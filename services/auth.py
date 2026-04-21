@@ -21,6 +21,17 @@ def _secret() -> str:
     return AUTH_TOKEN_SECRET.strip() or "wb-dashboard-auth-secret"
 
 
+def create_access_token(username: str, brand: str = "default", expires_days: int = 30) -> str:
+    payload = {
+        "username": username,
+        "brand": brand,
+        "exp": time.time() + expires_days * 86400,
+    }
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    signature = hmac.new(_secret().encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{signature}"
+
+
 def decode_access_token(token: str) -> Optional[dict]:
     """Token'ı doğrula ve payload'ı döner. Geçersizse None."""
     try:

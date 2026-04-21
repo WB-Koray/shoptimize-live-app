@@ -15,6 +15,7 @@ from typing import Optional
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
 from services.db import get_setting, set_connection_settings
 
@@ -25,6 +26,7 @@ SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
 REDIRECT_URI = f"{APP_URL}/auth/shopify/callback"
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
 SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders"
 
@@ -202,6 +204,25 @@ async def shopify_callback(
 
     # 7. Başarı sayfasına yönlendir
     return RedirectResponse(f"{APP_URL}/install/success?shop={shop}")
+
+
+class TokenRequest(BaseModel):
+    username: str
+    brand: str = "default"
+    password: str
+
+
+@router.post("/api/auth/token")
+async def create_dashboard_token(body: TokenRequest):
+    """Dashboard JWT token üreteci — DASHBOARD_PASSWORD ile korumalı."""
+    if not DASHBOARD_PASSWORD:
+        raise HTTPException(500, "DASHBOARD_PASSWORD ayarlanmamış")
+    if body.password != DASHBOARD_PASSWORD:
+        raise HTTPException(401, "Geçersiz şifre")
+    from services.auth import create_access_token
+    token = create_access_token(body.username, body.brand)
+    tid = get_setting(body.username, body.brand, "shopify", "pixel_tracking_id", "")
+    return {"ok": True, "token": token, "username": body.username, "brand": body.brand, "tid": tid}
 
 
 @router.get("/install/success")
