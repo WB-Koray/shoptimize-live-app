@@ -1,22 +1,6 @@
 """
 Storefront Live Activity — Redis entegreli versiyon.
-
-Değişiklikler (eski live.py'e göre):
-  - _events / _subscribers dict'leri kaldırıldı → RedisStore kullanıyor
-  - _tid_owner dict'i kaldırıldı → Redis Hash kullanıyor
-  - receive_event async yapıldı (zaten vardı)
-  - sse_stream Queue yönetimi RedisStore.subscribe/unsubscribe'a taşındı
-  - startup_event / shutdown_event main_v2.py'e eklenmeli (aşağıda açıklandı)
-
-Endpoint'ler değişmedi:
-  GET  /pixel.js
-  POST /api/live/event
-  GET  /api/live/stream
-  GET  /api/live/events
-  GET  /api/shopify/pixel/status
-  POST /api/shopify/pixel/install
-  DELETE /api/shopify/pixel/uninstall
-  + webhook + customer endpoint'leri
+Bağımsız servis olarak çalışır, mevcut shoptimize backend'e bağımlılık yok.
 """
 
 import asyncio
@@ -31,10 +15,9 @@ import requests
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-import os`nSHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
-from services.brand_credentials import get_setting
-from services.integrations_store import get_connection, set_connection_settings
-from services.redis_store import store  # ← tek değişen import
+SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
+from services.db import get_setting, set_connection_settings
+from services.redis_store import store
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,14 +25,10 @@ router = APIRouter()
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.shoptimize.com.tr").rstrip("/")
 
 # ---------------------------------------------------------------------------
-# Geriye dönük uyumluluk (wa_rules vs. gibi iç servisler hâlâ çağırıyorsa)
+# Geriye dönük uyumluluk
 # ---------------------------------------------------------------------------
 
 def register_tid_owner(tid: str, username: str, brand: str):
-    """
-    Sync wrapper — WhatsApp kural motoru ve pixel_install gibi sync context'lerden
-    çağrılabilmesi için. Redis işlemi event loop'ta fire-and-forget çalıştırır.
-    """
     if not tid:
         return
     try:
@@ -191,7 +170,7 @@ _PIXEL_JS_TEMPLATE = """
       if (handle) {
         handle = handle.split('?')[0].split('/')[0];
         return {
-          product_id: '', product_title: document.title.replace(/ [–\\-|].*/,'').trim() || handle,
+          product_id: '', product_title: document.title.replace(/ [\\u2013\\-|].*/,'').trim() || handle,
           product_handle: handle, product_price: null,
           product_vendor: '', product_type: '', product_image: ''
         };
@@ -335,8 +314,6 @@ async def serve_pixel(tid: str = Query(""), request: Request = None):
 # Event alıcı
 # ---------------------------------------------------------------------------
 
-# Müşteri oturum eşleştirme — bu hâlâ in-memory (Redis'e taşımak opsiyonel)
-# Gerekçe: checkout event'leri düşük frekanslı, restart riski düşük
 _customer_to_tid: dict[str, dict] = {}
 _vid_to_phone: dict[str, str] = {}
 _email_to_phone: dict[str, str] = {}
@@ -346,7 +323,6 @@ _email_to_name: dict[str, str] = {}
 
 @router.post("/api/live/event")
 async def receive_event(request: Request):
-    """Pixel'den gelen event — public, auth yok."""
     try:
         body = await request.json()
     except Exception:
@@ -378,22 +354,9 @@ async def receive_event(request: Request):
         "data": body.get("data") if isinstance(body.get("data"), dict) else {},
     }
 
-    # ✅ Redis'e yaz + SSE'ye yayınla (tek satır)
     await store.push_event(tid, event)
 
-    # WhatsApp kural motoru
     owner = await store.get_tid_owner(tid)
-    if owner:
-        try:
-            from services.wa_rules import process_event as _wa_process
-            vid = event.get("vid", "")
-            email_key = str(event.get("data", {}).get("email", "") or "").lower()
-            customer_phone = _vid_to_phone.get(vid) or _email_to_phone.get(email_key) or ""
-            customer_name  = _vid_to_name.get(vid)  or _email_to_name.get(email_key)  or ""
-            _wa_process(tid, event["event_type"], event["data"], owner[0], owner[1],
-                        customer_phone=customer_phone, customer_name=customer_name)
-        except Exception as e:
-            logger.error("[WA_RULES] hook error: %s", e)
 
     if event.get("customer_id"):
         _customer_to_tid[event["customer_id"]] = {
@@ -411,14 +374,11 @@ async def receive_event(request: Request):
 
 @router.get("/api/live/stream")
 async def sse_stream(request: Request, tid: str = Query(...)):
-    """Server-Sent Events akışı — dashboard için."""
     q = store.subscribe(tid)
 
     async def generate():
-        # İlk bağlantıda son 200 event'i hemen gönder
         for ev in await store.get_recent_events(tid, limit=200):
             yield f"data: {json.dumps(ev)}\n\n"
-
         try:
             while True:
                 if await request.is_disconnected():
@@ -448,7 +408,7 @@ async def get_recent_events(tid: str = Query(...), limit: int = Query(50)):
 
 
 # ---------------------------------------------------------------------------
-# Pixel kurulum (değişmedi)
+# Pixel kurulum
 # ---------------------------------------------------------------------------
 
 def _shopify_headers(token: str) -> dict:
@@ -491,10 +451,8 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = get_setting(username, brand, "shopify", "admin_api_token", "")
     tid    = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
-
     if not domain or not token:
         return {"ok": False, "error": "shopify_not_connected"}
-
     tag = _find_our_scripttag(domain, token)
     if tid:
         await store.register_tid_owner(tid, username, brand)
@@ -512,20 +470,16 @@ async def pixel_install(username: str = Query(""), brand: str = Query("default")
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
-
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
-
     existing = _find_our_scripttag(domain, token, version)
     if existing:
         tid = _get_or_create_tid(username, brand)
         await store.register_tid_owner(tid, username, brand)
         return {"ok": True, "already_installed": True, "tracking_id": tid, "script_tag_id": existing["id"]}
-
     tid = _get_or_create_tid(username, brand)
     await store.register_tid_owner(tid, username, brand)
     script_url = f"{API_BASE_URL}/pixel.js?tid={tid}"
-
     try:
         r = requests.post(
             _shopify_url(domain, "script_tags.json", version),
@@ -534,7 +488,6 @@ async def pixel_install(username: str = Query(""), brand: str = Query("default")
         )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
     if r.status_code == 201:
         tag = r.json().get("script_tag", {})
         return {"ok": True, "installed": True, "tracking_id": tid, "script_tag_id": tag.get("id")}
@@ -546,14 +499,11 @@ async def pixel_uninstall(username: str = Query(""), brand: str = Query("default
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
-
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
-
     tag = _find_our_scripttag(domain, token, version)
     if not tag:
         return {"ok": True, "already_uninstalled": True}
-
     try:
         r = requests.delete(
             _shopify_url(domain, f"script_tags/{tag['id']}.json", version),
@@ -561,14 +511,13 @@ async def pixel_uninstall(username: str = Query(""), brand: str = Query("default
         )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
     if r.status_code in (200, 204):
         return {"ok": True, "uninstalled": True}
     return JSONResponse({"ok": False, "error": r.text}, status_code=502)
 
 
 # ---------------------------------------------------------------------------
-# Müşteri bilgisi (değişmedi)
+# Müşteri bilgisi
 # ---------------------------------------------------------------------------
 
 @router.get("/api/shopify/customer")
@@ -580,14 +529,11 @@ async def get_shopify_customer(
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
-
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
-
     cid = str(customer_id).strip()
     if not cid or not cid.isdigit():
         return JSONResponse({"ok": False, "error": "invalid_customer_id"}, status_code=400)
-
     try:
         r = requests.get(
             _shopify_url(domain, f"customers/{cid}.json", version),
@@ -595,7 +541,6 @@ async def get_shopify_customer(
         )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
     if r.status_code == 200:
         c = r.json().get("customer", {})
         return {"ok": True, "customer": {
@@ -611,18 +556,6 @@ async def get_shopify_customer(
 # Webhook endpoint'leri
 # ---------------------------------------------------------------------------
 
-def _broadcast_event_sync(tid: str, ev: dict):
-    """Webhook endpoint'lerinden async olmayan context'te event yayınlamak için."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(store.push_event(tid, ev))
-        else:
-            loop.run_until_complete(store.push_event(tid, ev))
-    except Exception as e:
-        logger.error("[LIVE] broadcast sync error: %s", e)
-
-
 @router.post("/api/shopify/webhook/orders-create")
 async def shopify_orders_webhook(
     request: Request,
@@ -633,7 +566,6 @@ async def shopify_orders_webhook(
     stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
     if stored_token and token != stored_token:
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-
     try:
         order = await request.json()
     except Exception:
@@ -644,15 +576,7 @@ async def shopify_orders_webhook(
     order_number = str(order.get("order_number") or order.get("name") or "")
     total_price  = str(order.get("total_price", "0"))
 
-    logger.info("[WEBHOOK] orders/create — order=%s customer=%s", order_number, customer_id)
-
     session_info = _customer_to_tid.get(customer_id) if customer_id else None
-
-    if not session_info and username:
-        recent = await store.get_recent_events("_scan_", limit=1)  # dummy — aşağıda elle tara
-        # TID owner listesini Redis'ten al
-        # Not: Bu kısım production'da optimize edilebilir (ayrı bir index tutarak)
-        pass
 
     line_items = []
     for item in (order.get("line_items") or [])[:15]:
@@ -679,10 +603,8 @@ async def shopify_orders_webhook(
             "data": ev_data,
         }
         await store.push_event(tid, ev)
-        logger.info("[WEBHOOK] ✓ checkout_completed → tid=%s vid=%s", tid, vid)
         return JSONResponse({"ok": True, "matched": True, "tid": tid})
 
-    logger.warning("[WEBHOOK] ⚠ Oturum bulunamadı — order=%s", order_number)
     return JSONResponse({"ok": True, "matched": False})
 
 
@@ -696,7 +618,6 @@ async def shopify_checkouts_webhook(
     stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
     if stored_token and token != stored_token:
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-
     try:
         checkout = await request.json()
     except Exception:
@@ -725,7 +646,6 @@ async def shopify_checkouts_webhook(
         _vid_to_phone[matched_vid] = phone
         if customer_name:
             _vid_to_name[matched_vid] = customer_name
-        logger.info("[CHECKOUT-WH] vid=%s phone=***%s", matched_vid, phone[-4:])
     if email:
         _email_to_phone[email] = phone
         if customer_name:
@@ -739,7 +659,6 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
-
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
 
@@ -752,7 +671,6 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
         ("orders/create",    "orders-create"),
         ("checkouts/create", "checkouts-create"),
     ]
-
     results = {}
     for topic, slug in topics:
         callback_url = (
@@ -782,10 +700,8 @@ async def get_webhook_status(username: str = Query(""), brand: str = Query("defa
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
-
     if not domain or not token:
         return {"ok": False, "webhooks": []}
-
     try:
         r = requests.get(
             _shopify_url(domain, "webhooks.json?topic=orders/create", version),
