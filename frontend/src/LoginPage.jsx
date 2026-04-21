@@ -15,11 +15,11 @@ export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
   const [brand, setBrand] = useState('default');
   const [password, setPassword] = useState('');
+  const [manualTid, setManualTid] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit(e) {
-    e?.preventDefault?.();
+  async function handleSubmit() {
     if (!username.trim() || !password.trim()) {
       setError('Kullanıcı adı ve şifre gerekli');
       return;
@@ -37,7 +37,13 @@ export default function LoginPage({ onLogin }) {
         setError(data.detail || data.error || 'Giriş başarısız');
         return;
       }
-      onLogin({ token: data.token, username: data.username, brand: data.brand, tid: data.tid });
+      // TID: API'den gelen > elle girilen > boş
+      const tid = data.tid || manualTid.trim() || '';
+      if (!tid) {
+        setError('TID bulunamadı. Aşağıdaki "Tracking ID" alanını doldurun.');
+        return;
+      }
+      onLogin({ token: data.token, username: data.username, brand: data.brand, tid });
     } catch {
       setError('Sunucuya bağlanılamadı. Lütfen tekrar deneyin.');
     } finally {
@@ -56,26 +62,22 @@ export default function LoginPage({ onLogin }) {
         padding: 16,
       }}
     >
-      <div style={{ width: '100%', maxWidth: 420 }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ marginBottom: 8 }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                background: '#1a1a2e',
-                color: '#fff',
-                padding: '10px 20px',
-                borderRadius: 12,
-                marginBottom: 12,
-              }}
-            >
-              <span style={{ fontSize: 20 }}>⚡</span>
-              <Text variant="headingLg" as="span">
-                <span style={{ color: '#fff' }}>Shoptimize Live</span>
-              </Text>
-            </div>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#1a1a2e',
+              color: '#fff',
+              padding: '10px 20px',
+              borderRadius: 12,
+              marginBottom: 12,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>⚡</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>Shoptimize Live</span>
           </div>
           <Text variant="bodySm" tone="subdued" as="p">
             Canlı mağaza aktivitesi & ziyaretçi takibi
@@ -97,6 +99,7 @@ export default function LoginPage({ onLogin }) {
                 onChange={setUsername}
                 autoComplete="username"
                 placeholder="ornek@siteniz.com"
+                helpText="Shopify OAuth sırasında kullanılan e-posta"
               />
               <TextField
                 label="Marka"
@@ -113,6 +116,15 @@ export default function LoginPage({ onLogin }) {
                 autoComplete="current-password"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
+              <TextField
+                label="Tracking ID (TID)"
+                value={manualTid}
+                onChange={setManualTid}
+                autoComplete="off"
+                placeholder="koray@ornek.com_default_abc123..."
+                helpText="Otomatik bulunmazsa buraya girin. Piksel URL'sinden (?tid=...) kopyalayabilirsiniz."
+                monospaced
+              />
             </FormLayout>
 
             <Button
@@ -126,6 +138,12 @@ export default function LoginPage({ onLogin }) {
             </Button>
           </BlockStack>
         </Card>
+
+        <div style={{ marginTop: 12, textAlign: 'center' }}>
+          <Text variant="bodyXs" tone="subdued" as="p">
+            TID örneği: koray@korayyildiz.com.tr_default_89f03476cdd41216
+          </Text>
+        </div>
       </div>
     </div>
   );
