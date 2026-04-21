@@ -12,7 +12,8 @@ import time
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
+from services.auth import get_current_user
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
@@ -373,7 +374,7 @@ async def receive_event(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/live/stream")
-async def sse_stream(request: Request, tid: str = Query(...)):
+async def sse_stream(request: Request, tid: str = Query(...), current_user: dict = Depends(get_current_user)):
     q = store.subscribe(tid)
 
     async def generate():
