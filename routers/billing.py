@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing")
 
 APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
-SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
+SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
 
 PLAN_NAME = os.getenv("BILLING_PLAN_NAME", "Shoptimize Live")
 PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
@@ -59,6 +59,7 @@ def create_charge(shop: str, access_token: str, username: str, brand: str) -> st
         }
     }
 
+    logger.info("[BILLING] Charge oluşturuluyor: shop=%s token_len=%d test=%s", shop, len(access_token), TEST_MODE)
     r = requests.post(
         _shopify_url(shop, "recurring_application_charges.json"),
         json=payload,
@@ -67,7 +68,7 @@ def create_charge(shop: str, access_token: str, username: str, brand: str) -> st
     )
 
     if r.status_code not in (200, 201):
-        logger.error("[BILLING] Charge hatası: status=%s body=%s", r.status_code, r.text)
+        logger.error("[BILLING] Charge hatası: status=%s body=%s headers=%s", r.status_code, r.text, dict(r.headers))
         raise HTTPException(502, f"Billing charge oluşturulamadı: {r.text}")
 
     charge = r.json().get("recurring_application_charge", {})
