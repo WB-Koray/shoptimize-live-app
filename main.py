@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.redis_store import store
 from routers import live
+from routers import auth
 
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.add_middleware(
 )
 
 app.include_router(live.router)
+app.include_router(auth.router)
 
 
 @app.get("/health")
