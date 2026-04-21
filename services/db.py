@@ -70,7 +70,7 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
                     existing.update(updates)
                     cur.execute(
                         """
-                        UPDATE integration_connections SET payload_json = %s, updated_at = NOW()
+                        UPDATE integration_connections SET payload_json = %s, updated_at = EXTRACT(EPOCH FROM NOW())::bigint
                         WHERE username = %s AND brand = %s AND integration_id = %s
                         """,
                         (json.dumps(existing), username, brand, integration),
@@ -79,7 +79,7 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
                     cur.execute(
                         """
                         INSERT INTO integration_connections (username, brand, integration_id, payload_json, updated_at)
-                        VALUES (%s, %s, %s, %s, NOW())
+                        VALUES (%s, %s, %s, %s, EXTRACT(EPOCH FROM NOW())::bigint)
                         """,
                         (username, brand, integration, json.dumps(updates)),
                     )
