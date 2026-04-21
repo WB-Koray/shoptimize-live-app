@@ -19,7 +19,5 @@ api_version = "2026-04"
   customer_deletion_url = "https://live.shoptimize.com.tr/webhooks/customers/redact"
   shop_deletion_url = "https://live.shoptimize.com.tr/webhooks/shop/redact"
 
-[app_proxy]
-
 [pos]
 embedded = false
