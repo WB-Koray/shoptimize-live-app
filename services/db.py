@@ -23,10 +23,6 @@ def _get_conn():
 
 
 def get_setting(username: str, brand: str, integration: str, key: str, default=""):
-    """
-    integration_connections tablosundan ayar okur.
-    Sütunlar: username, brand, integration_id, payload_json, updated_at
-    """
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -40,9 +36,11 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
                 )
                 row = cur.fetchone()
                 if row and row["payload_json"]:
-                    settings = row["payload_json"]
-                    if isinstance(settings, str):
-                        settings = json.loads(settings)
+                    data = row["payload_json"]
+                    if isinstance(data, str):
+                        data = json.loads(data)
+                    # Önce settings alt anahtarına bak
+                    settings = data.get("settings", data)
                     return settings.get(key, default)
     except Exception as e:
         logger.error("[DB] get_setting hatası: %s", e)
