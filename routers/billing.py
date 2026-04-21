@@ -59,7 +59,7 @@ def create_charge(shop: str, access_token: str, username: str, brand: str) -> st
         }
     }
 
-    logger.info("[BILLING] Charge oluşturuluyor: shop=%s token_len=%d test=%s", shop, len(access_token), TEST_MODE)
+    logger.warning("[BILLING] Charge oluşturuluyor: shop=%s token_len=%d test=%s url=%s", shop, len(access_token), TEST_MODE, _shopify_url(shop, "recurring_application_charges.json"))
     r = requests.post(
         _shopify_url(shop, "recurring_application_charges.json"),
         json=payload,
