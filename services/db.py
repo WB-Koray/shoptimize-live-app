@@ -25,21 +25,22 @@ def _get_conn():
 def get_setting(username: str, brand: str, integration: str, key: str, default=""):
     """
     integration_connections tablosundan ayar okur.
+    Sütunlar: username, brand, integration_id, payload_json, updated_at
     """
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT settings FROM integration_connections
-                    WHERE username = %s AND brand = %s AND integration = %s
+                    SELECT payload_json FROM integration_connections
+                    WHERE username = %s AND brand = %s AND integration_id = %s
                     LIMIT 1
                     """,
                     (username, brand, integration),
                 )
                 row = cur.fetchone()
-                if row and row["settings"]:
-                    settings = row["settings"]
+                if row and row["payload_json"]:
+                    settings = row["payload_json"]
                     if isinstance(settings, str):
                         settings = json.loads(settings)
                     return settings.get(key, default)
@@ -50,37 +51,37 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
 
 def set_connection_settings(username: str, brand: str, integration: str, updates: dict):
     """
-    integration_connections tablosundaki settings alanını günceller.
+    integration_connections tablosundaki payload_json alanını günceller.
     """
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT settings FROM integration_connections
-                    WHERE username = %s AND brand = %s AND integration = %s
+                    SELECT payload_json FROM integration_connections
+                    WHERE username = %s AND brand = %s AND integration_id = %s
                     LIMIT 1
                     """,
                     (username, brand, integration),
                 )
                 row = cur.fetchone()
                 if row:
-                    existing = row["settings"] or {}
+                    existing = row["payload_json"] or {}
                     if isinstance(existing, str):
                         existing = json.loads(existing)
                     existing.update(updates)
                     cur.execute(
                         """
-                        UPDATE integration_connections SET settings = %s
-                        WHERE username = %s AND brand = %s AND integration = %s
+                        UPDATE integration_connections SET payload_json = %s, updated_at = NOW()
+                        WHERE username = %s AND brand = %s AND integration_id = %s
                         """,
                         (json.dumps(existing), username, brand, integration),
                     )
                 else:
                     cur.execute(
                         """
-                        INSERT INTO integration_connections (username, brand, integration, settings)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO integration_connections (username, brand, integration_id, payload_json, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW())
                         """,
                         (username, brand, integration, json.dumps(updates)),
                     )
@@ -98,14 +99,14 @@ def get_all_shopify_connections():
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT username, brand, settings FROM integration_connections
-                    WHERE integration = 'shopify'
+                    SELECT username, brand, payload_json FROM integration_connections
+                    WHERE integration_id = 'shopify'
                     """
                 )
                 rows = cur.fetchall()
                 result = []
                 for row in rows:
-                    settings = row["settings"] or {}
+                    settings = row["payload_json"] or {}
                     if isinstance(settings, str):
                         settings = json.loads(settings)
                     result.append({
