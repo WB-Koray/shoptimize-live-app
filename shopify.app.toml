@@ -2,7 +2,6 @@ name = "Shoptimize Live App"
 client_id = "3cc5db4cd2e08e09887b0cfa230b8c78"
 application_url = "https://live.shoptimize.com.tr"
 embedded = true
-privacy_policy_url = "https://live.shoptimize.com.tr/privacy"
 
 [access_scopes]
 scopes = "read_customers,read_orders,write_orders,read_script_tags,write_script_tags"
