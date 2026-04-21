@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from services.redis_store import store
 from routers import live
 from routers import auth
+from routers import gdpr
+from routers import billing
 
 
 @asynccontextmanager
@@ -43,6 +45,8 @@ app.add_middleware(
 
 app.include_router(live.router)
 app.include_router(auth.router)
+app.include_router(gdpr.router)
+app.include_router(billing.router)
 
 
 @app.get("/health")

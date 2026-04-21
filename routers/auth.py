@@ -202,8 +202,14 @@ async def shopify_callback(
     except Exception as e:
         logger.warning("[OAuth] Webhook kurulum hatası: %s", e)
 
-    # 7. Başarı sayfasına yönlendir
-    return RedirectResponse(f"{APP_URL}/install/success?shop={shop}")
+    # 7. Billing — onay sayfasına yönlendir
+    try:
+        from routers.billing import create_charge
+        confirmation_url = create_charge(shop, access_token, username, brand)
+        return RedirectResponse(confirmation_url)
+    except Exception as e:
+        logger.warning("[OAuth] Billing oluşturulamadı, direkt success'e yönlendiriliyor: %s", e)
+        return RedirectResponse(f"{APP_URL}/install/success?shop={shop}")
 
 
 class TokenRequest(BaseModel):

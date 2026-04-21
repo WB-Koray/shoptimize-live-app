@@ -138,6 +138,15 @@ class RedisStore:
         finally:
             await pubsub.aclose()
 
+    async def delete_tid_events(self, tid: str) -> None:
+        """GDPR shop/redact: TID'e ait tüm event ve visitor key'lerini sil."""
+        pipe = self._redis.pipeline()
+        pipe.delete(f"events:{tid}")
+        pipe.delete(f"tid_owner:{tid}")
+        await pipe.execute()
+        async for key in self._redis.scan_iter(f"visitor:{tid}:*"):
+            await self._redis.delete(key)
+
     async def warmup_tid_cache(self):
         try:
             from services.db import get_all_shopify_connections
