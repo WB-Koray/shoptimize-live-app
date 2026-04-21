@@ -31,7 +31,7 @@ import requests
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from config import SHOPIFY_API_VERSION
+import os`nSHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
 from services.brand_credentials import get_setting
 from services.integrations_store import get_connection, set_connection_settings
 from services.redis_store import store  # ← tek değişen import
