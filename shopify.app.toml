@@ -1,0 +1,25 @@
+name = "Shoptimize Live App"
+client_id = "3cc5db4cd2e08e09887b0cfa230b8c78"
+application_url = "https://live.shoptimize.com.tr"
+embedded = true
+
+[access_scopes]
+scopes = "read_customers,read_orders,write_orders,read_script_tags,write_script_tags"
+
+[auth]
+redirect_urls = [
+  "https://live.shoptimize.com.tr/auth/shopify/callback"
+]
+
+[webhooks]
+api_version = "2026-04"
+
+  [webhooks.privacy_compliance]
+  customer_data_request_url = "https://live.shoptimize.com.tr/webhooks/customers/data_request"
+  customer_deletion_url = "https://live.shoptimize.com.tr/webhooks/customers/redact"
+  shop_deletion_url = "https://live.shoptimize.com.tr/webhooks/shop/redact"
+
+[app_proxy]
+
+[pos]
+embedded = false
