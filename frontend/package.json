@@ -1,7 +1,7 @@
 {
   "name": "shoptimize-live-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,8 +11,6 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@shopify/app-bridge-react": "^4.1.6",
-    "@shopify/polaris": "^13.9.5",
     "recharts": "^2.12.7",
     "lucide-react": "^0.428.0"
   },

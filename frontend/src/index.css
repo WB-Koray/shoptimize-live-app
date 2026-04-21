@@ -2,30 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Polaris override — full-height app */
-#root {
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background: #0a0b10;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Recharts responsive */
-.recharts-responsive-container {
-  width: 100% !important;
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Line clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* Pulse animation for live indicator */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-.live-dot {
-  animation: pulse-dot 1.5s ease-in-out infinite;
-}
+/* Tabular numbers */
+.tabular-nums { font-variant-numeric: tabular-nums; }
 
-/* Event feed item enter animation */
+/* New event slide-in */
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.event-enter {
-  animation: slide-in 0.2s ease-out;
-}
+.event-enter { animation: slide-in 0.2s ease-out; }

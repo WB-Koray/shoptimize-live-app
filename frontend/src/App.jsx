@@ -1,5 +1,3 @@
-import { AppProvider } from '@shopify/polaris';
-import enTranslations from '@shopify/polaris/locales/en.json';
 import { useState } from 'react';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
@@ -25,12 +23,8 @@ export default function App() {
     setSession(null);
   }
 
-  return (
-    <AppProvider i18n={enTranslations}>
-      {session
-        ? <Dashboard session={session} onLogout={handleLogout} />
-        : <LoginPage onLogin={handleLogin} />
-      }
-    </AppProvider>
-  );
+  if (session) {
+    return <Dashboard session={session} onLogout={handleLogout} />;
+  }
+  return <LoginPage onLogin={handleLogin} />;
 }

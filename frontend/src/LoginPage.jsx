@@ -1,15 +1,31 @@
 import { useState } from 'react';
-import {
-  Card,
-  FormLayout,
-  TextField,
-  Button,
-  Text,
-  Banner,
-  BlockStack,
-} from '@shopify/polaris';
+import { Zap, User, Lock, Tag, Hash, AlertCircle } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
+
+function Field({ label, icon: Icon, type = 'text', value, onChange, placeholder, helpText, onKeyDown }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</label>
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+          <Icon size={15} />
+        </div>
+        <input
+          type={type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          autoComplete={type === 'password' ? 'current-password' : 'off'}
+          className="w-full bg-[#161926] border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600
+            focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
+        />
+      </div>
+      {helpText && <p className="text-[11px] text-slate-600">{helpText}</p>}
+    </div>
+  );
+}
 
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -37,113 +53,88 @@ export default function LoginPage({ onLogin }) {
         setError(data.detail || data.error || 'Giriş başarısız');
         return;
       }
-      // TID: API'den gelen > elle girilen > boş
-      const tid = data.tid || manualTid.trim() || '';
+      const tid = data.tid || manualTid.trim();
       if (!tid) {
-        setError('TID bulunamadı. Aşağıdaki "Tracking ID" alanını doldurun.');
+        setError('Tracking ID bulunamadı — aşağıdaki TID alanını doldurun');
         return;
       }
       onLogin({ token: data.token, username: data.username, brand: data.brand, tid });
     } catch {
-      setError('Sunucuya bağlanılamadı. Lütfen tekrar deneyin.');
+      setError('Sunucuya bağlanılamadı');
     } finally {
       setLoading(false);
     }
   }
 
+  function onKey(e) { if (e.key === 'Enter') handleSubmit(); }
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #f6f6f7 0%, #e8e9eb 100%)',
-        padding: 16,
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 440 }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              background: '#1a1a2e',
-              color: '#fff',
-              padding: '10px 20px',
-              borderRadius: 12,
-              marginBottom: 12,
-            }}
-          >
-            <span style={{ fontSize: 20 }}>⚡</span>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>Shoptimize Live</span>
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'radial-gradient(ellipse at 60% 0%, #0d1a2e 0%, #0a0b10 60%)' }}>
+      <div className="w-full max-w-md">
+
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-3 mb-4">
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+              <Zap size={28} className="text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-2xl font-bold text-white">Shoptimize Live</h1>
+              <p className="text-sm text-slate-500">Canlı mağaza aktivitesi</p>
+            </div>
           </div>
-          <Text variant="bodySm" tone="subdued" as="p">
-            Canlı mağaza aktivitesi & ziyaretçi takibi
-          </Text>
         </div>
 
-        <Card>
-          <BlockStack gap="400">
-            {error && (
-              <Banner tone="critical" onDismiss={() => setError('')}>
-                {error}
-              </Banner>
+        {/* Card */}
+        <div className="bg-[#0d0f18] border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+              <AlertCircle size={15} className="shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <Field label="Kullanıcı Adı" icon={User} value={username} onChange={setUsername}
+            placeholder="ornek@siteniz.com"
+            helpText="OAuth kurulumunda kullanılan e-posta" />
+
+          <Field label="Marka" icon={Tag} value={brand} onChange={setBrand}
+            placeholder="default"
+            helpText="Genellikle 'default'" />
+
+          <Field label="Şifre" icon={Lock} type="password" value={password}
+            onChange={setPassword} onKeyDown={onKey} />
+
+          <Field label="Tracking ID (TID)" icon={Hash} value={manualTid} onChange={setManualTid}
+            placeholder="koray@ornek.com_default_abc123…"
+            helpText="Otomatik bulunmazsa girin — pixel URL'sindeki ?tid= değeri" />
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm
+              bg-gradient-to-r from-emerald-600 to-teal-600 text-white
+              hover:from-emerald-500 hover:to-teal-500 transition-all
+              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/30 mt-2"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Giriş yapılıyor...
+              </>
+            ) : (
+              <><Zap size={15} /> Giriş Yap</>
             )}
-
-            <FormLayout>
-              <TextField
-                label="Kullanıcı Adı"
-                value={username}
-                onChange={setUsername}
-                autoComplete="username"
-                placeholder="ornek@siteniz.com"
-                helpText="Shopify OAuth sırasında kullanılan e-posta"
-              />
-              <TextField
-                label="Marka"
-                value={brand}
-                onChange={setBrand}
-                autoComplete="off"
-                helpText="Genellikle 'default'"
-              />
-              <TextField
-                label="Şifre"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                autoComplete="current-password"
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              />
-              <TextField
-                label="Tracking ID (TID)"
-                value={manualTid}
-                onChange={setManualTid}
-                autoComplete="off"
-                placeholder="koray@ornek.com_default_abc123..."
-                helpText="Otomatik bulunmazsa buraya girin. Piksel URL'sinden (?tid=...) kopyalayabilirsiniz."
-                monospaced
-              />
-            </FormLayout>
-
-            <Button
-              fullWidth
-              variant="primary"
-              loading={loading}
-              onClick={handleSubmit}
-              size="large"
-            >
-              Giriş Yap
-            </Button>
-          </BlockStack>
-        </Card>
-
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
-          <Text variant="bodyXs" tone="subdued" as="p">
-            TID örneği: koray@korayyildiz.com.tr_default_89f03476cdd41216
-          </Text>
+          </button>
         </div>
+
+        <p className="text-center text-[11px] text-slate-700 mt-4">
+          TID örneği: koray@korayyildiz.com.tr_default_89f03476cdd41216
+        </p>
       </div>
     </div>
   );
