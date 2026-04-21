@@ -24,15 +24,14 @@ def _get_conn():
 
 def get_setting(username: str, brand: str, integration: str, key: str, default=""):
     """
-    integrations tablosundan ayar okur.
-    Mevcut backend'deki get_setting() ile aynı davranış.
+    integration_connections tablosundan ayar okur.
     """
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT settings FROM integrations
+                    SELECT settings FROM integration_connections
                     WHERE username = %s AND brand = %s AND integration = %s
                     LIMIT 1
                     """,
@@ -51,14 +50,14 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
 
 def set_connection_settings(username: str, brand: str, integration: str, updates: dict):
     """
-    integrations tablosundaki settings alanını günceller.
+    integration_connections tablosundaki settings alanını günceller.
     """
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT settings FROM integrations
+                    SELECT settings FROM integration_connections
                     WHERE username = %s AND brand = %s AND integration = %s
                     LIMIT 1
                     """,
@@ -72,7 +71,7 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
                     existing.update(updates)
                     cur.execute(
                         """
-                        UPDATE integrations SET settings = %s
+                        UPDATE integration_connections SET settings = %s
                         WHERE username = %s AND brand = %s AND integration = %s
                         """,
                         (json.dumps(existing), username, brand, integration),
@@ -80,7 +79,7 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
                 else:
                     cur.execute(
                         """
-                        INSERT INTO integrations (username, brand, integration, settings)
+                        INSERT INTO integration_connections (username, brand, integration, settings)
                         VALUES (%s, %s, %s, %s)
                         """,
                         (username, brand, integration, json.dumps(updates)),
@@ -99,7 +98,7 @@ def get_all_shopify_connections():
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT username, brand, settings FROM integrations
+                    SELECT username, brand, settings FROM integration_connections
                     WHERE integration = 'shopify'
                     """
                 )
