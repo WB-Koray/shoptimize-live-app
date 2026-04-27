@@ -117,9 +117,9 @@ function ProductCard({ product, flash }) {
   return (
     <div className={`bg-[#24201A] border rounded-xl overflow-hidden transition-all duration-300
       ${flash ? 'border-[#C4A5D4]/50 shadow-lg shadow-[#C4A5D4]/10' : 'border-[#403628]'}`}>
-      <div className="relative h-28 bg-[#362D22]/60 overflow-hidden">
+      <div className="relative aspect-square bg-[#2A231B] overflow-hidden">
         {product.image
-          ? <img src={product.image} alt={product.title} className="w-full h-full object-cover"
+          ? <img src={product.image} alt={product.title} className="w-full h-full object-contain p-2"
               onError={e => { e.target.style.display = 'none'; }} />
           : <div className="w-full h-full flex items-center justify-center">
               <Package size={24} className="text-[#7A705F]" />
@@ -874,7 +874,8 @@ export default function Dashboard({ session, onLogout }) {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#1F1A14] p-4 space-y-4">
+    <div className="min-h-screen bg-[#1F1A14] p-4">
+    <div className="max-w-5xl mx-auto space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1007,7 +1008,7 @@ export default function Dashboard({ session, onLogout }) {
       {productStats.length > 0 && (
         <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
           <SectionHead icon={TrendingUp} iconClass="text-[#C4A5D4]" title="En Çok Görüntülenen Ürünler" badge={`${productStats.length} ürün`} />
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          <div className="p-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
             {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
           </div>
         </div>
@@ -1162,7 +1163,7 @@ export default function Dashboard({ session, onLogout }) {
       {visitorProfiles.length > 0 && (
         <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
           <SectionHead icon={Users} title="Aktif Ziyaretçiler" badge={visitorProfiles.length} extra="Karta tıkla → yolculuğu gör" />
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {visitorProfiles.slice(0, 24).map(profile => (
               <VisitorCard key={profile.vid} profile={profile}
                 customerName={customerNames[profile.customer_id]}
@@ -1239,6 +1240,7 @@ export default function Dashboard({ session, onLogout }) {
       <DrillDownModal title={drillDown?.title} subtitle={drillDown?.subtitle}
         products={drillDown?.products} visitors={drillDown?.visitors}
         onClose={() => setDrillDown(null)} />
+    </div>
     </div>
   );
 }
