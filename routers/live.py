@@ -46,8 +46,27 @@ def register_tid_owner(tid: str, username: str, brand: str):
 # pixel.js
 # ---------------------------------------------------------------------------
 
+_BOT_UA_KEYWORDS = (
+    "googlebot", "adsbot-google", "mediapartners-google",
+    "bingbot", "msnbot", "slurp", "duckduckbot",
+    "baiduspider", "yandexbot", "facebookexternalhit",
+    "twitterbot", "linkedinbot", "whatsapp",
+    "semrushbot", "ahrefsbot", "mj12bot", "dotbot",
+    "rogerbot", "seznambot", "pinterestbot", "applebot",
+    "python-requests", "go-http-client", "axios/",
+    "curl/", "wget/", "scrapy", "lighthouse",
+)
+
+
+def _is_bot(ua: str) -> bool:
+    ua_lower = ua.lower()
+    return any(k in ua_lower for k in _BOT_UA_KEYWORDS)
+
+
 _PIXEL_JS_TEMPLATE = """
 /* Shoptimize Storefront Pixel v2 */
+if (window._spt_loaded) { /* already loaded */ } else {
+window._spt_loaded = true;
 (function () {
   'use strict';
 
@@ -297,6 +316,7 @@ _PIXEL_JS_TEMPLATE = """
 
   console.info('[SPT] Shoptimize pixel aktif. TID:', TID.slice(-8));
 })();
+} /* end _spt_loaded guard */
 """
 
 
@@ -333,6 +353,16 @@ async def receive_event(request: Request):
     if not tid:
         return JSONResponse({"ok": False, "error": "missing_tid"}, status_code=400)
 
+    ua = str(body.get("ua", ""))[:512]
+    if _is_bot(ua):
+        return JSONResponse({"ok": True, "skipped": "bot"})
+
+    vid = str(body.get("vid", ""))[:32]
+    event_type = str(body.get("event_type", ""))[:64]
+    url = str(body.get("url", ""))[:512]
+    if await store.is_duplicate(tid, vid, event_type, url):
+        return JSONResponse({"ok": True, "skipped": "duplicate"})
+
     raw_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
     if not raw_ip:
         try:
@@ -342,9 +372,9 @@ async def receive_event(request: Request):
 
     event = {
         "tid": tid,
-        "vid": str(body.get("vid", ""))[:32],
-        "event_type": str(body.get("event_type", ""))[:64],
-        "url": str(body.get("url", ""))[:512],
+        "vid": vid,
+        "event_type": event_type,
+        "url": url,
         "referrer": str(body.get("referrer", ""))[:256],
         "ts": int(body.get("ts", time.time() * 1000)),
         "ua": str(body.get("ua", ""))[:512],

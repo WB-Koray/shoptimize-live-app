@@ -3,6 +3,7 @@ Redis katmanı — tüm live activity state'ini Redis'te tutar.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -50,6 +51,12 @@ class RedisStore:
         if self._redis:
             await self._redis.aclose()
 
+    async def is_duplicate(self, tid: str, vid: str, event_type: str, url: str, window_sec: int = 10) -> bool:
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+        key = f"dedup:{tid}:{vid}:{event_type}:{url_hash}"
+        result = await self._redis.set(key, "1", ex=window_sec, nx=True)
+        return result is None
+
     async def push_event(self, tid: str, event: dict) -> None:
         raw = json.dumps(event, ensure_ascii=False)
         key = f"events:{tid}"
@@ -67,11 +74,20 @@ class RedisStore:
 
     async def get_recent_events(self, tid: str, limit: int = 200) -> list[dict]:
         limit = min(limit, _MAX_EVENTS)
-        raws = await self._redis.lrange(f"events:{tid}", 0, limit - 1)
+        raws = await self._redis.lrange(f"events:{tid}", 0, _MAX_EVENTS - 1)
         events = []
+        seen: set[str] = set()
         for r in raws:
             try:
-                events.append(json.loads(r))
+                ev = json.loads(r)
+                bucket = ev.get("ts", 0) // 10_000
+                key = f"{ev.get('vid','')}:{ev.get('event_type','')}:{ev.get('url','')}:{bucket}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(ev)
+                if len(events) >= limit:
+                    break
             except Exception:
                 pass
         return events
