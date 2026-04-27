@@ -6,9 +6,9 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr'
 function Field({ label, icon: Icon, type = 'text', value, onChange, placeholder, helpText, onKeyDown }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</label>
+      <label className="text-xs font-semibold text-[#B8AD9A] uppercase tracking-wide">{label}</label>
       <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7A705F]">
           <Icon size={15} />
         </div>
         <input
@@ -18,11 +18,11 @@ function Field({ label, icon: Icon, type = 'text', value, onChange, placeholder,
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           autoComplete={type === 'password' ? 'current-password' : 'off'}
-          className="w-full bg-[#161926] border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600
-            focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
+          className="w-full bg-[#362D22] border border-[#403628] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[#F4EFE6] placeholder:text-[#7A705F]
+            focus:outline-none focus:border-[#9BBA7A]/60 focus:ring-1 focus:ring-[#9BBA7A]/30 transition-colors"
         />
       </div>
-      {helpText && <p className="text-[11px] text-slate-600">{helpText}</p>}
+      {helpText && <p className="text-[11px] text-[#7A705F]">{helpText}</p>}
     </div>
   );
 }
@@ -70,24 +70,24 @@ export default function LoginPage({ onLogin }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'radial-gradient(ellipse at 60% 0%, #0d1a2e 0%, #0a0b10 60%)' }}>
+      style={{ background: 'radial-gradient(ellipse at 50% 0%, #2A231B 0%, #1F1A14 65%)' }}>
       <div className="w-full max-w-md">
 
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-              <Zap size={28} className="text-emerald-400" />
+            <div className="p-3 rounded-2xl bg-[#24301D] border border-[#9BBA7A]/30">
+              <Zap size={28} className="text-[#9BBA7A]" />
             </div>
             <div className="text-left">
-              <h1 className="text-2xl font-bold text-white">Shoptimize Live</h1>
-              <p className="text-sm text-slate-500">Canlı mağaza aktivitesi</p>
+              <h1 className="text-2xl font-bold text-[#F4EFE6]">Shoptimize Live</h1>
+              <p className="text-sm text-[#7A705F]">Canlı mağaza aktivitesi</p>
             </div>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-[#0d0f18] border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl p-6 shadow-2xl space-y-4">
           {error && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
               <AlertCircle size={15} className="shrink-0" />
@@ -114,9 +114,10 @@ export default function LoginPage({ onLogin }) {
             onClick={handleSubmit}
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm
-              bg-gradient-to-r from-emerald-600 to-teal-600 text-white
-              hover:from-emerald-500 hover:to-teal-500 transition-all
-              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/30 mt-2"
+              bg-gradient-to-r from-[#5A7A3C] to-[#3E8D7A] text-[#F4EFE6]
+              hover:from-[#6A8A4C] hover:to-[#4E9D8A] transition-all
+              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-2"
+            style={{ boxShadow: '0 4px 16px rgba(90,122,60,0.25)' }}
           >
             {loading ? (
               <>
@@ -132,7 +133,7 @@ export default function LoginPage({ onLogin }) {
           </button>
         </div>
 
-        <p className="text-center text-[11px] text-slate-700 mt-4">
+        <p className="text-center text-[11px] text-[#403628] mt-4">
           TID örneği: koray@korayyildiz.com.tr_default_89f03476cdd41216
         </p>
       </div>
