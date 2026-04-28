@@ -4,7 +4,7 @@ application_url = "https://live.shoptimize.com.tr"
 embedded = true
 
 [access_scopes]
-scopes = "read_customers,read_orders,write_orders,read_script_tags,write_script_tags"
+scopes = "read_customers,read_orders,write_orders,read_script_tags,write_script_tags,read_checkouts"
 
 [auth]
 redirect_urls = [
