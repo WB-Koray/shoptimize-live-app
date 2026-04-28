@@ -1,6 +1,45 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
-  theme: { extend: {} },
+  content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        bg:           'var(--c-bg)',
+        surface:      'var(--c-surface)',
+        surfaceAlt:   'var(--c-surfaceAlt)',
+        surfaceSoft:  'var(--c-surfaceSoft)',
+        border:       'var(--c-border)',
+        borderStrong: 'var(--c-borderStrong)',
+        text:         'var(--c-text)',
+        textDim:      'var(--c-textDim)',
+        textMute:     'var(--c-textMute)',
+        accent:       'var(--c-accent)',
+        accentSoft:   'var(--c-accentSoft)',
+        teal:         'var(--c-teal)',
+        tealSoft:     'var(--c-tealSoft)',
+        green:        'var(--c-green)',
+        greenSoft:    'var(--c-greenSoft)',
+        amber:        'var(--c-amber)',
+        amberSoft:    'var(--c-amberSoft)',
+        blue:         'var(--c-blue)',
+        blueSoft:     'var(--c-blueSoft)',
+        purple:       'var(--c-purple)',
+        purpleSoft:   'var(--c-purpleSoft)',
+        rose:         'var(--c-rose)',
+        roseSoft:     'var(--c-roseSoft)',
+      },
+      fontFamily: {
+        display: ['var(--font-display)'],
+        body:    ['var(--font-body)'],
+        mono:    ['var(--font-mono)'],
+      },
+      borderRadius: {
+        sm: 'var(--r-sm)',
+        md: 'var(--r-md)',
+        lg: 'var(--r-lg)',
+        xl: 'var(--r-xl)',
+      },
+    },
+  },
   plugins: [],
 };

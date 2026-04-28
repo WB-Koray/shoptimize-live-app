@@ -5,6 +5,7 @@ import {
   Radio, Users, ChevronDown, ChevronUp, TrendingUp,
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
 } from 'lucide-react';
+import { ThemeSwitch } from './ThemeContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 const MAX_EVENTS = 500;
@@ -888,7 +889,7 @@ export default function Dashboard({ session, onLogout }) {
             <p className="text-[#8A7D6A] text-xs">{username} / {brand}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${statusBadge}`}>
             {sseStatus === 'connected'
               ? <><span className="w-1.5 h-1.5 rounded-full bg-[#9BBA7A] animate-pulse" /> Canlı</>
@@ -896,6 +897,7 @@ export default function Dashboard({ session, onLogout }) {
               ? <><span className="w-1.5 h-1.5 rounded-full bg-[#E0BA70] animate-pulse" /> Bağlanıyor...</>
               : <><WifiOff size={12} /> Bağlı Değil</>}
           </div>
+          <ThemeSwitch />
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#362D22] border border-[#5A4535] text-[#B8AD9A] text-xs font-bold rounded-full hover:text-[#F4EFE6] transition-colors">
             <LogOut size={12} /> Çıkış

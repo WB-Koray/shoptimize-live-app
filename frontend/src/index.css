@@ -2,7 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* ── Tema degiskenleri (ThemeProvider runtime'da gunceller) ── */
+:root {
+  --c-bg:#1F1A14;          --c-surface:#2A231B;       --c-surfaceAlt:#362D22;
+  --c-surfaceSoft:#24201A; --c-border:#403628;        --c-borderStrong:#F4EFE6;
+  --c-text:#F4EFE6;        --c-textDim:#B8AD9A;       --c-textMute:#7A705F;
+  --c-accent:#E8925F;      --c-accentSoft:#3A2A1E;
+  --c-teal:#6DC4B0;        --c-tealSoft:#1F2E2A;
+  --c-green:#9BBA7A;       --c-greenSoft:#24301D;
+  --c-amber:#E0BA70;       --c-amberSoft:#332815;
+  --c-blue:#8FAECB;        --c-blueSoft:#1F2A36;
+  --c-purple:#C4A5D4;      --c-purpleSoft:#2C2336;
+  --c-rose:#DB8898;        --c-roseSoft:#332027;
+
+  --font-display: 'Fraunces', 'Newsreader', Georgia, serif;
+  --font-body:    'Geist', 'Inter', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+}
+
+[data-vibe="brutalist"] {
+  --r-sm: 0px; --r-md: 0px; --r-lg: 0px; --r-xl: 0px;
+}
+[data-vibe="brutalist"] .border,
+[data-vibe="brutalist"] [class*="border-["] { border-width: 2px !important; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -10,16 +36,17 @@ html, body, #root {
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  background: #1F1A14;
-  color: #F4EFE6;
-  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #403628; border-radius: 2px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #5A4535; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--c-surfaceAlt); }
 
 .line-clamp-2 {
   display: -webkit-box;

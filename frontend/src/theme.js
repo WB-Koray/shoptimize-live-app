@@ -1,5 +1,4 @@
-// Atlas Tema Sistemi — Warm Dark (varsayılan)
-// Token'lar sabit kalır, değerler tema ile değişir.
+// Atlas Tema Sistemi — Warm + Brutalist (her biri light + dark)
 
 const WARM = {
   light: {
@@ -41,9 +40,58 @@ const WARM = {
   },
 };
 
+const BRUTALIST = {
+  light: {
+    bg:'#FAFAF7', surface:'#FFFFFF', surfaceAlt:'#F0F0EA', surfaceSoft:'#FFFFFF',
+    border:'#000000', borderStrong:'#000000',
+    text:'#000000', textDim:'#3A3A3A', textMute:'#7A7A7A',
+    accent:'#FF4500', accentSoft:'#FFE8DD',
+    teal:'#0A7F6B', tealSoft:'#D0EBE5',
+    green:'#0A7D3E', greenSoft:'#D3EBD9',
+    amber:'#C48800', amberSoft:'#F5E6C0',
+    blue:'#0048C9', blueSoft:'#D6E1F5',
+    purple:'#5B2E9E', purpleSoft:'#E4DAF1',
+    rose:'#C41E3A', roseSoft:'#F5D5DB',
+    chartA:'#000000', chartB:'#FF4500', chartC:'#0A7D3E', chartD:'#5B2E9E',
+  },
+  dark: {
+    bg:'#0A0A0A', surface:'#121212', surfaceAlt:'#1A1A1A', surfaceSoft:'#0A0A0A',
+    border:'#FFFFFF', borderStrong:'#FFFFFF',
+    text:'#FFFFFF', textDim:'#C0C0C0', textMute:'#808080',
+    accent:'#FF6B35', accentSoft:'#2A1810',
+    teal:'#3EDAC4', tealSoft:'#0F2A26',
+    green:'#3EE87A', greenSoft:'#0F2A18',
+    amber:'#FFCC33', amberSoft:'#2A2110',
+    blue:'#5B9DFF', blueSoft:'#0F1A2A',
+    purple:'#C88FFF', purpleSoft:'#1F1230',
+    rose:'#FF5A7A', roseSoft:'#2A0F18',
+    chartA:'#FFFFFF', chartB:'#FF6B35', chartC:'#3EE87A', chartD:'#C88FFF',
+  },
+  fonts: {
+    display: "'JetBrains Mono', ui-monospace, monospace",
+    body:    "'JetBrains Mono', ui-monospace, monospace",
+    mono:    "'JetBrains Mono', ui-monospace, monospace",
+  },
+  radius: { sm:0, md:0, lg:0, xl:0 },
+  shadow: {
+    sm:'2px 2px 0 currentColor',
+    md:'4px 4px 0 currentColor',
+    lg:'6px 6px 0 currentColor',
+  },
+};
+
+const THEMES = { warm: WARM, brutalist: BRUTALIST };
+
 export function getTheme(vibe = 'warm', mode = 'dark') {
-  const t = vibe === 'warm' ? WARM : WARM;
-  return { vibe, mode, c: t[mode], fonts: t.fonts, radius: t.radius, shadow: t.shadow };
+  const t = THEMES[vibe] || WARM;
+  return {
+    vibe, mode,
+    c: t[mode] || t.dark,
+    fonts: t.fonts,
+    radius: t.radius,
+    shadow: t.shadow,
+    isBrutal: vibe === 'brutalist',
+  };
 }
 
 export function swatch(theme, name) {
@@ -57,6 +105,18 @@ export function swatch(theme, name) {
     rose:   { fg: c.rose,   bg: c.roseSoft   },
   };
   return m[name] || m.teal;
+}
+
+export function applyThemeToCSSVars(theme) {
+  const r = document.documentElement;
+  const { c, fonts, radius } = theme;
+  Object.entries(c).forEach(([k, v]) => r.style.setProperty(`--c-${k}`, v));
+  r.style.setProperty('--font-display', fonts.display);
+  r.style.setProperty('--font-body',    fonts.body);
+  r.style.setProperty('--font-mono',    fonts.mono);
+  Object.entries(radius).forEach(([k, v]) => r.style.setProperty(`--r-${k}`, `${v}px`));
+  r.dataset.vibe = theme.vibe;
+  r.dataset.mode = theme.mode;
 }
 
 export const T = getTheme('warm', 'dark');
