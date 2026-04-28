@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from services.auth import get_current_user
 from services.redis_store import store
-from services.wa_sender import send_wa_text, render_template
+from services.wa_sender import send_wa_template
 
 router = APIRouter()
 
@@ -80,16 +80,14 @@ async def send_test_message(
     elif not to_phone.startswith("+"):
         to_phone = f"+{digits}"
 
-    template = settings.get("message_template", _DEFAULT_TEMPLATE)
-    message = render_template(template, name="Test Kullanıcı", product="Test Ürün")
 
-    result = await send_wa_text(
+    result = await send_wa_template(
         settings["wa_token"],
         settings["phone_number_id"],
         to_phone,
-        message,
+        name="Test Kullanıcı",
+        product="Test Ürün",
     )
-    return result
 
 
 @router.get("/api/flow/logs")

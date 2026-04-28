@@ -23,7 +23,7 @@ from routers import flow
 async def _abandoned_checkout_worker():
     import asyncio
     import time
-    from services.wa_sender import send_wa_text, render_template
+    from services.wa_sender import send_wa_template
     while True:
         try:
             await asyncio.sleep(60)
@@ -48,9 +48,9 @@ async def _abandoned_checkout_worker():
                 phone    = co.get("phone", "")
                 if not wa_token or not phone_id or not phone:
                     continue
-                template = settings.get("message_template", "")
-                message  = render_template(template, name=co.get("name", ""), product=co.get("product", ""))
-                result   = await send_wa_text(wa_token, phone_id, phone, message)
+                
+                
+                result   = await send_wa_template(wa_token, phone_id, phone, name=co.get("name", ""), product=co.get("product", ""))
                 await store.mark_wa_sent(token)
                 entry = {
                     "ts": int(now_ms), "token": token[:16] + "…",
