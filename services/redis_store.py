@@ -154,6 +154,88 @@ class RedisStore:
         finally:
             await pubsub.aclose()
 
+    # ── Checkout takibi (terk edilmiş ödeme akışı) ──────────────────────────────
+
+    _CHECKOUT_TTL = 14_400  # 4 saat
+
+    async def save_checkout(self, checkout_token: str, data: dict) -> None:
+        """Checkout webhook'undan gelen veriyi Redis'e yazar."""
+        await self._redis.setex(
+            f"checkout:{checkout_token}",
+            self._CHECKOUT_TTL,
+            json.dumps(data, ensure_ascii=False),
+        )
+        # Zaman damgasıyla global sıralı set'e ekle
+        await self._redis.zadd("pending_checkouts", {checkout_token: data.get("ts", 0)})
+
+    async def mark_checkout_completed(self, checkout_token: str) -> None:
+        await self._redis.setex(f"checkout_done:{checkout_token}", self._CHECKOUT_TTL, "1")
+        await self._redis.zrem("pending_checkouts", checkout_token)
+
+    async def is_checkout_completed(self, checkout_token: str) -> bool:
+        return bool(await self._redis.exists(f"checkout_done:{checkout_token}"))
+
+    async def get_checkout(self, checkout_token: str) -> dict | None:
+        raw = await self._redis.get(f"checkout:{checkout_token}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    async def get_pending_checkouts_before(self, cutoff_ms: int) -> list[str]:
+        """cutoff_ms öncesindeki tüm checkout token'larını döner."""
+        return await self._redis.zrangebyscore("pending_checkouts", 0, cutoff_ms)
+
+    async def remove_pending_checkout(self, checkout_token: str) -> None:
+        await self._redis.zrem("pending_checkouts", checkout_token)
+
+    async def is_wa_sent(self, checkout_token: str) -> bool:
+        return bool(await self._redis.exists(f"wa_sent:{checkout_token}"))
+
+    async def mark_wa_sent(self, checkout_token: str) -> None:
+        await self._redis.setex(f"wa_sent:{checkout_token}", self._CHECKOUT_TTL, "1")
+
+    # ── Flow ayarları ────────────────────────────────────────────────────────────
+
+    async def save_flow_settings(self, username: str, brand: str, settings: dict) -> None:
+        await self._redis.set(
+            f"flow_settings:{username}:{brand}",
+            json.dumps(settings, ensure_ascii=False),
+        )
+
+    async def get_flow_settings(self, username: str, brand: str) -> dict:
+        raw = await self._redis.get(f"flow_settings:{username}:{brand}")
+        if not raw:
+            return {}
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {}
+
+    async def append_flow_log(self, username: str, brand: str, entry: dict) -> None:
+        key = f"flow_logs:{username}:{brand}"
+        pipe = self._redis.pipeline()
+        pipe.lpush(key, json.dumps(entry, ensure_ascii=False))
+        pipe.ltrim(key, 0, 199)
+        await pipe.execute()
+
+    async def get_flow_logs(self, username: str, brand: str, limit: int = 50) -> list[dict]:
+        raws = await self._redis.lrange(f"flow_logs:{username}:{brand}", 0, min(limit, 200) - 1)
+        result = []
+        for r in raws:
+            try:
+                result.append(json.loads(r))
+            except Exception:
+                pass
+        return result
+
+    async def clear_flow_logs(self, username: str, brand: str) -> None:
+        await self._redis.delete(f"flow_logs:{username}:{brand}")
+
+    # ── GDPR / cleanup ──────────────────────────────────────────────────────────
+
     async def delete_tid_events(self, tid: str) -> None:
         """GDPR shop/redact: TID'e ait tüm event ve visitor key'lerini sil."""
         pipe = self._redis.pipeline()

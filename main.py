@@ -17,6 +17,51 @@ from routers import live
 from routers import auth
 from routers import gdpr
 from routers import billing
+from routers import flow
+
+
+async def _abandoned_checkout_worker():
+    import asyncio
+    import time
+    from services.wa_sender import send_wa_text, render_template
+    while True:
+        try:
+            await asyncio.sleep(60)
+            now_ms = time.time() * 1000
+            pending = await store.get_pending_checkouts_before(int(now_ms))
+            for token in pending:
+                co = await store.get_checkout(token)
+                if not co:
+                    continue
+                username = co.get("username", "")
+                brand    = co.get("brand", "default")
+                settings = await store.get_flow_settings(username, brand)
+                if not settings.get("enabled"):
+                    continue
+                delay_ms = settings.get("delay_minutes", 15) * 60 * 1000
+                if now_ms - co.get("ts", 0) < delay_ms:
+                    continue
+                if await store.is_wa_sent(token):
+                    continue
+                wa_token = settings.get("wa_token", "")
+                phone_id = settings.get("phone_number_id", "")
+                phone    = co.get("phone", "")
+                if not wa_token or not phone_id or not phone:
+                    continue
+                template = settings.get("message_template", "")
+                message  = render_template(template, name=co.get("name", ""), product=co.get("product", ""))
+                result   = await send_wa_text(wa_token, phone_id, phone, message)
+                await store.mark_wa_sent(token)
+                entry = {
+                    "ts": int(now_ms), "token": token[:16] + "…",
+                    "phone": "***" + phone[-4:], "name": co.get("name", ""),
+                    "product": co.get("product", ""), "ok": result.get("ok"),
+                    "message_id": result.get("message_id", ""), "error": result.get("error", ""),
+                }
+                await store.append_flow_log(username, brand, entry)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("[FLOW] Worker hatası: %s", e)
 
 
 @asynccontextmanager
@@ -24,6 +69,8 @@ async def lifespan(app: FastAPI):
     # Startup
     await store.connect()
     await store.warmup_tid_cache()
+    import asyncio
+    asyncio.create_task(_abandoned_checkout_worker())
     yield
     # Shutdown
     await store.disconnect()
@@ -48,6 +95,7 @@ app.include_router(live.router)
 app.include_router(auth.router)
 app.include_router(gdpr.router)
 app.include_router(billing.router)
+app.include_router(flow.router)
 
 
 @app.get("/health")

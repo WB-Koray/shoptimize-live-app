@@ -4,6 +4,8 @@ import {
   Layers, CheckCircle, WifiOff, Zap, RefreshCw, Trash2,
   Radio, Users, ChevronDown, ChevronUp, TrendingUp,
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
+  MessageCircle, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
+  Clock, Phone, FileText, XCircle, AlertCircle,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 
@@ -521,10 +523,239 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
+// ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
+
+const DEFAULT_TEMPLATE = 'Merhaba {name}! 👋 Sepetinizde {product} bekleniyor. Siparişinizi tamamlamak için mağazamızı ziyaret edebilirsiniz.';
+
+function FlowPanel({ session }) {
+  const { token, username, brand } = session;
+  const base = API_URL;
+  const qp = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
+  const authH = { Authorization: `Bearer ${token}` };
+
+  const [settings, setSettings]   = useState({ enabled: false, wa_token: '', phone_number_id: '', delay_minutes: 15, message_template: DEFAULT_TEMPLATE });
+  const [maskedToken, setMasked]  = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [saveErr, setSaveErr]     = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [testLoading, setTestL]   = useState(false);
+  const [testResult, setTestRes]  = useState(null);
+  const [logs, setLogs]           = useState([]);
+  const [logsLoading, setLogsL]   = useState(false);
+  const [logsOpen, setLogsOpen]   = useState(true);
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${base}/api/flow/settings${qp}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) {
+        const s = d.settings || {};
+        setSettings({ enabled: s.enabled ?? false, wa_token: '', phone_number_id: s.phone_number_id || '', delay_minutes: s.delay_minutes || 15, message_template: s.message_template || DEFAULT_TEMPLATE });
+        setMasked(s.wa_token_masked || '');
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [username, brand]);
+
+  const fetchLogs = useCallback(async () => {
+    setLogsL(true);
+    try {
+      const r = await fetch(`${base}/api/flow/logs${qp}&limit=50`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setLogs(d.logs || []);
+    } catch { /* ignore */ }
+    setLogsL(false);
+  }, [username, brand]);
+
+  useEffect(() => { fetchSettings(); fetchLogs(); }, [username, brand]);
+
+  async function handleSave() {
+    setSaving(true); setSaved(false); setSaveErr('');
+    try {
+      const r = await fetch(`${base}/api/flow/settings${qp}`, { method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+      const d = await r.json();
+      if (d.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); await fetchSettings(); }
+      else setSaveErr(d.error || 'Kaydetme başarısız');
+    } catch { setSaveErr('Sunucuya bağlanılamadı'); }
+    setSaving(false);
+  }
+
+  async function handleTest() {
+    setTestL(true); setTestRes(null);
+    try {
+      const r = await fetch(`${base}/api/flow/test${qp}`, { method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: testPhone }) });
+      setTestRes(await r.json());
+    } catch { setTestRes({ ok: false, error: 'Sunucuya bağlanılamadı' }); }
+    setTestL(false);
+  }
+
+  async function handleClearLogs() {
+    await fetch(`${base}/api/flow/logs${qp}`, { method: 'DELETE', headers: authH });
+    setLogs([]);
+  }
+
+  if (loading) return <div className="flex items-center justify-center py-32"><RefreshCw size={20} className="text-textMute animate-spin" /></div>;
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 rounded-xl bg-greenSoft border border-green/20">
+          <MessageCircle size={16} className="text-green" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-text font-bold text-sm">WhatsApp Terk Edilmiş Ödeme</h2>
+          <p className="text-textMute text-xs">Ödemeyi yarım bırakan müşterilere otomatik bildirim</p>
+        </div>
+        <button onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
+          className="flex items-center gap-1.5 text-sm font-medium transition-colors">
+          {settings.enabled
+            ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">Aktif</span></>
+            : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">Pasif</span></>}
+        </button>
+      </div>
+
+      {/* Settings card */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-4">
+        {/* WA Token */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">WhatsApp Token</label>
+          <div className="relative">
+            <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+            <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
+              placeholder={maskedToken || 'EAAxxxxxxx…'}
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+          </div>
+          <p className="text-[10px] text-textMute">Meta Business → WhatsApp → API Kurulumu → Geçici erişim jetonu</p>
+        </div>
+
+        {/* Phone Number ID */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Phone Number ID</label>
+          <div className="relative">
+            <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+            <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
+              placeholder="123456789012345"
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+          </div>
+          <p className="text-[10px] text-textMute">Meta Business → WhatsApp → API Kurulumu → Telefon Numarası Kimliği</p>
+        </div>
+
+        {/* Gecikme */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Gecikme</label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Clock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+              <input type="number" min={5} max={120} value={settings.delay_minutes}
+                onChange={e => setSettings(s => ({ ...s, delay_minutes: parseInt(e.target.value) || 15 }))}
+                className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+            </div>
+            <span className="text-textMute text-xs shrink-0">dakika sonra gönder</span>
+          </div>
+        </div>
+
+        {/* Mesaj şablonu */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Mesaj Şablonu</label>
+          <textarea value={settings.message_template} onChange={e => setSettings(s => ({ ...s, message_template: e.target.value }))}
+            rows={3}
+            className="w-full bg-surfaceAlt border border-border rounded-xl px-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors resize-none" />
+          <p className="text-[10px] text-textMute">Değişkenler: <code className="text-textDim">{'{ name }'}</code> müşteri adı, <code className="text-textDim">{'{ product }'}</code> ürün</p>
+        </div>
+
+        {saveErr && (
+          <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-2.5 text-sm text-rose">
+            <AlertCircle size={13} className="shrink-0" />{saveErr}
+          </div>
+        )}
+        <button onClick={handleSave} disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50">
+          {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+          {saved ? 'Kaydedildi ✓' : saving ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
+      </div>
+
+      {/* Test */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+        <h3 className="text-text font-semibold text-sm flex items-center gap-2"><Send size={13} className="text-green" />Test Mesajı</h3>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+            <input type="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)}
+              placeholder="+905551234567" onKeyDown={e => e.key === 'Enter' && handleTest()}
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+          </div>
+          <button onClick={handleTest} disabled={testLoading || !testPhone.trim()}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50 shrink-0">
+            {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Gönder
+          </button>
+        </div>
+        {testResult && (
+          <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm border ${testResult.ok ? 'bg-greenSoft border-green/20 text-green' : 'bg-roseSoft border-rose/20 text-rose'}`}>
+            {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
+            {testResult.ok ? `Gönderildi — ID: ${testResult.message_id}` : (testResult.error || 'Başarısız')}
+          </div>
+        )}
+      </div>
+
+      {/* Logs */}
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <FileText size={13} className="text-textDim" />
+          <span className="text-text font-semibold text-sm flex-1">Gönderim Geçmişi</span>
+          <span className="text-textMute text-xs">{logs.length} kayıt</span>
+          <button onClick={fetchLogs} disabled={logsLoading}
+            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors disabled:opacity-50">
+            <RefreshCw size={11} className={logsLoading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={handleClearLogs} disabled={logs.length === 0}
+            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-rose transition-colors disabled:opacity-50">
+            <Trash2 size={11} />
+          </button>
+          <button onClick={() => setLogsOpen(o => !o)}
+            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors">
+            {logsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+        </div>
+        {logsOpen && (
+          <div className="overflow-y-auto max-h-80 p-3 space-y-2 custom-scrollbar">
+            {logs.length === 0 ? (
+              <div className="py-10 text-center">
+                <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
+                <p className="text-textMute text-sm">Henüz gönderim yok</p>
+              </div>
+            ) : logs.map((entry, i) => (
+              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
+                <div className="mt-0.5 shrink-0">{entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-text font-medium">{entry.name || 'Müşteri'}</span>
+                    <span className="text-textMute text-xs">{entry.phone}</span>
+                    {entry.product && <span className="text-textMute text-xs truncate max-w-[140px]">{entry.product}</span>}
+                  </div>
+                  {entry.error && <p className="text-rose text-xs mt-0.5">{entry.error}</p>}
+                </div>
+                <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">{new Date(entry.ts).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
+
 export default function Dashboard({ session, onLogout }) {
   const { token, username, brand, tid } = session;
   const qs = `username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
 
+  const [activeView, setActiveView] = useState('live');
   const [events, setEvents]           = useState([]);
   const [sseStatus, setSseStatus]     = useState('connecting');
   const [paused, setPaused]           = useState(false);
@@ -897,6 +1128,17 @@ export default function Dashboard({ session, onLogout }) {
               ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> Bağlanıyor...</>
               : <><WifiOff size={12} /> Bağlı Değil</>}
           </div>
+          {/* View switcher */}
+          <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5">
+            <button onClick={() => setActiveView('live')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'live' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+              <Radio size={11} /> Canlı
+            </button>
+            <button onClick={() => setActiveView('flow')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'flow' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+              <MessageCircle size={11} /> WA Otomasyon
+            </button>
+          </div>
           <ThemeSwitch />
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
@@ -904,6 +1146,11 @@ export default function Dashboard({ session, onLogout }) {
           </button>
         </div>
       </div>
+
+      {/* WA Otomasyon view */}
+      {activeView === 'flow' && <FlowPanel session={session} />}
+
+      {activeView === 'live' && <>
 
       {/* Pixel panel */}
       <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
@@ -1242,6 +1489,8 @@ export default function Dashboard({ session, onLogout }) {
       <DrillDownModal title={drillDown?.title} subtitle={drillDown?.subtitle}
         products={drillDown?.products} visitors={drillDown?.visitors}
         onClose={() => setDrillDown(null)} />
+
+      </>}
     </div>
     </div>
   );
