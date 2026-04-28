@@ -667,6 +667,7 @@ async def shopify_checkouts_webhook(
     customer_name = f"{first_name} {last_name}".strip()
 
     if not phone:
+        logger.info("[CHECKOUT] telefon yok — atlandı email=%s", email or "-")
         return JSONResponse({"ok": True, "matched": False, "reason": "no_phone"})
 
     if not phone.startswith("+"):
@@ -699,6 +700,9 @@ async def shopify_checkouts_webhook(
             "brand": brand,
             "ts": int(time.time() * 1000),
         })
+        logger.info("[CHECKOUT] kaydedildi phone=***%s name=%s product=%s", phone[-4:], customer_name or "-", product[:30] or "-")
+    else:
+        logger.info("[CHECKOUT] token veya telefon eksik token=%s phone=%s", bool(checkout_token), bool(phone))
 
     return JSONResponse({"ok": True, "matched": bool(matched_vid), "vid": matched_vid, "checkout_saved": bool(checkout_token and phone)})
 
