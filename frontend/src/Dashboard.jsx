@@ -23,15 +23,15 @@ const EVENT_META = {
   search_submitted:   { label: 'Arama Yapıldı',       icon: Search,       color: 'slate'   },
 };
 
-// Warm dark renk eşlemeleri
+// Token tabanlı renk eşlemeleri — tema değişince otomatik güncellenir
 const CM = {
-  blue:    { bg: 'bg-[#1F2A36]',  text: 'text-[#8FAECB]',  dot: 'bg-[#8FAECB]'  },
-  purple:  { bg: 'bg-[#2C2336]',  text: 'text-[#C4A5D4]',  dot: 'bg-[#C4A5D4]'  },
-  teal:    { bg: 'bg-[#1F2E2A]',  text: 'text-[#6DC4B0]',  dot: 'bg-[#6DC4B0]'  },
-  orange:  { bg: 'bg-[#332815]',  text: 'text-[#E0BA70]',  dot: 'bg-[#E0BA70]'  },
-  emerald: { bg: 'bg-[#24301D]',  text: 'text-[#9BBA7A]',  dot: 'bg-[#9BBA7A]'  },
-  yellow:  { bg: 'bg-[#332815]',  text: 'text-[#E0BA70]',  dot: 'bg-[#E0BA70]'  },
-  slate:   { bg: 'bg-[#362D22]',  text: 'text-[#B8AD9A]',  dot: 'bg-[#B8AD9A]'  },
+  blue:    { bg: 'bg-blueSoft',   text: 'text-blue',    dot: 'bg-blue'    },
+  purple:  { bg: 'bg-purpleSoft', text: 'text-purple',  dot: 'bg-purple'  },
+  teal:    { bg: 'bg-tealSoft',   text: 'text-teal',    dot: 'bg-teal'    },
+  orange:  { bg: 'bg-amberSoft',  text: 'text-amber',   dot: 'bg-amber'   },
+  emerald: { bg: 'bg-greenSoft',  text: 'text-green',   dot: 'bg-green'   },
+  yellow:  { bg: 'bg-amberSoft',  text: 'text-amber',   dot: 'bg-amber'   },
+  slate:   { bg: 'bg-surfaceAlt', text: 'text-textDim', dot: 'bg-textDim' },
 };
 
 const STAGE_META = {
@@ -43,14 +43,14 @@ const STAGE_META = {
 };
 
 const SRC_COLORS = {
-  'Arama':    'text-[#8FAECB]',
-  'Facebook': 'text-[#8FAECB]',
-  'Instagram':'text-[#DB8898]',
-  'TikTok':   'text-[#B8AD9A]',
-  'YouTube':  'text-[#DB8898]',
-  'Twitter/X':'text-[#8FAECB]',
-  'Doğrudan': 'text-[#9BBA7A]',
-  'Diğer':    'text-[#B8AD9A]',
+  'Arama':    'text-blue',
+  'Facebook': 'text-blue',
+  'Instagram':'text-rose',
+  'TikTok':   'text-textDim',
+  'YouTube':  'text-rose',
+  'Twitter/X':'text-blue',
+  'Doğrudan': 'text-green',
+  'Diğer':    'text-textDim',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,17 +97,17 @@ function StatCard({ label, value, icon: Icon, color = 'blue', pulse, onClick }) 
   const c = CM[color] || CM.blue;
   return (
     <div onClick={onClick}
-      className={`bg-[#2A231B] border border-[#403628] rounded-xl p-3 flex items-center gap-3 transition-colors
+      className={`bg-surface border border-border rounded-xl p-3 flex items-center gap-3 transition-colors
         ${onClick ? 'cursor-pointer hover:border-[#5A4535]' : ''}`}>
       <div className={`p-2 rounded-lg ${c.bg} shrink-0 relative`}>
         <Icon size={16} className={c.text} />
-        {pulse && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#9BBA7A] animate-ping" />}
+        {pulse && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green animate-ping" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[#B8AD9A] text-[10px] uppercase font-bold tracking-wide truncate">{label}</p>
-        <p className={`text-lg font-bold leading-tight tabular-nums ${pulse ? c.text : 'text-[#F4EFE6]'}`}>{value}</p>
+        <p className="text-textDim text-[10px] uppercase font-bold tracking-wide truncate">{label}</p>
+        <p className={`text-lg font-bold leading-tight tabular-nums ${pulse ? c.text : 'text-text'}`}>{value}</p>
       </div>
-      {onClick && <ArrowRight size={12} className="text-[#7A705F] shrink-0" />}
+      {onClick && <ArrowRight size={12} className="text-textMute shrink-0" />}
     </div>
   );
 }
@@ -116,46 +116,46 @@ function StatCard({ label, value, icon: Icon, color = 'blue', pulse, onClick }) 
 
 function ProductCard({ product, flash }) {
   return (
-    <div className={`bg-[#24201A] border rounded-xl overflow-hidden transition-all duration-300
-      ${flash ? 'border-[#C4A5D4]/50 shadow-lg shadow-[#C4A5D4]/10' : 'border-[#403628]'}`}>
-      <div className="relative aspect-square bg-[#2A231B] overflow-hidden">
+    <div className={`bg-surfaceSoft border rounded-xl overflow-hidden transition-all duration-300
+      ${flash ? 'border-purple/50 shadow-lg' : 'border-border'}`}>
+      <div className="relative aspect-square bg-surface overflow-hidden">
         {product.image
           ? <img src={product.image} alt={product.title} className="w-full h-full object-contain p-2"
               onError={e => { e.target.style.display = 'none'; }} />
           : <div className="w-full h-full flex items-center justify-center">
-              <Package size={24} className="text-[#7A705F]" />
+              <Package size={24} className="text-textMute" />
             </div>
         }
-        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-[#1F1A14]/80 backdrop-blur-sm px-2 py-0.5 rounded-full">
-          <Eye size={10} className="text-[#C4A5D4]" />
-          <span className={`text-xs font-bold tabular-nums ${flash ? 'text-[#D4BAE0]' : 'text-[#F4EFE6]'}`}>{product.views}</span>
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-bg/80 backdrop-blur-sm px-2 py-0.5 rounded-full">
+          <Eye size={10} className="text-purple" />
+          <span className={`text-xs font-bold tabular-nums ${flash ? 'text-purple' : 'text-text'}`}>{product.views}</span>
         </div>
       </div>
       <div className="p-2.5 space-y-1.5">
-        <p className="text-[#F4EFE6] text-[11px] font-semibold leading-tight line-clamp-2" title={product.title}>{product.title}</p>
+        <p className="text-text text-[11px] font-semibold leading-tight line-clamp-2" title={product.title}>{product.title}</p>
         {product.price && (
-          <p className="text-[#9BBA7A] text-[11px] font-bold tabular-nums">
+          <p className="text-green text-[11px] font-bold tabular-nums">
             {parseFloat(product.price).toLocaleString('tr-TR')} ₺
           </p>
         )}
-        <div className="flex items-center gap-1 pt-1 border-t border-[#403628]">
-          <Eye size={9} className="text-[#C4A5D4]" />
-          <span className="text-[9px] text-[#B8AD9A]">Görüntüleme</span>
-          <span className="text-[9px] font-bold text-[#D4BAE0] ml-auto tabular-nums">{product.views}</span>
+        <div className="flex items-center gap-1 pt-1 border-t border-border">
+          <Eye size={9} className="text-purple" />
+          <span className="text-[9px] text-textDim">Görüntüleme</span>
+          <span className="text-[9px] font-bold text-purple ml-auto tabular-nums">{product.views}</span>
         </div>
         <div className="flex items-center gap-1">
-          <ShoppingCart size={9} className="text-[#9BBA7A]" />
-          <span className="text-[9px] text-[#B8AD9A]">Sepete Ekleme</span>
-          <span className="text-[9px] font-bold text-[#B3D090] ml-auto tabular-nums">{product.carts}</span>
+          <ShoppingCart size={9} className="text-green" />
+          <span className="text-[9px] text-textDim">Sepete Ekleme</span>
+          <span className="text-[9px] font-bold text-green ml-auto tabular-nums">{product.carts}</span>
         </div>
         {product.views > 0 && product.carts > 0 && (
           <div className="text-center">
-            <span className="text-[9px] font-bold text-[#E0BA70] bg-[#332815] px-2 py-0.5 rounded-full">
+            <span className="text-[9px] font-bold text-amber bg-amberSoft px-2 py-0.5 rounded-full">
               %{((product.carts / product.views) * 100).toFixed(0)} dönüşüm
             </span>
           </div>
         )}
-        {product.vendor && <p className="text-[9px] text-[#7A705F] truncate">{product.vendor}</p>}
+        {product.vendor && <p className="text-[9px] text-textMute truncate">{product.vendor}</p>}
       </div>
     </div>
   );
@@ -171,30 +171,30 @@ function VisitorCard({ profile, customerName, onClick }) {
   const fullName = customerName ? [customerName.first_name, customerName.last_name].filter(Boolean).join(' ') : null;
   return (
     <div onClick={onClick}
-      className={`bg-[#24201A] border rounded-xl p-3 cursor-pointer hover:border-[#5A4535] transition-all space-y-2
-        ${inactive ? 'border-[#403628]/40 opacity-50' : 'border-[#403628]'}`}>
+      className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-[#5A4535] transition-all space-y-2
+        ${inactive ? 'border-border/40 opacity-50' : 'border-border'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <DevIcon size={11} className="text-[#8A7D6A]" />
-          <span className="text-[10px] text-[#B8AD9A] font-mono">{shortVid(profile.vid)}</span>
+          <DevIcon size={11} className="text-textMute" />
+          <span className="text-[10px] text-textDim font-mono">{shortVid(profile.vid)}</span>
         </div>
         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
       </div>
       {fullName
-        ? <p className="text-[10px] text-[#B3D090] font-semibold truncate">{fullName}</p>
+        ? <p className="text-[10px] text-green font-semibold truncate">{fullName}</p>
         : profile.customer_id
-          ? <p className="text-[9px] text-[#9BBA7A]/60 font-mono truncate">Üye #{profile.customer_id}</p>
+          ? <p className="text-[9px] text-green/60 font-mono truncate">Üye #{profile.customer_id}</p>
           : null
       }
       {profile.lastProduct && (
-        <p className="text-[10px] text-[#F4EFE6]/70 truncate" title={profile.lastProduct}>{profile.lastProduct}</p>
+        <p className="text-[10px] text-text/70 truncate" title={profile.lastProduct}>{profile.lastProduct}</p>
       )}
       {profile.utm?.utm_campaign && (
-        <p className="text-[9px] text-[#8FAECB] truncate">{profile.utm.utm_source || 'utm'} / {profile.utm.utm_campaign}</p>
+        <p className="text-[9px] text-blue truncate">{profile.utm.utm_source || 'utm'} / {profile.utm.utm_campaign}</p>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-[#7A705F]">{profile.referrer}</span>
-        <span className="text-[9px] text-[#7A705F]">{timeAgo(profile.lastTs)}</span>
+        <span className="text-[9px] text-textMute">{profile.referrer}</span>
+        <span className="text-[9px] text-textMute">{timeAgo(profile.lastTs)}</span>
       </div>
     </div>
   );
@@ -209,7 +209,7 @@ function EventRow({ ev, isNew }) {
   const d = ev.data || {};
   return (
     <div className={`flex items-start gap-3 p-3 rounded-xl border transition-all duration-500
-      ${isNew ? 'border-[#9BBA7A]/40 bg-[#24301D]/50 event-enter' : 'border-[#403628]/60 bg-[#24201A]'}`}>
+      ${isNew ? 'border-green/40 bg-greenSoft/50 event-enter' : 'border-border/60 bg-surfaceSoft'}`}>
       <div className={`p-1.5 rounded-lg ${c.bg} shrink-0 mt-0.5`}>
         <Icon size={14} className={c.text} />
       </div>
@@ -217,42 +217,42 @@ function EventRow({ ev, isNew }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs font-bold ${c.text}`}>{meta.label}</span>
           {d.order_number && (
-            <span className="text-[10px] font-bold text-[#B3D090] bg-[#24301D] border border-[#9BBA7A]/20 px-1.5 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
               #{d.order_number}
             </span>
           )}
           {d.total_price && (
-            <span className="text-[10px] font-bold text-[#9BBA7A]">
+            <span className="text-[10px] font-bold text-green">
               {parseFloat(d.total_price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {d.currency || 'TRY'}
             </span>
           )}
           {d.product_title && !d.order_number && (
-            <span className="text-[10px] text-[#F4EFE6]/80 bg-[#4A3D2E]/60 px-1.5 py-0.5 rounded truncate max-w-[160px]" title={d.product_title}>
+            <span className="text-[10px] text-text/80 bg-surfaceAlt/60 px-1.5 py-0.5 rounded truncate max-w-[160px]" title={d.product_title}>
               {d.product_title}
             </span>
           )}
-          {d.query && <span className="text-[10px] text-[#F4EFE6]/80 bg-[#4A3D2E]/60 px-1.5 py-0.5 rounded">"{d.query}"</span>}
+          {d.query && <span className="text-[10px] text-text/80 bg-surfaceAlt/60 px-1.5 py-0.5 rounded">"{d.query}"</span>}
           {d.product_price && !d.order_number && (
-            <span className="text-[10px] text-[#9BBA7A] font-bold">{d.product_price} ₺</span>
+            <span className="text-[10px] text-green font-bold">{d.product_price} ₺</span>
           )}
         </div>
         {d.line_items?.length > 0 && (
-          <p className="text-[9px] text-[#8A7D6A] mt-0.5 truncate">
+          <p className="text-[9px] text-textMute mt-0.5 truncate">
             {d.line_items.slice(0, 3).map(li => `${li.title} ×${li.quantity}`).join(' · ')}
             {d.line_items.length > 3 ? ` +${d.line_items.length - 3}` : ''}
           </p>
         )}
         {!d.line_items?.length && (
-          <p className="text-[10px] text-[#8A7D6A] mt-0.5 truncate">{fmtUrl(ev.url)}</p>
+          <p className="text-[10px] text-textMute mt-0.5 truncate">{fmtUrl(ev.url)}</p>
         )}
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.dot}`} />
-          <span className="text-[9px] text-[#7A705F]">{shortVid(ev.vid)}</span>
-          {ev.customer_id && <span className="text-[9px] text-[#9BBA7A]">Üye #{ev.customer_id}</span>}
+          <span className="text-[9px] text-textMute">{shortVid(ev.vid)}</span>
+          {ev.customer_id && <span className="text-[9px] text-green">Üye #{ev.customer_id}</span>}
           {ev.utm?.utm_campaign && (
-            <span className="text-[9px] text-[#8FAECB] bg-[#1F2A36] px-1 rounded">{ev.utm.utm_campaign}</span>
+            <span className="text-[9px] text-blue bg-blueSoft px-1 rounded">{ev.utm.utm_campaign}</span>
           )}
-          <span className="text-[9px] text-[#7A705F]">{fmtTime(ev.ts)}</span>
+          <span className="text-[9px] text-textMute">{fmtTime(ev.ts)}</span>
         </div>
       </div>
     </div>
@@ -264,29 +264,29 @@ function EventRow({ ev, isNew }) {
 function FunnelWidget({ stats }) {
   const total = stats.total || 1;
   const steps = [
-    { label: 'Tüm Ziyaretçi',   count: stats.total,     color: 'bg-[#8FAECB]',  pct: 100 },
-    { label: 'Ürün İnceledi',    count: stats.product,   color: 'bg-[#C4A5D4]',  pct: (stats.product / total) * 100 },
-    { label: 'Sepete Ekledi',    count: stats.cart,      color: 'bg-[#E0BA70]',  pct: (stats.cart / total) * 100 },
-    { label: 'Ödeme Başlattı',   count: stats.checkout,  color: 'bg-[#E0BA70]',  pct: (stats.checkout / total) * 100 },
-    { label: 'Satın Aldı',       count: stats.converted, color: 'bg-[#9BBA7A]',  pct: (stats.converted / total) * 100 },
+    { label: 'Tüm Ziyaretçi',   count: stats.total,     color: 'bg-blue',   pct: 100 },
+    { label: 'Ürün İnceledi',    count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
+    { label: 'Sepete Ekledi',    count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
+    { label: 'Ödeme Başlattı',   count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
+    { label: 'Satın Aldı',       count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
   ];
   return (
-    <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-2 p-4 border-b border-[#403628]">
-        <TrendingUp size={15} className="text-[#8FAECB]" />
-        <span className="text-[#F4EFE6] text-sm font-bold">Dönüşüm Hunisi</span>
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 p-4 border-b border-border">
+        <TrendingUp size={15} className="text-blue" />
+        <span className="text-text text-sm font-bold">Dönüşüm Hunisi</span>
       </div>
       <div className="p-4 space-y-3">
         {steps.map((step, i) => (
           <div key={step.label} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#B8AD9A]">{step.label}</span>
+              <span className="text-textDim">{step.label}</span>
               <div className="flex items-center gap-2">
-                <span className="text-[#F4EFE6] font-bold tabular-nums">{step.count}</span>
-                {i > 0 && <span className="text-[10px] text-[#8A7D6A]">({step.pct.toFixed(1)}%)</span>}
+                <span className="text-text font-bold tabular-nums">{step.count}</span>
+                {i > 0 && <span className="text-[10px] text-textMute">({step.pct.toFixed(1)}%)</span>}
               </div>
             </div>
-            <div className="h-2 bg-[#362D22] rounded-full overflow-hidden">
+            <div className="h-2 bg-surfaceAlt rounded-full overflow-hidden">
               <div className={`h-full ${step.color} rounded-full transition-all duration-700`}
                 style={{ width: `${Math.min(100, step.pct)}%` }} />
             </div>
@@ -304,24 +304,24 @@ function TrafficTable({ traffic, onSourceClick }) {
   const max = traffic[0]?.count || 1;
   const total = traffic.reduce((a, b) => a + b.count, 0) || 1;
   return (
-    <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-2 p-4 border-b border-[#403628]">
-        <Globe size={15} className="text-[#B8AD9A]" />
-        <span className="text-[#F4EFE6] text-sm font-bold">Trafik Kaynakları</span>
-        <span className="text-[10px] text-[#7A705F] ml-auto">Tıkla → ürünleri gör</span>
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 p-4 border-b border-border">
+        <Globe size={15} className="text-textDim" />
+        <span className="text-text text-sm font-bold">Trafik Kaynakları</span>
+        <span className="text-[10px] text-textMute ml-auto">Tıkla → ürünleri gör</span>
       </div>
-      <div className="divide-y divide-[#403628]/60">
+      <div className="divide-y divide-border/60">
         {traffic.map(({ source, count }) => (
           <div key={source} onClick={() => onSourceClick?.(source)}
-            className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-[#362D22]/40 transition-colors">
-            <span className={`text-xs font-bold w-24 shrink-0 ${SRC_COLORS[source] || 'text-[#B8AD9A]'}`}>{source}</span>
-            <div className="flex-1 h-1.5 bg-[#362D22] rounded-full overflow-hidden">
+            className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
+            <span className={`text-xs font-bold w-24 shrink-0 ${SRC_COLORS[source] || 'text-textDim'}`}>{source}</span>
+            <div className="flex-1 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
                 style={{ width: `${(count / max) * 100}%` }} />
             </div>
-            <span className="text-xs font-bold text-[#D8CFC4] tabular-nums w-5 text-right">{count}</span>
-            <span className="text-[10px] text-[#7A705F] w-8 text-right">{((count / total) * 100).toFixed(0)}%</span>
-            <ArrowRight size={11} className="text-[#6A6050] shrink-0" />
+            <span className="text-xs font-bold text-textDim tabular-nums w-5 text-right">{count}</span>
+            <span className="text-[10px] text-textMute w-8 text-right">{((count / total) * 100).toFixed(0)}%</span>
+            <ArrowRight size={11} className="text-textMute shrink-0" />
           </div>
         ))}
       </div>
@@ -334,25 +334,25 @@ function TrafficTable({ traffic, onSourceClick }) {
 function SearchTable({ searches }) {
   if (!searches.length) return null;
   return (
-    <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-2 p-4 border-b border-[#403628]">
-        <Search size={15} className="text-[#B8AD9A]" />
-        <span className="text-[#F4EFE6] text-sm font-bold">Canlı Aramalar</span>
-        <span className="text-[10px] bg-[#4A3D2E] text-[#B8AD9A] px-2 py-0.5 rounded-full ml-auto">{searches.length} terim</span>
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 p-4 border-b border-border">
+        <Search size={15} className="text-textDim" />
+        <span className="text-text text-sm font-bold">Canlı Aramalar</span>
+        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-auto">{searches.length} terim</span>
       </div>
-      <div className="divide-y divide-[#403628]/60">
+      <div className="divide-y divide-border/60">
         {searches.map((s, i) => (
-          <div key={s.query} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#362D22]/40 transition-colors">
-            <span className="text-[10px] text-[#7A705F] w-4 text-right font-mono">{i + 1}</span>
+          <div key={s.query} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+            <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
             <div className="flex-1 min-w-0">
-              <span className="text-sm text-[#F4EFE6] font-medium">"{s.query}"</span>
+              <span className="text-sm text-text font-medium">"{s.query}"</span>
             </div>
-            <div className="w-20 h-1.5 bg-[#362D22] rounded-full overflow-hidden">
+            <div className="w-20 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(100, (s.count / searches[0].count) * 100)}%` }} />
             </div>
-            <span className="text-xs font-bold text-[#D8CFC4] w-6 text-right tabular-nums">{s.count}</span>
-            <span className="text-[9px] text-[#7A705F] w-16 text-right">{timeAgo(s.lastTs)}</span>
+            <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
+            <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(s.lastTs)}</span>
           </div>
         ))}
       </div>
@@ -370,42 +370,42 @@ function JourneyModal({ profile, customerName, onClose }) {
   const fullName = customerName ? [customerName.first_name, customerName.last_name].filter(Boolean).join(' ') : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#2A231B] border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[82vh] flex flex-col shadow-2xl"
+      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[82vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-[#403628]">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[#362D22]/80">
-              <DevIcon size={14} className="text-[#B8AD9A]" />
+            <div className="p-2 rounded-lg bg-surfaceAlt/80">
+              <DevIcon size={14} className="text-textDim" />
             </div>
             <div>
               {fullName
-                ? <><p className="text-[#B3D090] font-bold text-sm">{fullName}</p>
-                    <p className="text-[#8A7D6A] text-[10px]">{shortVid(profile.vid)} · {profile.referrer} · {profile.device}</p></>
-                : <><p className="text-[#F4EFE6] font-bold text-sm">{shortVid(profile.vid)}</p>
-                    <p className="text-[#8A7D6A] text-[10px]">{profile.referrer} · {profile.device}</p></>
+                ? <><p className="text-green font-bold text-sm">{fullName}</p>
+                    <p className="text-textMute text-[10px]">{shortVid(profile.vid)} · {profile.referrer} · {profile.device}</p></>
+                : <><p className="text-text font-bold text-sm">{shortVid(profile.vid)}</p>
+                    <p className="text-textMute text-[10px]">{profile.referrer} · {profile.device}</p></>
               }
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
-            <button onClick={onClose} className="p-1.5 hover:bg-[#362D22] rounded-lg text-[#B8AD9A] hover:text-[#F4EFE6] transition-colors">
+            <button onClick={onClose} className="p-1.5 hover:bg-surfaceAlt rounded-lg text-textDim hover:text-text transition-colors">
               <X size={14} />
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-[#403628]/60 text-[10px] text-[#8A7D6A] flex-wrap">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-border/60 text-[10px] text-textMute flex-wrap">
           <span>{profile.events.length} event</span>
           <span>İlk: {fmtTime(profile.firstTs)}</span>
           <span>Son: {fmtTime(profile.lastTs)}</span>
           <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} dk</span>
-          {profile.customer_id && !fullName && <span className="text-[#9BBA7A] font-semibold">Üye #{profile.customer_id}</span>}
-          {customerName?.email && <span className="text-[#B8AD9A]">{customerName.email}</span>}
-          {customerName?.orders_count > 0 && <span className="text-[#E0BA70]">{customerName.orders_count} sipariş</span>}
+          {profile.customer_id && !fullName && <span className="text-green font-semibold">Üye #{profile.customer_id}</span>}
+          {customerName?.email && <span className="text-textDim">{customerName.email}</span>}
+          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} sipariş</span>}
           {customerName?.total_spent && parseFloat(customerName.total_spent) > 0 && (
-            <span className="text-[#9BBA7A]">{parseFloat(customerName.total_spent).toLocaleString('tr-TR')} ₺</span>
+            <span className="text-green">{parseFloat(customerName.total_spent).toLocaleString('tr-TR')} ₺</span>
           )}
           {profile.utm?.utm_campaign && (
-            <span className="text-[#8FAECB]">{[profile.utm.utm_source, profile.utm.utm_medium, profile.utm.utm_campaign].filter(Boolean).join(' / ')}</span>
+            <span className="text-blue">{[profile.utm.utm_source, profile.utm.utm_medium, profile.utm.utm_campaign].filter(Boolean).join(' / ')}</span>
           )}
         </div>
         <div className="overflow-y-auto flex-1 p-3 space-y-1 custom-scrollbar">
@@ -414,17 +414,17 @@ function JourneyModal({ profile, customerName, onClose }) {
             const ec = CM[meta.color] || CM.slate;
             const Icon = meta.icon;
             return (
-              <div key={i} className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-[#362D22]/40">
+              <div key={i} className="flex items-start gap-3 px-2 py-1.5 rounded-lg hover:bg-surfaceAlt/40">
                 <div className={`p-1 rounded-md ${ec.bg} shrink-0 mt-0.5`}><Icon size={11} className={ec.text} /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[10px] font-bold ${ec.text}`}>{meta.label}</span>
-                    {ev.data?.product_title && <span className="text-[10px] text-[#F4EFE6]/70 truncate max-w-[160px]">{ev.data.product_title}</span>}
-                    {ev.data?.query && <span className="text-[10px] text-[#F4EFE6]/70">"{ev.data.query}"</span>}
+                    {ev.data?.product_title && <span className="text-[10px] text-text/70 truncate max-w-[160px]">{ev.data.product_title}</span>}
+                    {ev.data?.query && <span className="text-[10px] text-text/70">"{ev.data.query}"</span>}
                   </div>
-                  <p className="text-[9px] text-[#7A705F] truncate">{fmtUrl(ev.url)}</p>
+                  <p className="text-[9px] text-textMute truncate">{fmtUrl(ev.url)}</p>
                 </div>
-                <span className="text-[9px] text-[#7A705F] shrink-0">{fmtTime(ev.ts)}</span>
+                <span className="text-[9px] text-textMute shrink-0">{fmtTime(ev.ts)}</span>
               </div>
             );
           })}
@@ -440,38 +440,38 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
   if (!title) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#2A231B] border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl"
+      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-[#403628]">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <p className="text-[#F4EFE6] font-bold text-sm">{title}</p>
-            {subtitle && <p className="text-[#8A7D6A] text-[10px] mt-0.5">{subtitle}</p>}
+            <p className="text-text font-bold text-sm">{title}</p>
+            {subtitle && <p className="text-textMute text-[10px] mt-0.5">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-[#362D22] rounded-lg text-[#B8AD9A] hover:text-[#F4EFE6] transition-colors">
+          <button onClick={onClose} className="p-1.5 hover:bg-surfaceAlt rounded-lg text-textDim hover:text-text transition-colors">
             <X size={14} />
           </button>
         </div>
         <div className="overflow-y-auto flex-1 p-3 space-y-1 custom-scrollbar">
           {products?.length > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] text-[#8A7D6A] uppercase font-bold px-2 mb-1">Görüntülenen Ürünler ({products.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Görüntülenen Ürünler ({products.length})</p>
               {products.map((p, i) => (
-                <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-[#362D22]/40 transition-colors">
-                  <span className="text-[10px] text-[#7A705F] w-4 text-right font-mono">{i + 1}</span>
+                <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
+                  <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
                   {p.image && <img src={p.image} alt={p.title} className="w-8 h-8 rounded object-cover shrink-0"
                     onError={e => { e.target.style.display = 'none'; }} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[#F4EFE6] font-medium truncate">{p.title}</p>
-                    {p.price && <p className="text-[10px] text-[#9BBA7A]">{parseFloat(p.price).toLocaleString('tr-TR')} ₺</p>}
+                    <p className="text-xs text-text font-medium truncate">{p.title}</p>
+                    {p.price && <p className="text-[10px] text-green">{parseFloat(p.price).toLocaleString('tr-TR')} ₺</p>}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs font-bold text-[#D4BAE0] tabular-nums">{p.views}</p>
-                    <p className="text-[9px] text-[#7A705F]">görüntüleme</p>
+                    <p className="text-xs font-bold text-purple tabular-nums">{p.views}</p>
+                    <p className="text-[9px] text-textMute">görüntüleme</p>
                   </div>
                   {p.carts > 0 && (
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-bold text-[#B3D090] tabular-nums">{p.carts}</p>
-                      <p className="text-[9px] text-[#7A705F]">sepet</p>
+                      <p className="text-xs font-bold text-green tabular-nums">{p.carts}</p>
+                      <p className="text-[9px] text-textMute">sepet</p>
                     </div>
                   )}
                 </div>
@@ -480,23 +480,23 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
           )}
           {visitors?.length > 0 && (
             <div>
-              <p className="text-[10px] text-[#8A7D6A] uppercase font-bold px-2 mb-1">Ziyaretçiler ({visitors.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Ziyaretçiler ({visitors.length})</p>
               {visitors.slice(0, 30).map((v, i) => {
                 const sm2 = STAGE_META[v.stage] || STAGE_META.browsing;
                 const c2 = CM[sm2.color] || CM.slate;
                 return (
-                  <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-[#362D22]/40 transition-colors">
-                    <span className="text-[9px] font-mono text-[#8A7D6A] w-16">{shortVid(v.vid)}</span>
+                  <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
+                    <span className="text-[9px] font-mono text-textMute w-16">{shortVid(v.vid)}</span>
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{sm2.label}</span>
-                    {v.lastProduct && <span className="text-[10px] text-[#F4EFE6]/60 flex-1 truncate">{v.lastProduct}</span>}
-                    <span className="text-[9px] text-[#7A705F] shrink-0">{timeAgo(v.lastTs)}</span>
+                    {v.lastProduct && <span className="text-[10px] text-text/60 flex-1 truncate">{v.lastProduct}</span>}
+                    <span className="text-[9px] text-textMute shrink-0">{timeAgo(v.lastTs)}</span>
                   </div>
                 );
               })}
             </div>
           )}
           {!products?.length && !visitors?.length && (
-            <div className="py-8 text-center text-[#7A705F] text-sm">Veri yok</div>
+            <div className="py-8 text-center text-textMute text-sm">Veri yok</div>
           )}
         </div>
       </div>
@@ -506,15 +506,15 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
 
 // ── Section header helper ─────────────────────────────────────────────────────
 
-function SectionHead({ icon: Icon, iconClass = 'text-[#B8AD9A]', title, badge, extra }) {
+function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, extra }) {
   return (
-    <div className="flex items-center gap-2 p-4 border-b border-[#403628]">
+    <div className="flex items-center gap-2 p-4 border-b border-border">
       <Icon size={15} className={iconClass} />
-      <span className="text-[#F4EFE6] text-sm font-bold">{title}</span>
+      <span className="text-text text-sm font-bold">{title}</span>
       {badge !== undefined && (
-        <span className="text-[10px] bg-[#4A3D2E] text-[#B8AD9A] px-2 py-0.5 rounded-full ml-1">{badge}</span>
+        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-1">{badge}</span>
       )}
-      {extra && <span className="text-[10px] text-[#7A705F] ml-auto">{extra}</span>}
+      {extra && <span className="text-[10px] text-textMute ml-auto">{extra}</span>}
     </div>
   );
 }
@@ -868,38 +868,38 @@ export default function Dashboard({ session, onLogout }) {
   }, [events]);
 
   const statusBadge = sseStatus === 'connected'
-    ? 'bg-[#24301D] border-[#9BBA7A]/30 text-[#9BBA7A]'
+    ? 'bg-greenSoft border-green/30 text-green'
     : sseStatus === 'connecting'
-    ? 'bg-[#332815] border-[#E0BA70]/30 text-[#E0BA70]'
-    : 'bg-[#362D22]/30 border-[#403628] text-[#8A7D6A]';
+    ? 'bg-amberSoft border-amber/30 text-amber'
+    : 'bg-surfaceSoft border-border text-textMute';
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#1F1A14] p-4">
+    <div className="min-h-screen bg-bg p-4">
     <div className="max-w-5xl mx-auto space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-[#24301D] border border-[#9BBA7A]/20">
-            <Radio size={20} className="text-[#9BBA7A]" />
+          <div className="p-2 rounded-xl bg-greenSoft border border-green/20">
+            <Radio size={20} className="text-green" />
           </div>
           <div>
-            <h1 className="text-[#F4EFE6] font-bold text-base">Shoptimize Live</h1>
-            <p className="text-[#8A7D6A] text-xs">{username} / {brand}</p>
+            <h1 className="text-text font-bold text-base">Shoptimize Live</h1>
+            <p className="text-textMute text-xs">{username} / {brand}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${statusBadge}`}>
             {sseStatus === 'connected'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-[#9BBA7A] animate-pulse" /> Canlı</>
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Canlı</>
               : sseStatus === 'connecting'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-[#E0BA70] animate-pulse" /> Bağlanıyor...</>
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> Bağlanıyor...</>
               : <><WifiOff size={12} /> Bağlı Değil</>}
           </div>
           <ThemeSwitch />
           <button onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#362D22] border border-[#5A4535] text-[#B8AD9A] text-xs font-bold rounded-full hover:text-[#F4EFE6] transition-colors">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
             <LogOut size={12} /> Çıkış
           </button>
         </div>
@@ -907,16 +907,16 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Pixel panel */}
       <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
-        ${pixelStatus?.installed ? 'bg-[#24301D]/50 border-[#9BBA7A]/20' : 'bg-[#362D22]/50 border-[#5A4535]'}`}>
+        ${pixelStatus?.installed ? 'bg-greenSoft/50 border-green/20' : 'bg-surfaceAlt/50 border-[#5A4535]'}`}>
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${pixelStatus?.installed ? 'bg-[#24301D]' : 'bg-[#4A3D2E]/40'}`}>
-            <Zap size={16} className={pixelStatus?.installed ? 'text-[#9BBA7A]' : 'text-[#B8AD9A]'} />
+          <div className={`p-2 rounded-lg ${pixelStatus?.installed ? 'bg-greenSoft' : 'bg-surfaceAlt/40'}`}>
+            <Zap size={16} className={pixelStatus?.installed ? 'text-green' : 'text-textDim'} />
           </div>
           <div>
-            <p className={`text-sm font-bold ${pixelStatus?.installed ? 'text-[#9BBA7A]' : 'text-[#F4EFE6]'}`}>
+            <p className={`text-sm font-bold ${pixelStatus?.installed ? 'text-green' : 'text-text'}`}>
               {pixelStatus?.installed ? 'Storefront Pixel Kurulu' : 'Storefront Pixel Kurulu Değil'}
             </p>
-            <p className="text-[#8A7D6A] text-[10px]">
+            <p className="text-textMute text-[10px]">
               {pixelStatus?.installed
                 ? `Tracking ID: ${pixelStatus.tracking_id || '—'}`
                 : 'Ziyaretçi hareketlerini takip etmek için pixeli kurun'}
@@ -928,8 +928,8 @@ export default function Dashboard({ session, onLogout }) {
             <button onClick={handleRegisterWebhook} disabled={webhookLoading}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:opacity-50
                 ${webhookStatus?.registered
-                  ? 'bg-[#24301D] border-[#9BBA7A]/20 text-[#9BBA7A]'
-                  : 'bg-[#1F2A36] border-[#8FAECB]/20 text-[#8FAECB] hover:bg-[#1F2A36]/80'}`}>
+                  ? 'bg-greenSoft border-green/20 text-green'
+                  : 'bg-blueSoft border-blue/20 text-blue hover:bg-blueSoft/80'}`}>
               {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Kuruluyor...</>
                 : webhookStatus?.registered ? <><CheckCircle size={11} /> Sipariş Takibi Aktif</>
                 : <><Zap size={11} /> Sipariş Takibini Kur</>}
@@ -937,11 +937,11 @@ export default function Dashboard({ session, onLogout }) {
           )}
           {pixelStatus?.installed
             ? <button onClick={handleUninstall} disabled={installing || pixelLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#332027] border border-[#DB8898]/20 text-[#DB8898] text-xs font-bold rounded-lg hover:bg-[#332027]/80 transition-colors disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
                 <Trash2 size={12} /> Kaldır
               </button>
             : <button onClick={handleInstall} disabled={installing || pixelLoading}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-[#F4EFE6] text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
+                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
                 {installing ? <><RefreshCw size={12} className="animate-spin" /> Kuruluyor...</> : <><Zap size={12} /> Tek Tıkla Kur</>}
               </button>
           }
@@ -977,11 +977,11 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Abandoned checkout alert */}
       {abandonedVisitors.length > 0 && (
-        <div className="bg-[#332815]/50 border border-[#E0BA70]/20 rounded-xl p-4">
+        <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
-            <CreditCard size={15} className="text-[#E0BA70]" />
-            <span className="text-[#E0BA70] text-sm font-bold">Terk Edilen Ödemeler</span>
-            <span className="text-[10px] bg-[#332815] text-[#ECC878] px-2 py-0.5 rounded-full">
+            <CreditCard size={15} className="text-amber" />
+            <span className="text-amber text-sm font-bold">Terk Edilen Ödemeler</span>
+            <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full">
               {abandonedVisitors.length} ziyaretçi ödemeye geçti, tamamlamadı
             </span>
           </div>
@@ -991,14 +991,14 @@ export default function Dashboard({ session, onLogout }) {
               const name = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
               return (
                 <div key={profile.vid} onClick={() => setSelectedVisitor(profile)}
-                  className="flex items-center gap-3 bg-[#24201A] border border-[#E0BA70]/20 rounded-lg p-3 cursor-pointer hover:border-[#E0BA70]/40 transition-colors">
-                  <div className="p-1.5 rounded-lg bg-[#332815] shrink-0"><CreditCard size={13} className="text-[#E0BA70]" /></div>
+                  className="flex items-center gap-3 bg-surfaceSoft border border-amber/20 rounded-lg p-3 cursor-pointer hover:border-amber/40 transition-colors">
+                  <div className="p-1.5 rounded-lg bg-amberSoft shrink-0"><CreditCard size={13} className="text-amber" /></div>
                   <div className="flex-1 min-w-0">
-                    {name ? <p className="text-xs font-bold text-[#B3D090] truncate">{name}</p>
-                      : <p className="text-xs font-mono text-[#B8AD9A]">{shortVid(profile.vid)}</p>}
-                    {profile.lastProduct && <p className="text-[10px] text-[#F4EFE6]/60 truncate">{profile.lastProduct}</p>}
+                    {name ? <p className="text-xs font-bold text-green truncate">{name}</p>
+                      : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
+                    {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
                   </div>
-                  <span className="text-[9px] text-[#E0BA70] shrink-0">{timeAgo(profile.lastTs)}</span>
+                  <span className="text-[9px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
                 </div>
               );
             })}
@@ -1008,8 +1008,8 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Product grid */}
       {productStats.length > 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-          <SectionHead icon={TrendingUp} iconClass="text-[#C4A5D4]" title="En Çok Görüntülenen Ürünler" badge={`${productStats.length} ürün`} />
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <SectionHead icon={TrendingUp} iconClass="text-purple" title="En Çok Görüntülenen Ürünler" badge={`${productStats.length} ürün`} />
           <div className="p-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
             {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
           </div>
@@ -1018,19 +1018,19 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Collections */}
       {collectionStats.length > 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-          <SectionHead icon={Layers} iconClass="text-[#6DC4B0]" title="En Çok Görüntülenen Koleksiyonlar" badge={`${collectionStats.length} koleksiyon`} />
-          <div className="divide-y divide-[#403628]/60">
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <SectionHead icon={Layers} iconClass="text-teal" title="En Çok Görüntülenen Koleksiyonlar" badge={`${collectionStats.length} koleksiyon`} />
+          <div className="divide-y divide-border/60">
             {collectionStats.map((col, i) => (
-              <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#362D22]/40 transition-colors">
-                <span className="text-[10px] text-[#7A705F] w-4 text-right font-mono">{i + 1}</span>
-                <span className="flex-1 text-sm text-[#F4EFE6] font-medium">{col.handle}</span>
-                <div className="w-24 h-1.5 bg-[#362D22] rounded-full overflow-hidden">
+              <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+                <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
+                <span className="flex-1 text-sm text-text font-medium">{col.handle}</span>
+                <div className="w-24 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-[#6DC4B0] to-[#8FAECB] rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
                 </div>
-                <span className="text-xs font-bold text-[#D8CFC4] w-6 text-right tabular-nums">{col.count}</span>
-                <span className="text-[9px] text-[#7A705F] w-16 text-right">{timeAgo(col.lastTs)}</span>
+                <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
+                <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(col.lastTs)}</span>
               </div>
             ))}
           </div>
@@ -1039,29 +1039,29 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* 404 pages */}
       {notFoundStats.length > 0 && (
-        <div className="bg-[#332027]/50 border border-[#DB8898]/20 rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 p-4 border-b border-[#DB8898]/15">
-            <span className="text-sm font-bold text-[#DB8898]">404</span>
-            <span className="text-[#F4EFE6] text-sm font-bold">Bulunamayan Sayfalar</span>
-            <span className="text-[10px] bg-[#332027] text-[#E8A0B0] px-2 py-0.5 rounded-full ml-auto">{notFoundStats.length} URL</span>
+        <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 p-4 border-b border-rose/15">
+            <span className="text-sm font-bold text-rose">404</span>
+            <span className="text-text text-sm font-bold">Bulunamayan Sayfalar</span>
+            <span className="text-[10px] bg-roseSoft text-rose px-2 py-0.5 rounded-full ml-auto">{notFoundStats.length} URL</span>
           </div>
-          <div className="divide-y divide-[#DB8898]/10">
+          <div className="divide-y divide-rose/10">
             {notFoundStats.map((item, i) => (
-              <div key={item.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#332027]/30 transition-colors">
-                <span className="text-[10px] text-[#7A705F] w-4 text-right font-mono shrink-0">{i + 1}</span>
+              <div key={item.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-roseSoft/30 transition-colors">
+                <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[#F4EFE6] font-mono truncate" title={item.url}>{item.path}</p>
+                  <p className="text-xs text-text font-mono truncate" title={item.url}>{item.path}</p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#E8A0B0] tabular-nums">{item.vids.size}</p>
-                    <p className="text-[9px] text-[#7A705F]">tekil</p>
+                    <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
+                    <p className="text-[9px] text-textMute">tekil</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#B8AD9A] tabular-nums">{item.count}</p>
-                    <p className="text-[9px] text-[#7A705F]">istek</p>
+                    <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
+                    <p className="text-[9px] text-textMute">istek</p>
                   </div>
-                  <span className="text-[9px] text-[#7A705F] w-16 text-right">{timeAgo(item.lastTs)}</span>
+                  <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(item.lastTs)}</span>
                 </div>
               </div>
             ))}
@@ -1071,30 +1071,30 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Page stats */}
       {pageStats.length > 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
           <SectionHead icon={Eye} title="Sayfa İstatistikleri" badge={`${pageStats.length} sayfa`} extra="Blog, içerik ve diğer sayfalar" />
-          <div className="divide-y divide-[#403628]/60">
+          <div className="divide-y divide-border/60">
             {pageStats.map((page, i) => (
-              <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#362D22]/40 transition-colors">
-                <span className="text-[10px] text-[#7A705F] w-4 text-right font-mono shrink-0">{i + 1}</span>
+              <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+                <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[#F4EFE6] font-medium truncate" title={page.title}>{page.title}</p>
-                  <p className="text-[10px] text-[#8A7D6A] font-mono truncate">{page.path}</p>
+                  <p className="text-xs text-text font-medium truncate" title={page.title}>{page.title}</p>
+                  <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
                 </div>
-                <div className="w-20 h-1.5 bg-[#362D22] rounded-full overflow-hidden shrink-0">
+                <div className="w-20 h-1.5 bg-surfaceAlt rounded-full overflow-hidden shrink-0">
                   <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, (page.vids.size / (pageStats[0]?.vids.size || 1)) * 100)}%` }} />
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#D4BAE0] tabular-nums">{page.vids.size}</p>
-                    <p className="text-[9px] text-[#7A705F]">tekil</p>
+                    <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
+                    <p className="text-[9px] text-textMute">tekil</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#B8AD9A] tabular-nums">{page.count}</p>
-                    <p className="text-[9px] text-[#7A705F]">görüntüleme</p>
+                    <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
+                    <p className="text-[9px] text-textMute">görüntüleme</p>
                   </div>
-                  <span className="text-[9px] text-[#7A705F] w-16 text-right">{timeAgo(page.lastTs)}</span>
+                  <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(page.lastTs)}</span>
                 </div>
               </div>
             ))}
@@ -1107,9 +1107,9 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* UTM campaigns */}
       {utmStats.length > 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-          <SectionHead icon={BarChart2} iconClass="text-[#8FAECB]" title="Kampanya Bazlı (UTM)" badge={`${utmStats.length} kampanya`} extra="Google Ads · Meta · TikTok" />
-          <div className="divide-y divide-[#403628]/60">
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <SectionHead icon={BarChart2} iconClass="text-blue" title="Kampanya Bazlı (UTM)" badge={`${utmStats.length} kampanya`} extra="Google Ads · Meta · TikTok" />
+          <div className="divide-y divide-border/60">
             {utmStats.map(camp => (
               <div key={camp.campaign}
                 onClick={() => setDrillDown({
@@ -1118,25 +1118,25 @@ export default function Dashboard({ session, onLogout }) {
                   products: camp.products,
                   visitors: visitorProfiles.filter(v => camp.vids.has(v.vid)),
                 })}
-                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#362D22]/40 transition-colors">
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#F4EFE6] font-semibold truncate">{camp.campaign}</p>
-                  <p className="text-[10px] text-[#8A7D6A] truncate">{[camp.source, camp.medium].filter(Boolean).join(' / ')}</p>
+                  <p className="text-sm text-text font-semibold truncate">{camp.campaign}</p>
+                  <p className="text-[10px] text-textMute truncate">{[camp.source, camp.medium].filter(Boolean).join(' / ')}</p>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#D4BAE0] tabular-nums">{camp.views}</p>
-                    <p className="text-[9px] text-[#7A705F]">görüntüleme</p>
+                    <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
+                    <p className="text-[9px] text-textMute">görüntüleme</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#B3D090] tabular-nums">{camp.carts}</p>
-                    <p className="text-[9px] text-[#7A705F]">sepet</p>
+                    <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
+                    <p className="text-[9px] text-textMute">sepet</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-[#A8C4DB] tabular-nums">{camp.vids.size}</p>
-                    <p className="text-[9px] text-[#7A705F]">ziyaretçi</p>
+                    <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
+                    <p className="text-[9px] text-textMute">ziyaretçi</p>
                   </div>
-                  <ArrowRight size={11} className="text-[#6A6050]" />
+                  <ArrowRight size={11} className="text-textMute" />
                 </div>
               </div>
             ))}
@@ -1163,7 +1163,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Visitor grid */}
       {visitorProfiles.length > 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
           <SectionHead icon={Users} title="Aktif Ziyaretçiler" badge={visitorProfiles.length} extra="Karta tıkla → yolculuğu gör" />
           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {visitorProfiles.slice(0, 24).map(profile => (
@@ -1173,33 +1173,33 @@ export default function Dashboard({ session, onLogout }) {
             ))}
           </div>
           {visitorProfiles.length > 24 && (
-            <p className="px-4 pb-3 text-center text-[10px] text-[#7A705F]">+{visitorProfiles.length - 24} daha fazla ziyaretçi</p>
+            <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 24} daha fazla ziyaretçi</p>
           )}
         </div>
       )}
 
       {/* Live feed */}
-      <div className="bg-[#2A231B] border border-[#403628] rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-[#403628]">
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
-            <Activity size={16} className="text-[#B8AD9A]" />
-            <span className="text-[#F4EFE6] text-sm font-bold">Canlı Feed</span>
+            <Activity size={16} className="text-textDim" />
+            <span className="text-text text-sm font-bold">Canlı Feed</span>
             {events.length > 0 && (
-              <span className="text-[10px] bg-[#4A3D2E] text-[#B8AD9A] px-2 py-0.5 rounded-full">{events.length} event</span>
+              <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length} event</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setPaused(p => !p)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
-                ${paused ? 'bg-[#332815] border-[#E0BA70]/30 text-[#E0BA70]' : 'bg-[#362D22] border-[#5A4535] text-[#B8AD9A] hover:text-[#F4EFE6]'}`}>
+                ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
               {paused ? '▶ Devam Et' : '⏸ Duraklat'}
             </button>
             <button onClick={() => setEvents([])}
-              className="p-1.5 bg-[#362D22] border border-[#5A4535] text-[#B8AD9A] rounded-lg hover:text-[#DB8898] transition-colors" title="Temizle">
+              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Temizle">
               <Trash2 size={12} />
             </button>
             <button onClick={() => setFeedOpen(o => !o)}
-              className="p-1.5 bg-[#362D22] border border-[#5A4535] text-[#B8AD9A] rounded-lg hover:text-[#F4EFE6] transition-colors">
+              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-text transition-colors">
               {feedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
           </div>
@@ -1208,8 +1208,8 @@ export default function Dashboard({ session, onLogout }) {
           <div className="overflow-y-auto max-h-[480px] p-3 space-y-2 custom-scrollbar">
             {events.length === 0
               ? <div className="py-16 text-center space-y-2">
-                  <p className="text-[#8A7D6A] text-sm font-medium">Henüz event yok</p>
-                  <p className="text-[#7A705F] text-xs">Mağazanıza giriş yapın — hareketler burada anlık görünecek</p>
+                  <p className="text-textMute text-sm font-medium">Henüz event yok</p>
+                  <p className="text-textMute text-xs">Mağazanıza giriş yapın — hareketler burada anlık görünecek</p>
                 </div>
               : events.map(ev => (
                   <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
@@ -1222,12 +1222,12 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Empty state when no pixel */}
       {!pixelStatus?.installed && !pixelLoading && events.length === 0 && (
-        <div className="bg-[#2A231B] border border-[#403628] rounded-2xl p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#362D22]/60 border border-[#5A4535] flex items-center justify-center">
-            <Radio size={24} className="text-[#8A7D6A]" />
+        <div className="bg-surface border border-border rounded-2xl p-8 text-center">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
+            <Radio size={24} className="text-textMute" />
           </div>
-          <h3 className="text-[#F4EFE6] font-bold text-base mb-2">Nasıl Çalışır?</h3>
-          <div className="text-[#B8AD9A] text-sm space-y-2 max-w-sm mx-auto text-left">
+          <h3 className="text-text font-bold text-base mb-2">Nasıl Çalışır?</h3>
+          <div className="text-textDim text-sm space-y-2 max-w-sm mx-auto text-left">
             <p>① "Tek Tıkla Kur" butonuna basın → pixel otomatik yüklenir</p>
             <p>② Müşteriler mağazanızı ziyaret ettiğinde hareketler buraya akar</p>
             <p>③ Ürün görüntüleme, sepete ekleme, ödemeye geçme anlık takip edilir</p>
