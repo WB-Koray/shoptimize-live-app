@@ -607,6 +607,10 @@ async def shopify_orders_webhook(
     order_number = str(order.get("order_number") or order.get("name") or "")
     total_price  = str(order.get("total_price", "0"))
 
+    checkout_token = str(order.get("checkout_token") or "").strip()
+    if checkout_token:
+        await store.mark_checkout_completed(checkout_token)
+
     session_info = _customer_to_tid.get(customer_id) if customer_id else None
 
     line_items = []
@@ -682,7 +686,21 @@ async def shopify_checkouts_webhook(
         if customer_name:
             _email_to_name[email] = customer_name
 
-    return JSONResponse({"ok": True, "matched": bool(matched_vid), "vid": matched_vid})
+    checkout_token = str(checkout.get("token") or checkout.get("id") or "").strip()
+    line_items = checkout.get("line_items") or []
+    product = line_items[0].get("title", "") if line_items else ""
+    if checkout_token and phone:
+        await store.save_checkout(checkout_token, {
+            "token": checkout_token,
+            "phone": phone,
+            "name": customer_name,
+            "product": product,
+            "username": username,
+            "brand": brand,
+            "ts": int(time.time() * 1000),
+        })
+
+    return JSONResponse({"ok": True, "matched": bool(matched_vid), "vid": matched_vid, "checkout_saved": bool(checkout_token and phone)})
 
 
 @router.post("/api/shopify/webhook/register")
@@ -701,6 +719,7 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
     topics = [
         ("orders/create",    "orders-create"),
         ("checkouts/create", "checkouts-create"),
+        ("checkouts/update", "checkouts-create"),
     ]
     results = {}
     for topic, slug in topics:
