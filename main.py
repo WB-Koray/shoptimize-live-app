@@ -24,11 +24,17 @@ async def _abandoned_checkout_worker():
     import asyncio
     import time
     import logging
+    import datetime
     from services.wa_sender import send_wa_template
     _log = logging.getLogger(__name__)
     while True:
         try:
             await asyncio.sleep(60)
+            # Türkiye saati kontrolü (UTC+3, DST yok)
+            tr_hour = (datetime.datetime.utcnow().hour + 3) % 24
+            if tr_hour < 9 or tr_hour >= 21:
+                continue  # 09:00–21:00 dışında gönderme
+
             now_ms = time.time() * 1000
             pending = await store.get_pending_checkouts_before(int(now_ms))
             for token in pending:
