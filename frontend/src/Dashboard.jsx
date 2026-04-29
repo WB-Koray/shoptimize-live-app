@@ -6,6 +6,7 @@ import {
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
   MessageCircle, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
+  ShoppingBag, Ban, UserX, Plus, Minus,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 
@@ -525,26 +526,48 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
 
 // ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
 
-const DEFAULT_TEMPLATE = 'Merhaba {name}! 👋 Sepetinizde {product} bekleniyor. Siparişinizi tamamlamak için mağazamızı ziyaret edebilirsiniz.';
+const DEFAULT_SEQUENCE = [
+  { delay_minutes: 15,   template: 'sepet_hatirlatma', enabled: true,  label: 'İlk hatırlatma' },
+  { delay_minutes: 1440, template: 'sepet_hatirlatma', enabled: false, label: '24 saat sonra' },
+  { delay_minutes: 2880, template: 'sepet_hatirlatma', enabled: false, label: '48 saat sonra' },
+];
+
+function fmtDelay(m) {
+  if (m < 60) return `${m} dk`;
+  if (m < 1440) return `${Math.round(m / 60)} saat`;
+  return `${Math.round(m / 1440)} gün`;
+}
 
 function FlowPanel({ session }) {
   const { token, username, brand } = session;
   const base = API_URL;
-  const qp = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
+  const qp   = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
   const authH = { Authorization: `Bearer ${token}` };
 
-  const [settings, setSettings]   = useState({ enabled: false, wa_token: '', phone_number_id: '', delay_minutes: 15, message_template: DEFAULT_TEMPLATE });
-  const [maskedToken, setMasked]  = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
-  const [saveErr, setSaveErr]     = useState('');
-  const [testPhone, setTestPhone] = useState('');
-  const [testLoading, setTestL]   = useState(false);
-  const [testResult, setTestRes]  = useState(null);
+  const [settings, setSettings] = useState({
+    enabled: false, wa_token: '', phone_number_id: '',
+    sequence: DEFAULT_SEQUENCE,
+    post_order: { enabled: false, template: 'siparis_onay' },
+  });
+  const [maskedToken, setMasked] = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [saveErr, setSaveErr]   = useState('');
+
+  const [testPhone, setTestPhone]     = useState('');
+  const [testTemplate, setTestTmpl]  = useState('sepet_hatirlatma');
+  const [testLoading, setTestL]       = useState(false);
+  const [testResult, setTestRes]      = useState(null);
+
   const [logs, setLogs]           = useState([]);
   const [logsLoading, setLogsL]   = useState(false);
   const [logsOpen, setLogsOpen]   = useState(true);
+
+  const [optouts, setOptouts]         = useState([]);
+  const [optoutsOpen, setOptoutsOpen] = useState(false);
+  const [optoutPhone, setOptoutPhone] = useState('');
+  const [removingOptout, setRmOptout] = useState('');
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -553,7 +576,13 @@ function FlowPanel({ session }) {
       const d = await r.json();
       if (d.ok) {
         const s = d.settings || {};
-        setSettings({ enabled: s.enabled ?? false, wa_token: '', phone_number_id: s.phone_number_id || '', delay_minutes: s.delay_minutes || 15, message_template: s.message_template || DEFAULT_TEMPLATE });
+        setSettings({
+          enabled:         s.enabled ?? false,
+          wa_token:        '',
+          phone_number_id: s.phone_number_id || '',
+          sequence:        s.sequence?.length ? s.sequence : DEFAULT_SEQUENCE,
+          post_order:      s.post_order || { enabled: false, template: 'siparis_onay' },
+        });
         setMasked(s.wa_token_masked || '');
       }
     } catch { /* ignore */ }
@@ -563,19 +592,30 @@ function FlowPanel({ session }) {
   const fetchLogs = useCallback(async () => {
     setLogsL(true);
     try {
-      const r = await fetch(`${base}/api/flow/logs${qp}&limit=50`, { headers: authH });
+      const r = await fetch(`${base}/api/flow/logs${qp}&limit=100`, { headers: authH });
       const d = await r.json();
       if (d.ok) setLogs(d.logs || []);
     } catch { /* ignore */ }
     setLogsL(false);
   }, [username, brand]);
 
-  useEffect(() => { fetchSettings(); fetchLogs(); }, [username, brand]);
+  const fetchOptouts = useCallback(async () => {
+    try {
+      const r = await fetch(`${base}/api/flow/optouts`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setOptouts(d.phones || []);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchSettings(); fetchLogs(); fetchOptouts(); }, [username, brand]);
 
   async function handleSave() {
     setSaving(true); setSaved(false); setSaveErr('');
     try {
-      const r = await fetch(`${base}/api/flow/settings${qp}`, { method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+      const r = await fetch(`${base}/api/flow/settings${qp}`, {
+        method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
       const d = await r.json();
       if (d.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); await fetchSettings(); }
       else setSaveErr(d.error || 'Kaydetme başarısız');
@@ -583,10 +623,17 @@ function FlowPanel({ session }) {
     setSaving(false);
   }
 
+  function updateStep(idx, patch) {
+    setSettings(s => ({ ...s, sequence: s.sequence.map((st, i) => i === idx ? { ...st, ...patch } : st) }));
+  }
+
   async function handleTest() {
     setTestL(true); setTestRes(null);
     try {
-      const r = await fetch(`${base}/api/flow/test${qp}`, { method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: testPhone }) });
+      const r = await fetch(`${base}/api/flow/test${qp}`, {
+        method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhone, template: testTemplate }),
+      });
       setTestRes(await r.json());
     } catch { setTestRes({ ok: false, error: 'Sunucuya bağlanılamadı' }); }
     setTestL(false);
@@ -597,18 +644,39 @@ function FlowPanel({ session }) {
     setLogs([]);
   }
 
+  async function handleAddOptout() {
+    if (!optoutPhone.trim()) return;
+    await fetch(`${base}/api/flow/optout`, {
+      method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: optoutPhone.trim() }),
+    });
+    setOptoutPhone('');
+    fetchOptouts();
+  }
+
+  async function handleRemoveOptout(phone) {
+    setRmOptout(phone);
+    await fetch(`${base}/api/flow/optout?phone=${encodeURIComponent(phone)}`, { method: 'DELETE', headers: authH });
+    setRmOptout('');
+    fetchOptouts();
+  }
+
   if (loading) return <div className="flex items-center justify-center py-32"><RefreshCw size={20} className="text-textMute animate-spin" /></div>;
+
+  const sentCount      = logs.filter(l => l.ok).length;
+  const convertedCount = logs.filter(l => l.converted).length;
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-greenSoft border border-green/20">
           <MessageCircle size={16} className="text-green" />
         </div>
         <div className="flex-1">
-          <h2 className="text-text font-bold text-sm">WhatsApp Terk Edilmiş Ödeme</h2>
-          <p className="text-textMute text-xs">Ödemeyi yarım bırakan müşterilere otomatik bildirim</p>
+          <h2 className="text-text font-bold text-sm">WhatsApp Otomasyon</h2>
+          <p className="text-textMute text-xs">Sepet hatırlatma dizisi ve sipariş bildirimleri</p>
         </div>
         <button onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
           className="flex items-center gap-1.5 text-sm font-medium transition-colors">
@@ -618,66 +686,120 @@ function FlowPanel({ session }) {
         </button>
       </div>
 
-      {/* Settings card */}
-      <div className="bg-surface border border-border rounded-2xl p-4 space-y-4">
-        {/* WA Token */}
+      {/* Özet istatistikler */}
+      {logs.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Gönderim', value: sentCount,      color: 'text-green' },
+            { label: 'Sipariş',  value: convertedCount, color: 'text-blue' },
+            { label: 'Oran',     value: sentCount ? `%${Math.round(convertedCount / sentCount * 100)}` : '—', color: 'text-purple' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-surface border border-border rounded-xl p-3 text-center">
+              <p className={`text-lg font-bold ${color}`}>{value}</p>
+              <p className="text-textMute text-[10px]">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bağlantı ayarları */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+        <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Bağlantı</p>
+
         <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">WhatsApp Token</label>
+          <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">WhatsApp Token</label>
           <div className="relative">
             <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
             <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
               placeholder={maskedToken || 'EAAxxxxxxx…'}
-              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
           </div>
-          <p className="text-[10px] text-textMute">Meta Business → WhatsApp → API Kurulumu → Geçici erişim jetonu</p>
         </div>
 
-        {/* Phone Number ID */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Phone Number ID</label>
+          <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">Phone Number ID</label>
           <div className="relative">
             <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
             <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
               placeholder="123456789012345"
-              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
           </div>
-          <p className="text-[10px] text-textMute">Meta Business → WhatsApp → API Kurulumu → Telefon Numarası Kimliği</p>
         </div>
+      </div>
 
-        {/* Gecikme */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Gecikme</label>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Clock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-              <input type="number" min={5} max={120} value={settings.delay_minutes}
-                onChange={e => setSettings(s => ({ ...s, delay_minutes: parseInt(e.target.value) || 15 }))}
-                className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+      {/* Sequence */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+        <div>
+          <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Sepet Hatırlatma Dizisi</p>
+          <p className="text-textMute text-[10px] mt-0.5">Sipariş verilirse dizi otomatik durur</p>
+        </div>
+        {settings.sequence.map((step, idx) => (
+          <div key={idx} className={`rounded-xl border p-3 space-y-2 ${step.enabled ? 'border-green/30 bg-greenSoft/20' : 'border-border bg-surfaceAlt/30'}`}>
+            <div className="flex items-center gap-2">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${step.enabled ? 'bg-greenSoft text-green' : 'bg-surfaceAlt text-textMute'}`}>
+                {idx + 1}
+              </div>
+              <input value={step.label} onChange={e => updateStep(idx, { label: e.target.value })}
+                className="flex-1 bg-transparent text-sm font-medium text-text focus:outline-none" />
+              <button onClick={() => updateStep(idx, { enabled: !step.enabled })}>
+                {step.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
+              </button>
             </div>
-            <span className="text-textMute text-xs shrink-0">dakika sonra gönder</span>
+            {step.enabled && (
+              <div className="grid grid-cols-2 gap-2 pl-7">
+                <div>
+                  <p className="text-[10px] text-textMute mb-1">Gecikme</p>
+                  <div className="flex items-center gap-1.5">
+                    <input type="number" min={5} max={43200} value={step.delay_minutes}
+                      onChange={e => updateStep(idx, { delay_minutes: parseInt(e.target.value) || 15 })}
+                      className="w-16 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
+                    <span className="text-textMute text-[10px]">dk · {fmtDelay(step.delay_minutes)}</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-textMute mb-1">Şablon adı</p>
+                  <input value={step.template} onChange={e => updateStep(idx, { template: e.target.value })}
+                    className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* Mesaj şablonu */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold text-textDim uppercase tracking-wide">Mesaj Şablonu</label>
-          <textarea value={settings.message_template} onChange={e => setSettings(s => ({ ...s, message_template: e.target.value }))}
-            rows={3}
-            className="w-full bg-surfaceAlt border border-border rounded-xl px-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors resize-none" />
-          <p className="text-[10px] text-textMute">Değişkenler: <code className="text-textDim">{'{ name }'}</code> müşteri adı, <code className="text-textDim">{'{ product }'}</code> ürün</p>
+      {/* Sipariş onayı */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <ShoppingBag size={13} className="text-blue shrink-0" />
+          <div className="flex-1">
+            <p className="text-text font-semibold text-sm">Sipariş Onayı WA</p>
+            <p className="text-textMute text-[10px]">Sipariş tamamlandığında otomatik gönder</p>
+          </div>
+          <button onClick={() => setSettings(s => ({ ...s, post_order: { ...s.post_order, enabled: !s.post_order.enabled } }))}>
+            {settings.post_order?.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
+          </button>
         </div>
-
-        {saveErr && (
-          <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-2.5 text-sm text-rose">
-            <AlertCircle size={13} className="shrink-0" />{saveErr}
+        {settings.post_order?.enabled && (
+          <div className="pl-5 space-y-1">
+            <p className="text-[10px] text-textMute">Şablon adı</p>
+            <input value={settings.post_order.template || 'siparis_onay'}
+              onChange={e => setSettings(s => ({ ...s, post_order: { ...s.post_order, template: e.target.value } }))}
+              className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-1.5 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
           </div>
         )}
-        <button onClick={handleSave} disabled={saving}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50">
-          {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-          {saved ? 'Kaydedildi ✓' : saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
       </div>
+
+      {/* Kaydet */}
+      {saveErr && (
+        <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-2.5 text-sm text-rose">
+          <AlertCircle size={13} className="shrink-0" />{saveErr}
+        </div>
+      )}
+      <button onClick={handleSave} disabled={saving}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50">
+        {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+        {saved ? 'Kaydedildi ✓' : saving ? 'Kaydediliyor…' : 'Kaydet'}
+      </button>
 
       {/* Test */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
@@ -687,8 +809,13 @@ function FlowPanel({ session }) {
             <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
             <input type="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)}
               placeholder="+905551234567" onKeyDown={e => e.key === 'Enter' && handleTest()}
-              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 transition-colors" />
+              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
           </div>
+          <select value={testTemplate} onChange={e => setTestTmpl(e.target.value)}
+            className="bg-surfaceAlt border border-border rounded-xl px-2 text-xs text-text focus:outline-none shrink-0">
+            <option value="sepet_hatirlatma">sepet_hatirlatma</option>
+            <option value="siparis_onay">siparis_onay</option>
+          </select>
           <button onClick={handleTest} disabled={testLoading || !testPhone.trim()}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50 shrink-0">
             {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Gönder
@@ -702,7 +829,7 @@ function FlowPanel({ session }) {
         )}
       </div>
 
-      {/* Logs */}
+      {/* Gönderim Geçmişi */}
       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <FileText size={13} className="text-textDim" />
@@ -732,19 +859,69 @@ function FlowPanel({ session }) {
               <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
                 <div className="mt-0.5 shrink-0">{entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-text font-medium">{entry.name || 'Müşteri'}</span>
-                    <span className="text-textMute text-xs">{entry.phone}</span>
-                    {entry.product && <span className="text-textMute text-xs truncate max-w-[140px]">{entry.product}</span>}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-text font-medium text-xs">{entry.name || 'Müşteri'}</span>
+                    <span className="text-textMute text-[10px]">{entry.phone}</span>
+                    {entry.product && <span className="text-textMute text-[10px] truncate max-w-[130px]">{entry.product}</span>}
+                    {entry.step_label && <span className="text-[9px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>}
+                    {entry.converted && <span className="text-[9px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Sipariş</span>}
                   </div>
-                  {entry.error && <p className="text-rose text-xs mt-0.5">{entry.error}</p>}
+                  {entry.error && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
                 </div>
-                <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">{new Date(entry.ts).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+                <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
+                  {new Date(entry.ts).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Opt-out listesi */}
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <Ban size={13} className="text-textDim" />
+          <span className="text-text font-semibold text-sm flex-1">
+            Opt-out {optouts.length > 0 && <span className="text-textMute font-normal text-xs ml-1">({optouts.length})</span>}
+          </span>
+          <button onClick={() => { setOptoutsOpen(o => !o); if (!optoutsOpen) fetchOptouts(); }}
+            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors">
+            {optoutsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+        </div>
+        {optoutsOpen && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-textMute">"dur / stop / iptal" yazan müşteriler otomatik eklenir.</p>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <UserX size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                <input type="tel" value={optoutPhone} onChange={e => setOptoutPhone(e.target.value)}
+                  placeholder="+905551234567" onKeyDown={e => e.key === 'Enter' && handleAddOptout()}
+                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-8 pr-4 py-2 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-rose/40 transition-colors" />
+              </div>
+              <button onClick={handleAddOptout} disabled={!optoutPhone.trim()}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs bg-roseSoft border border-rose/20 text-rose hover:bg-rose/20 transition-colors disabled:opacity-40 shrink-0">
+                <Plus size={12} /> Ekle
+              </button>
+            </div>
+            {optouts.length === 0
+              ? <p className="text-textMute text-xs text-center py-3">Liste boş</p>
+              : <div className="space-y-1 max-h-36 overflow-y-auto custom-scrollbar">
+                  {optouts.map(phone => (
+                    <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
+                      <span className="text-xs text-rose flex-1 font-mono">{phone}</span>
+                      <button onClick={() => handleRemoveOptout(phone)} disabled={removingOptout === phone}
+                        className="text-textMute hover:text-rose transition-colors disabled:opacity-40">
+                        {removingOptout === phone ? <RefreshCw size={11} className="animate-spin" /> : <Minus size={12} />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+            }
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
