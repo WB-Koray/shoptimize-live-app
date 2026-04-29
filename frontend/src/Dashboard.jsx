@@ -16,14 +16,14 @@ const MAX_EVENTS = 500;
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const EVENT_META = {
-  page_viewed:        { label: 'Sayfa Görüntülendi',  icon: Eye,          color: 'blue'    },
-  product_viewed:     { label: 'Ürün Görüntülendi',   icon: Package,      color: 'purple'  },
-  collection_viewed:  { label: 'Koleksiyon',           icon: Layers,       color: 'teal'    },
-  cart_viewed:        { label: 'Sepet Görüntülendi',  icon: ShoppingCart, color: 'orange'  },
-  add_to_cart:        { label: 'Sepete Eklendi',       icon: ShoppingCart, color: 'emerald' },
-  checkout_started:   { label: 'Ödemeye Geçildi',     icon: CreditCard,   color: 'yellow'  },
-  checkout_completed: { label: 'Sipariş Tamamlandı',  icon: CheckCircle,  color: 'emerald' },
-  search_submitted:   { label: 'Arama Yapıldı',       icon: Search,       color: 'slate'   },
+  page_viewed:        { label: 'Page Viewed',       icon: Eye,          color: 'blue'    },
+  product_viewed:     { label: 'Product Viewed',    icon: Package,      color: 'purple'  },
+  collection_viewed:  { label: 'Collection Viewed', icon: Layers,       color: 'teal'    },
+  cart_viewed:        { label: 'Cart Viewed',       icon: ShoppingCart, color: 'orange'  },
+  add_to_cart:        { label: 'Added to Cart',     icon: ShoppingCart, color: 'emerald' },
+  checkout_started:   { label: 'Checkout Started',  icon: CreditCard,   color: 'yellow'  },
+  checkout_completed: { label: 'Order Completed',   icon: CheckCircle,  color: 'emerald' },
+  search_submitted:   { label: 'Search Submitted',  icon: Search,       color: 'slate'   },
 };
 
 // Token tabanlı renk eşlemeleri — tema değişince otomatik güncellenir
@@ -38,38 +38,38 @@ const CM = {
 };
 
 const STAGE_META = {
-  browsing:  { label: 'Geziniyor',      color: 'slate'   },
-  product:   { label: 'Ürün İnceliyor', color: 'purple'  },
-  cart:      { label: 'Sepette',        color: 'orange'  },
-  checkout:  { label: 'Ödeme',          color: 'yellow'  },
-  converted: { label: 'Satın Aldı',     color: 'emerald' },
+  browsing:  { label: 'Browsing',         color: 'slate'   },
+  product:   { label: 'Viewing Product',  color: 'purple'  },
+  cart:      { label: 'In Cart',          color: 'orange'  },
+  checkout:  { label: 'Checkout',         color: 'yellow'  },
+  converted: { label: 'Purchased',        color: 'emerald' },
 };
 
 const SRC_COLORS = {
-  'Arama':    'text-blue',
+  'Search':   'text-blue',
   'Facebook': 'text-blue',
   'Instagram':'text-rose',
   'TikTok':   'text-textDim',
   'YouTube':  'text-rose',
   'Twitter/X':'text-blue',
-  'Doğrudan': 'text-green',
-  'Diğer':    'text-textDim',
+  'Direct':   'text-green',
+  'Other':    'text-textDim',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtTime(ts) {
-  return new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 function fmtUrl(url) {
   try { return new URL(url).pathname || '/'; } catch { return url || '/'; }
 }
-function shortVid(vid) { return 'ziy_' + (vid || '').slice(-6); }
+function shortVid(vid) { return 'vis_' + (vid || '').slice(-6); }
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return `${s}sn önce`;
-  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
-  return `${Math.floor(s / 3600)}sa önce`;
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
 }
 function parseDevice(ua = '', sw = 0) {
   const u = ua.toLowerCase();
@@ -80,18 +80,18 @@ function parseDevice(ua = '', sw = 0) {
   return 'desktop';
 }
 function parseReferrer(ref = '') {
-  if (!ref) return 'Doğrudan';
+  if (!ref) return 'Direct';
   try {
     const h = new URL(ref).hostname.toLowerCase();
-    if (/google\.|bing\.|yahoo\.|yandex\./.test(h)) return 'Arama';
+    if (/google\.|bing\.|yahoo\.|yandex\./.test(h)) return 'Search';
     if (/facebook\.com|fb\.com/.test(h)) return 'Facebook';
     if (/instagram\.com/.test(h)) return 'Instagram';
     if (/tiktok\.com/.test(h)) return 'TikTok';
     if (/twitter\.com|t\.co|x\.com/.test(h)) return 'Twitter/X';
     if (/youtube\.com/.test(h)) return 'YouTube';
     if (/pinterest\.com/.test(h)) return 'Pinterest';
-    return 'Diğer';
-  } catch { return 'Diğer'; }
+    return 'Other';
+  } catch { return 'Other'; }
 }
 
 // ── StatCard ─────────────────────────────────────────────────────────────────
@@ -143,18 +143,18 @@ function ProductCard({ product, flash }) {
         )}
         <div className="flex items-center gap-1 pt-1 border-t border-border">
           <Eye size={9} className="text-purple" />
-          <span className="text-[9px] text-textDim">Görüntüleme</span>
+          <span className="text-[9px] text-textDim">Views</span>
           <span className="text-[9px] font-bold text-purple ml-auto tabular-nums">{product.views}</span>
         </div>
         <div className="flex items-center gap-1">
           <ShoppingCart size={9} className="text-green" />
-          <span className="text-[9px] text-textDim">Sepete Ekleme</span>
+          <span className="text-[9px] text-textDim">Add to Cart</span>
           <span className="text-[9px] font-bold text-green ml-auto tabular-nums">{product.carts}</span>
         </div>
         {product.views > 0 && product.carts > 0 && (
           <div className="text-center">
             <span className="text-[9px] font-bold text-amber bg-amberSoft px-2 py-0.5 rounded-full">
-              %{((product.carts / product.views) * 100).toFixed(0)} dönüşüm
+              {((product.carts / product.views) * 100).toFixed(0)}% conversion
             </span>
           </div>
         )}
@@ -186,7 +186,7 @@ function VisitorCard({ profile, customerName, onClick }) {
       {fullName
         ? <p className="text-[10px] text-green font-semibold truncate">{fullName}</p>
         : profile.customer_id
-          ? <p className="text-[9px] text-green/60 font-mono truncate">Üye #{profile.customer_id}</p>
+          ? <p className="text-[9px] text-green/60 font-mono truncate">Member #{profile.customer_id}</p>
           : null
       }
       {profile.lastProduct && (
@@ -251,7 +251,7 @@ function EventRow({ ev, isNew }) {
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.dot}`} />
           <span className="text-[9px] text-textMute">{shortVid(ev.vid)}</span>
-          {ev.customer_id && <span className="text-[9px] text-green">Üye #{ev.customer_id}</span>}
+          {ev.customer_id && <span className="text-[9px] text-green">Member #{ev.customer_id}</span>}
           {ev.utm?.utm_campaign && (
             <span className="text-[9px] text-blue bg-blueSoft px-1 rounded">{ev.utm.utm_campaign}</span>
           )}
@@ -267,17 +267,17 @@ function EventRow({ ev, isNew }) {
 function FunnelWidget({ stats }) {
   const total = stats.total || 1;
   const steps = [
-    { label: 'Tüm Ziyaretçi',   count: stats.total,     color: 'bg-blue',   pct: 100 },
-    { label: 'Ürün İnceledi',    count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
-    { label: 'Sepete Ekledi',    count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
-    { label: 'Ödeme Başlattı',   count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
-    { label: 'Satın Aldı',       count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
+    { label: 'All Visitors',      count: stats.total,     color: 'bg-blue',   pct: 100 },
+    { label: 'Viewed Product',    count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
+    { label: 'Added to Cart',     count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
+    { label: 'Started Checkout',  count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
+    { label: 'Purchased',         count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
   ];
   return (
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <TrendingUp size={15} className="text-blue" />
-        <span className="text-text text-sm font-bold">Dönüşüm Hunisi</span>
+        <span className="text-text text-sm font-bold">Conversion Funnel</span>
       </div>
       <div className="p-4 space-y-3">
         {steps.map((step, i) => (
@@ -310,8 +310,8 @@ function TrafficTable({ traffic, onSourceClick }) {
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Globe size={15} className="text-textDim" />
-        <span className="text-text text-sm font-bold">Trafik Kaynakları</span>
-        <span className="text-[10px] text-textMute ml-auto">Tıkla → ürünleri gör</span>
+        <span className="text-text text-sm font-bold">Traffic Sources</span>
+        <span className="text-[10px] text-textMute ml-auto">Click → see products</span>
       </div>
       <div className="divide-y divide-border/60">
         {traffic.map(({ source, count }) => (
@@ -340,8 +340,8 @@ function SearchTable({ searches }) {
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Search size={15} className="text-textDim" />
-        <span className="text-text text-sm font-bold">Canlı Aramalar</span>
-        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-auto">{searches.length} terim</span>
+        <span className="text-text text-sm font-bold">Live Searches</span>
+        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-auto">{searches.length} terms</span>
       </div>
       <div className="divide-y divide-border/60">
         {searches.map((s, i) => (
@@ -398,12 +398,12 @@ function JourneyModal({ profile, customerName, onClose }) {
         </div>
         <div className="flex items-center gap-3 px-4 py-2 border-b border-border/60 text-[10px] text-textMute flex-wrap">
           <span>{profile.events.length} event</span>
-          <span>İlk: {fmtTime(profile.firstTs)}</span>
-          <span>Son: {fmtTime(profile.lastTs)}</span>
-          <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} dk</span>
-          {profile.customer_id && !fullName && <span className="text-green font-semibold">Üye #{profile.customer_id}</span>}
+          <span>First: {fmtTime(profile.firstTs)}</span>
+          <span>Last: {fmtTime(profile.lastTs)}</span>
+          <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} min</span>
+          {profile.customer_id && !fullName && <span className="text-green font-semibold">Member #{profile.customer_id}</span>}
           {customerName?.email && <span className="text-textDim">{customerName.email}</span>}
-          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} sipariş</span>}
+          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} orders</span>}
           {customerName?.total_spent && parseFloat(customerName.total_spent) > 0 && (
             <span className="text-green">{parseFloat(customerName.total_spent).toLocaleString('tr-TR')} ₺</span>
           )}
@@ -457,7 +457,7 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
         <div className="overflow-y-auto flex-1 p-3 space-y-1 custom-scrollbar">
           {products?.length > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Görüntülenen Ürünler ({products.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Viewed Products ({products.length})</p>
               {products.map((p, i) => (
                 <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
                   <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
@@ -469,12 +469,12 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs font-bold text-purple tabular-nums">{p.views}</p>
-                    <p className="text-[9px] text-textMute">görüntüleme</p>
+                    <p className="text-[9px] text-textMute">views</p>
                   </div>
                   {p.carts > 0 && (
                     <div className="text-right shrink-0">
                       <p className="text-xs font-bold text-green tabular-nums">{p.carts}</p>
-                      <p className="text-[9px] text-textMute">sepet</p>
+                      <p className="text-[9px] text-textMute">cart</p>
                     </div>
                   )}
                 </div>
@@ -483,7 +483,7 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
           )}
           {visitors?.length > 0 && (
             <div>
-              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Ziyaretçiler ({visitors.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Visitors ({visitors.length})</p>
               {visitors.slice(0, 30).map((v, i) => {
                 const sm2 = STAGE_META[v.stage] || STAGE_META.browsing;
                 const c2 = CM[sm2.color] || CM.slate;
@@ -499,7 +499,7 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
             </div>
           )}
           {!products?.length && !visitors?.length && (
-            <div className="py-8 text-center text-textMute text-sm">Veri yok</div>
+            <div className="py-8 text-center text-textMute text-sm">No data</div>
           )}
         </div>
       </div>
@@ -527,15 +527,15 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
 // ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
 
 const DEFAULT_SEQUENCE = [
-  { delay_minutes: 15,   template: 'sepet_hatirlatma', enabled: true,  label: 'İlk hatırlatma' },
-  { delay_minutes: 1440, template: 'sepet_hatirlatma', enabled: false, label: '24 saat sonra' },
-  { delay_minutes: 2880, template: 'sepet_hatirlatma', enabled: false, label: '48 saat sonra' },
+  { delay_minutes: 15,   template: 'sepet_hatirlatma', enabled: true,  label: 'First reminder' },
+  { delay_minutes: 1440, template: 'sepet_hatirlatma', enabled: false, label: 'After 24 hours' },
+  { delay_minutes: 2880, template: 'sepet_hatirlatma', enabled: false, label: 'After 48 hours' },
 ];
 
 function fmtDelay(m) {
-  if (m < 60) return `${m} dk`;
-  if (m < 1440) return `${Math.round(m / 60)} saat`;
-  return `${Math.round(m / 1440)} gün`;
+  if (m < 60) return `${m} min`;
+  if (m < 1440) return `${Math.round(m / 60)} hr`;
+  return `${Math.round(m / 1440)} day`;
 }
 
 function FlowPanel({ session }) {
@@ -618,8 +618,8 @@ function FlowPanel({ session }) {
       });
       const d = await r.json();
       if (d.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); await fetchSettings(); }
-      else setSaveErr(d.error || 'Kaydetme başarısız');
-    } catch { setSaveErr('Sunucuya bağlanılamadı'); }
+      else setSaveErr(d.error || 'Save failed');
+    } catch { setSaveErr('Server unreachable'); }
     setSaving(false);
   }
 
@@ -635,7 +635,7 @@ function FlowPanel({ session }) {
         body: JSON.stringify({ phone: testPhone, template: testTemplate }),
       });
       setTestRes(await r.json());
-    } catch { setTestRes({ ok: false, error: 'Sunucuya bağlanılamadı' }); }
+    } catch { setTestRes({ ok: false, error: 'Server unreachable' }); }
     setTestL(false);
   }
 
@@ -675,14 +675,14 @@ function FlowPanel({ session }) {
           <MessageCircle size={16} className="text-green" />
         </div>
         <div className="flex-1">
-          <h2 className="text-text font-bold text-sm">WhatsApp Otomasyon</h2>
-          <p className="text-textMute text-xs">Sepet hatırlatma dizisi ve sipariş bildirimleri</p>
+          <h2 className="text-text font-bold text-sm">WhatsApp Automation</h2>
+          <p className="text-textMute text-xs">Cart recovery sequence and order notifications</p>
         </div>
         <button onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
           className="flex items-center gap-1.5 text-sm font-medium transition-colors">
           {settings.enabled
-            ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">Aktif</span></>
-            : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">Pasif</span></>}
+            ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">Active</span></>
+            : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">Inactive</span></>}
         </button>
       </div>
 
@@ -690,9 +690,9 @@ function FlowPanel({ session }) {
       {logs.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Gönderim', value: sentCount,      color: 'text-green' },
-            { label: 'Sipariş',  value: convertedCount, color: 'text-blue' },
-            { label: 'Oran',     value: sentCount ? `%${Math.round(convertedCount / sentCount * 100)}` : '—', color: 'text-purple' },
+            { label: 'Sent',    value: sentCount,      color: 'text-green' },
+            { label: 'Orders',  value: convertedCount, color: 'text-blue' },
+            { label: 'Rate',    value: sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—', color: 'text-purple' },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-surface border border-border rounded-xl p-3 text-center">
               <p className={`text-lg font-bold ${color}`}>{value}</p>
@@ -704,7 +704,7 @@ function FlowPanel({ session }) {
 
       {/* Bağlantı ayarları */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Bağlantı</p>
+        <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Connection</p>
 
         <div className="space-y-1.5">
           <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">WhatsApp Token</label>
@@ -730,8 +730,8 @@ function FlowPanel({ session }) {
       {/* Sequence */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
         <div>
-          <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Sepet Hatırlatma Dizisi</p>
-          <p className="text-textMute text-[10px] mt-0.5">Sipariş verilirse dizi otomatik durur</p>
+          <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Cart Reminder Sequence</p>
+          <p className="text-textMute text-[10px] mt-0.5">Sequence stops automatically when order is placed</p>
         </div>
         {settings.sequence.map((step, idx) => (
           <div key={idx} className={`rounded-xl border p-3 space-y-2 ${step.enabled ? 'border-green/30 bg-greenSoft/20' : 'border-border bg-surfaceAlt/30'}`}>
@@ -748,16 +748,16 @@ function FlowPanel({ session }) {
             {step.enabled && (
               <div className="grid grid-cols-2 gap-2 pl-7">
                 <div>
-                  <p className="text-[10px] text-textMute mb-1">Gecikme</p>
+                  <p className="text-[10px] text-textMute mb-1">Delay</p>
                   <div className="flex items-center gap-1.5">
                     <input type="number" min={5} max={43200} value={step.delay_minutes}
                       onChange={e => updateStep(idx, { delay_minutes: parseInt(e.target.value) || 15 })}
                       className="w-16 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
-                    <span className="text-textMute text-[10px]">dk · {fmtDelay(step.delay_minutes)}</span>
+                    <span className="text-textMute text-[10px]">min · {fmtDelay(step.delay_minutes)}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] text-textMute mb-1">Şablon adı</p>
+                  <p className="text-[10px] text-textMute mb-1">Template name</p>
                   <input value={step.template} onChange={e => updateStep(idx, { template: e.target.value })}
                     className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
                 </div>
@@ -772,8 +772,8 @@ function FlowPanel({ session }) {
         <div className="flex items-center gap-2">
           <ShoppingBag size={13} className="text-blue shrink-0" />
           <div className="flex-1">
-            <p className="text-text font-semibold text-sm">Sipariş Onayı WA</p>
-            <p className="text-textMute text-[10px]">Sipariş tamamlandığında otomatik gönder</p>
+            <p className="text-text font-semibold text-sm">Order Confirmation WA</p>
+            <p className="text-textMute text-[10px]">Auto-send when order is completed</p>
           </div>
           <button onClick={() => setSettings(s => ({ ...s, post_order: { ...s.post_order, enabled: !s.post_order.enabled } }))}>
             {settings.post_order?.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
@@ -781,7 +781,7 @@ function FlowPanel({ session }) {
         </div>
         {settings.post_order?.enabled && (
           <div className="pl-5 space-y-1">
-            <p className="text-[10px] text-textMute">Şablon adı</p>
+            <p className="text-[10px] text-textMute">Template name</p>
             <input value={settings.post_order.template || 'siparis_onay'}
               onChange={e => setSettings(s => ({ ...s, post_order: { ...s.post_order, template: e.target.value } }))}
               className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-1.5 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
@@ -798,12 +798,12 @@ function FlowPanel({ session }) {
       <button onClick={handleSave} disabled={saving}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50">
         {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-        {saved ? 'Kaydedildi ✓' : saving ? 'Kaydediliyor…' : 'Kaydet'}
+        {saved ? 'Saved ✓' : saving ? 'Saving...' : 'Save'}
       </button>
 
       {/* Test */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <h3 className="text-text font-semibold text-sm flex items-center gap-2"><Send size={13} className="text-green" />Test Mesajı</h3>
+        <h3 className="text-text font-semibold text-sm flex items-center gap-2"><Send size={13} className="text-green" />Test Message</h3>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
@@ -818,13 +818,13 @@ function FlowPanel({ session }) {
           </select>
           <button onClick={handleTest} disabled={testLoading || !testPhone.trim()}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50 shrink-0">
-            {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Gönder
+            {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Send
           </button>
         </div>
         {testResult && (
           <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm border ${testResult.ok ? 'bg-greenSoft border-green/20 text-green' : 'bg-roseSoft border-rose/20 text-rose'}`}>
             {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
-            {testResult.ok ? `Gönderildi — ID: ${testResult.message_id}` : (testResult.error || 'Başarısız')}
+            {testResult.ok ? `Sent — ID: ${testResult.message_id}` : (testResult.error || 'Failed')}
           </div>
         )}
       </div>
@@ -833,8 +833,8 @@ function FlowPanel({ session }) {
       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <FileText size={13} className="text-textDim" />
-          <span className="text-text font-semibold text-sm flex-1">Gönderim Geçmişi</span>
-          <span className="text-textMute text-xs">{logs.length} kayıt</span>
+          <span className="text-text font-semibold text-sm flex-1">Send History</span>
+          <span className="text-textMute text-xs">{logs.length} records</span>
           <button onClick={fetchLogs} disabled={logsLoading}
             className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors disabled:opacity-50">
             <RefreshCw size={11} className={logsLoading ? 'animate-spin' : ''} />
@@ -853,23 +853,23 @@ function FlowPanel({ session }) {
             {logs.length === 0 ? (
               <div className="py-10 text-center">
                 <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
-                <p className="text-textMute text-sm">Henüz gönderim yok</p>
+                <p className="text-textMute text-sm">No sends yet</p>
               </div>
             ) : logs.map((entry, i) => (
               <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
                 <div className="mt-0.5 shrink-0">{entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-text font-medium text-xs">{entry.name || 'Müşteri'}</span>
+                    <span className="text-text font-medium text-xs">{entry.name || 'Customer'}</span>
                     <span className="text-textMute text-[10px]">{entry.phone}</span>
                     {entry.product && <span className="text-textMute text-[10px] truncate max-w-[130px]">{entry.product}</span>}
                     {entry.step_label && <span className="text-[9px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>}
-                    {entry.converted && <span className="text-[9px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Sipariş</span>}
+                    {entry.converted && <span className="text-[9px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Order</span>}
                   </div>
                   {entry.error && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
                 </div>
                 <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
-                  {new Date(entry.ts).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                  {new Date(entry.ts).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
                 </span>
               </div>
             ))}
@@ -891,7 +891,7 @@ function FlowPanel({ session }) {
         </div>
         {optoutsOpen && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-textMute">"dur / stop / iptal" yazan müşteriler otomatik eklenir.</p>
+            <p className="text-[10px] text-textMute">Customers who reply "stop / opt-out" are added automatically.</p>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <UserX size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
@@ -901,11 +901,11 @@ function FlowPanel({ session }) {
               </div>
               <button onClick={handleAddOptout} disabled={!optoutPhone.trim()}
                 className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs bg-roseSoft border border-rose/20 text-rose hover:bg-rose/20 transition-colors disabled:opacity-40 shrink-0">
-                <Plus size={12} /> Ekle
+                <Plus size={12} /> Add
               </button>
             </div>
             {optouts.length === 0
-              ? <p className="text-textMute text-xs text-center py-3">Liste boş</p>
+              ? <p className="text-textMute text-xs text-center py-3">Empty list</p>
               : <div className="space-y-1 max-h-36 overflow-y-auto custom-scrollbar">
                   {optouts.map(phone => (
                     <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
@@ -1043,7 +1043,7 @@ export default function Dashboard({ session, onLogout }) {
   };
 
   const handleUninstall = async () => {
-    if (!confirm('Pixel kaldırılacak ve takip duracak. Emin misiniz?')) return;
+    if (!confirm('Pixel will be removed and tracking will stop. Are you sure?')) return;
     setInstalling(true);
     try {
       const r = await fetch(`${API_URL}/api/shopify/pixel/uninstall?${qs}`, { method: 'DELETE' });
@@ -1300,26 +1300,26 @@ export default function Dashboard({ session, onLogout }) {
         <div className="flex items-center gap-2 flex-wrap">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${statusBadge}`}>
             {sseStatus === 'connected'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Canlı</>
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Live</>
               : sseStatus === 'connecting'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> Bağlanıyor...</>
-              : <><WifiOff size={12} /> Bağlı Değil</>}
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> Connecting...</>
+              : <><WifiOff size={12} /> Disconnected</>}
           </div>
           {/* View switcher */}
           <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5">
             <button onClick={() => setActiveView('live')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'live' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <Radio size={11} /> Canlı
+              <Radio size={11} /> Live
             </button>
             <button onClick={() => setActiveView('flow')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'flow' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <MessageCircle size={11} /> WA Otomasyon
+              <MessageCircle size={11} /> WA Automation
             </button>
           </div>
           <ThemeSwitch />
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
-            <LogOut size={12} /> Çıkış
+            <LogOut size={12} /> Logout
           </button>
         </div>
       </div>
@@ -1338,12 +1338,12 @@ export default function Dashboard({ session, onLogout }) {
           </div>
           <div>
             <p className={`text-sm font-bold ${pixelStatus?.installed ? 'text-green' : 'text-text'}`}>
-              {pixelStatus?.installed ? 'Storefront Pixel Kurulu' : 'Storefront Pixel Kurulu Değil'}
+              {pixelStatus?.installed ? 'Storefront Pixel Installed' : 'Storefront Pixel Not Installed'}
             </p>
             <p className="text-textMute text-[10px]">
               {pixelStatus?.installed
                 ? `Tracking ID: ${pixelStatus.tracking_id || '—'}`
-                : 'Ziyaretçi hareketlerini takip etmek için pixeli kurun'}
+                : 'Install the pixel to track visitor activity'}
             </p>
           </div>
         </div>
@@ -1354,19 +1354,19 @@ export default function Dashboard({ session, onLogout }) {
                 ${webhookStatus?.registered
                   ? 'bg-greenSoft border-green/20 text-green'
                   : 'bg-blueSoft border-blue/20 text-blue hover:bg-blueSoft/80'}`}>
-              {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Kuruluyor...</>
-                : webhookStatus?.registered ? <><CheckCircle size={11} /> Sipariş Takibi Aktif</>
-                : <><Zap size={11} /> Sipariş Takibini Kur</>}
+              {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Installing...</>
+                : webhookStatus?.registered ? <><CheckCircle size={11} /> Order Tracking Active</>
+                : <><Zap size={11} /> Set Up Order Tracking</>}
             </button>
           )}
           {pixelStatus?.installed
             ? <button onClick={handleUninstall} disabled={installing || pixelLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
-                <Trash2 size={12} /> Kaldır
+                <Trash2 size={12} /> Remove
               </button>
             : <button onClick={handleInstall} disabled={installing || pixelLoading}
                 className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
-                {installing ? <><RefreshCw size={12} className="animate-spin" /> Kuruluyor...</> : <><Zap size={12} /> Tek Tıkla Kur</>}
+                {installing ? <><RefreshCw size={12} className="animate-spin" /> Installing...</> : <><Zap size={12} /> One-Click Install</>}
               </button>
           }
         </div>
@@ -1374,27 +1374,27 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* 7 stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        <StatCard label="Toplam Event" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
-          onClick={() => setDrillDown({ title: 'Tüm Eventler', subtitle: `${events.length} event`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Tekil Ziyaretçi" value={uniqueVisitorCount} icon={Users} color="purple"
-          onClick={() => setDrillDown({ title: 'Tekil Ziyaretçiler', subtitle: `${uniqueVisitorCount} ziyaretçi`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Aktif Üyeler" value={memberCount} icon={CheckCircle} color="teal"
-          onClick={() => setDrillDown({ title: 'Üye Girişi Yapanlar', subtitle: `${memberCount} üye`,
+        <StatCard label="Total Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
+          onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+        <StatCard label="Unique Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
+          onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+        <StatCard label="Active Members" value={memberCount} icon={CheckCircle} color="teal"
+          onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
             products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
             visitors: visitorProfiles.filter(v => v.customer_id) })} />
-        <StatCard label="Sepete Ekleme" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
-          onClick={() => setDrillDown({ title: 'Sepete Eklenen Ürünler', subtitle: `${evStats['add_to_cart'] || 0} sepet eventi`,
+        <StatCard label="Add to Cart" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
+          onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
             products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
             visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Ödeme Başlatma" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
-          onClick={() => setDrillDown({ title: 'Ödeme Başlatan Ziyaretçiler', subtitle: `${evStats['checkout_started'] || 0} checkout eventi`,
+        <StatCard label="Checkout Started" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
+          onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
             products: productStats.slice(0, 20),
             visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Tamamlanan" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
-          onClick={() => setDrillDown({ title: 'Tamamlanan Siparişler', subtitle: `${evStats['checkout_completed'] || 0} sipariş`,
+        <StatCard label="Completed" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
+          onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${evStats['checkout_completed'] || 0} orders`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Terk Edilen Ödeme" value={abandonedVisitors.length} icon={CreditCard} color="orange"
-          onClick={() => setDrillDown({ title: 'Terk Edilen Ödemeler', subtitle: 'Ödemeye geçti, tamamlamadı (15+ dk)',
+        <StatCard label="Abandoned Checkout" value={abandonedVisitors.length} icon={CreditCard} color="orange"
+          onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
             products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
             visitors: abandonedVisitors })} />
       </div>
@@ -1404,9 +1404,9 @@ export default function Dashboard({ session, onLogout }) {
         <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <CreditCard size={15} className="text-amber" />
-            <span className="text-amber text-sm font-bold">Terk Edilen Ödemeler</span>
+            <span className="text-amber text-sm font-bold">Abandoned Checkouts</span>
             <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full">
-              {abandonedVisitors.length} ziyaretçi ödemeye geçti, tamamlamadı
+              {abandonedVisitors.length} visitors started checkout but did not complete
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -1433,7 +1433,7 @@ export default function Dashboard({ session, onLogout }) {
       {/* Product grid */}
       {productStats.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={TrendingUp} iconClass="text-purple" title="En Çok Görüntülenen Ürünler" badge={`${productStats.length} ürün`} />
+          <SectionHead icon={TrendingUp} iconClass="text-purple" title="Most Viewed Products" badge={`${productStats.length} products`} />
           <div className="p-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
             {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
           </div>
@@ -1443,7 +1443,7 @@ export default function Dashboard({ session, onLogout }) {
       {/* Collections */}
       {collectionStats.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Layers} iconClass="text-teal" title="En Çok Görüntülenen Koleksiyonlar" badge={`${collectionStats.length} koleksiyon`} />
+          <SectionHead icon={Layers} iconClass="text-teal" title="Most Viewed Collections" badge={`${collectionStats.length} collections`} />
           <div className="divide-y divide-border/60">
             {collectionStats.map((col, i) => (
               <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
@@ -1466,7 +1466,7 @@ export default function Dashboard({ session, onLogout }) {
         <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
           <div className="flex items-center gap-2 p-4 border-b border-rose/15">
             <span className="text-sm font-bold text-rose">404</span>
-            <span className="text-text text-sm font-bold">Bulunamayan Sayfalar</span>
+            <span className="text-text text-sm font-bold">Not Found Pages</span>
             <span className="text-[10px] bg-roseSoft text-rose px-2 py-0.5 rounded-full ml-auto">{notFoundStats.length} URL</span>
           </div>
           <div className="divide-y divide-rose/10">
@@ -1479,11 +1479,11 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
-                    <p className="text-[9px] text-textMute">tekil</p>
+                    <p className="text-[9px] text-textMute">unique</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
-                    <p className="text-[9px] text-textMute">istek</p>
+                    <p className="text-[9px] text-textMute">hits</p>
                   </div>
                   <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(item.lastTs)}</span>
                 </div>
@@ -1496,7 +1496,7 @@ export default function Dashboard({ session, onLogout }) {
       {/* Page stats */}
       {pageStats.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Eye} title="Sayfa İstatistikleri" badge={`${pageStats.length} sayfa`} extra="Blog, içerik ve diğer sayfalar" />
+          <SectionHead icon={Eye} title="Page Statistics" badge={`${pageStats.length} pages`} extra="Blog, content and other pages" />
           <div className="divide-y divide-border/60">
             {pageStats.map((page, i) => (
               <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
@@ -1512,11 +1512,11 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                    <p className="text-[9px] text-textMute">tekil</p>
+                    <p className="text-[9px] text-textMute">unique</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
-                    <p className="text-[9px] text-textMute">görüntüleme</p>
+                    <p className="text-[9px] text-textMute">views</p>
                   </div>
                   <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(page.lastTs)}</span>
                 </div>
@@ -1532,13 +1532,13 @@ export default function Dashboard({ session, onLogout }) {
       {/* UTM campaigns */}
       {utmStats.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={BarChart2} iconClass="text-blue" title="Kampanya Bazlı (UTM)" badge={`${utmStats.length} kampanya`} extra="Google Ads · Meta · TikTok" />
+          <SectionHead icon={BarChart2} iconClass="text-blue" title="Campaign Based (UTM)" badge={`${utmStats.length} campaigns`} extra="Google Ads · Meta · TikTok" />
           <div className="divide-y divide-border/60">
             {utmStats.map(camp => (
               <div key={camp.campaign}
                 onClick={() => setDrillDown({
-                  title: `Kampanya: ${camp.campaign}`,
-                  subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${camp.vids.size} ziyaretçi · ${camp.views} görüntüleme`,
+                  title: `Campaign: ${camp.campaign}`,
+                  subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${camp.vids.size} visitors · ${camp.views} views`,
                   products: camp.products,
                   visitors: visitorProfiles.filter(v => camp.vids.has(v.vid)),
                 })}
@@ -1550,15 +1550,15 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
-                    <p className="text-[9px] text-textMute">görüntüleme</p>
+                    <p className="text-[9px] text-textMute">views</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
-                    <p className="text-[9px] text-textMute">sepet</p>
+                    <p className="text-[9px] text-textMute">cart</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
-                    <p className="text-[9px] text-textMute">ziyaretçi</p>
+                    <p className="text-[9px] text-textMute">visitors</p>
                   </div>
                   <ArrowRight size={11} className="text-textMute" />
                 </div>
@@ -1576,8 +1576,8 @@ export default function Dashboard({ session, onLogout }) {
             const prods = Object.values(sourceProductsMap[src] || {}).sort((a, b) => b.views - a.views);
             const vids = new Set(events.filter(ev => parseReferrer(ev.referrer) === src).map(ev => ev.vid));
             setDrillDown({
-              title: `${src} kaynağından gelenler`,
-              subtitle: `${vids.size} ziyaretçi · ${prods.length} ürün`,
+              title: `Visitors from ${src}`,
+              subtitle: `${vids.size} visitors · ${prods.length} products`,
               products: prods,
               visitors: visitorProfiles.filter(v => vids.has(v.vid)),
             });
@@ -1588,7 +1588,7 @@ export default function Dashboard({ session, onLogout }) {
       {/* Visitor grid */}
       {visitorProfiles.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Users} title="Aktif Ziyaretçiler" badge={visitorProfiles.length} extra="Karta tıkla → yolculuğu gör" />
+          <SectionHead icon={Users} title="Active Visitors" badge={visitorProfiles.length} extra="Click card → see journey" />
           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {visitorProfiles.slice(0, 24).map(profile => (
               <VisitorCard key={profile.vid} profile={profile}
@@ -1597,7 +1597,7 @@ export default function Dashboard({ session, onLogout }) {
             ))}
           </div>
           {visitorProfiles.length > 24 && (
-            <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 24} daha fazla ziyaretçi</p>
+            <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 24} more visitors</p>
           )}
         </div>
       )}
@@ -1607,7 +1607,7 @@ export default function Dashboard({ session, onLogout }) {
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Activity size={16} className="text-textDim" />
-            <span className="text-text text-sm font-bold">Canlı Feed</span>
+            <span className="text-text text-sm font-bold">Live Feed</span>
             {events.length > 0 && (
               <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length} event</span>
             )}
@@ -1616,10 +1616,10 @@ export default function Dashboard({ session, onLogout }) {
             <button onClick={() => setPaused(p => !p)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
                 ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
-              {paused ? '▶ Devam Et' : '⏸ Duraklat'}
+              {paused ? '▶ Resume' : '⏸ Pause'}
             </button>
             <button onClick={() => setEvents([])}
-              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Temizle">
+              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
               <Trash2 size={12} />
             </button>
             <button onClick={() => setFeedOpen(o => !o)}
@@ -1632,8 +1632,8 @@ export default function Dashboard({ session, onLogout }) {
           <div className="overflow-y-auto max-h-[480px] p-3 space-y-2 custom-scrollbar">
             {events.length === 0
               ? <div className="py-16 text-center space-y-2">
-                  <p className="text-textMute text-sm font-medium">Henüz event yok</p>
-                  <p className="text-textMute text-xs">Mağazanıza giriş yapın — hareketler burada anlık görünecek</p>
+                  <p className="text-textMute text-sm font-medium">No events yet</p>
+                  <p className="text-textMute text-xs">Visit your store — activity will appear here in real-time</p>
                 </div>
               : events.map(ev => (
                   <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
@@ -1650,11 +1650,11 @@ export default function Dashboard({ session, onLogout }) {
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
             <Radio size={24} className="text-textMute" />
           </div>
-          <h3 className="text-text font-bold text-base mb-2">Nasıl Çalışır?</h3>
+          <h3 className="text-text font-bold text-base mb-2">How It Works</h3>
           <div className="text-textDim text-sm space-y-2 max-w-sm mx-auto text-left">
-            <p>① "Tek Tıkla Kur" butonuna basın → pixel otomatik yüklenir</p>
-            <p>② Müşteriler mağazanızı ziyaret ettiğinde hareketler buraya akar</p>
-            <p>③ Ürün görüntüleme, sepete ekleme, ödemeye geçme anlık takip edilir</p>
+            <p>① Click "One-Click Install" → pixel is installed automatically</p>
+            <p>② When customers visit your store, activity streams here in real-time</p>
+            <p>③ Product views, add-to-cart, and checkout events are tracked live</p>
           </div>
         </div>
       )}

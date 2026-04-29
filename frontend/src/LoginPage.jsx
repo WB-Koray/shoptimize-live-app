@@ -37,7 +37,7 @@ export default function LoginPage({ onLogin }) {
 
   async function handleSubmit() {
     if (!username.trim() || !password.trim()) {
-      setError('Kullanıcı adı ve şifre gerekli');
+      setError('Username and password are required');
       return;
     }
     setLoading(true);
@@ -50,17 +50,17 @@ export default function LoginPage({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.detail || data.error || 'Giriş başarısız');
+        setError(data.detail || data.error || 'Login failed');
         return;
       }
       const tid = data.tid || manualTid.trim();
       if (!tid) {
-        setError('Tracking ID bulunamadı — aşağıdaki TID alanını doldurun');
+        setError('Tracking ID not found — please fill in the TID field below');
         return;
       }
       onLogin({ token: data.token, username: data.username, brand: data.brand, tid });
     } catch {
-      setError('Sunucuya bağlanılamadı');
+      setError('Could not connect to server');
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function LoginPage({ onLogin }) {
             </div>
             <div className="text-left">
               <h1 className="text-2xl font-bold text-text">Shoptimize Live</h1>
-              <p className="text-sm text-textMute">Canlı mağaza aktivitesi</p>
+              <p className="text-sm text-textMute">Real-time store activity</p>
             </div>
           </div>
         </div>
@@ -94,20 +94,20 @@ export default function LoginPage({ onLogin }) {
             </div>
           )}
 
-          <Field label="Kullanıcı Adı" icon={User} value={username} onChange={setUsername}
-            placeholder="ornek@siteniz.com"
-            helpText="OAuth kurulumunda kullanılan e-posta" />
+          <Field label="Username" icon={User} value={username} onChange={setUsername}
+            placeholder="you@yourstore.com"
+            helpText="Email used during OAuth installation" />
 
-          <Field label="Marka" icon={Tag} value={brand} onChange={setBrand}
+          <Field label="Brand" icon={Tag} value={brand} onChange={setBrand}
             placeholder="default"
-            helpText="Genellikle 'default'" />
+            helpText="Usually 'default'" />
 
-          <Field label="Şifre" icon={Lock} type="password" value={password}
+          <Field label="Password" icon={Lock} type="password" value={password}
             onChange={setPassword} onKeyDown={onKey} />
 
           <Field label="Tracking ID (TID)" icon={Hash} value={manualTid} onChange={setManualTid}
-            placeholder="koray@ornek.com_default_abc123…"
-            helpText="Otomatik bulunmazsa girin — pixel URL'sindeki ?tid= değeri" />
+            placeholder="you@yourstore.com_default_abc123…"
+            helpText="Enter manually if not found automatically — the ?tid= value from the pixel URL" />
 
           <button
             onClick={handleSubmit}
@@ -124,16 +124,16 @@ export default function LoginPage({ onLogin }) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Giriş yapılıyor...
+                Logging in...
               </>
             ) : (
-              <><Zap size={15} /> Giriş Yap</>
+              <><Zap size={15} /> Log In</>
             )}
           </button>
         </div>
 
         <p className="text-center text-[11px] text-textMute mt-4">
-          TID örneği: koray@korayyildiz.com.tr_default_89f03476cdd41216
+          TID example: you@yourstore.com_default_89f03476cdd41216
         </p>
       </div>
     </div>
