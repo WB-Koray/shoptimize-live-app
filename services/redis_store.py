@@ -156,7 +156,7 @@ class RedisStore:
 
     # ── Checkout takibi (terk edilmiş ödeme akışı) ──────────────────────────────
 
-    _CHECKOUT_TTL = 14_400  # 4 saat
+    _CHECKOUT_TTL = 259_200  # 72 saat (sequence adımları için yeterli)
 
     async def save_checkout(self, checkout_token: str, data: dict) -> None:
         """Checkout webhook'undan gelen veriyi Redis'e yazar."""
