@@ -1,5 +1,5 @@
-name = "Shoptimize Live App"
-client_id = "3cc5db4cd2e08e09887b0cfa230b8c78"
+name = "Shoptimize Live"
+client_id = "1e80272ad8faa2261f770841ddee0377"
 application_url = "https://live.shoptimize.com.tr"
 embedded = true
 
