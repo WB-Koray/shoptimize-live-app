@@ -197,6 +197,49 @@ class RedisStore:
     async def mark_wa_sent(self, checkout_token: str) -> None:
         await self._redis.setex(f"wa_sent:{checkout_token}", self._CHECKOUT_TTL, "1")
 
+    async def is_step_sent(self, checkout_token: str, step_idx: int) -> bool:
+        if step_idx == 0 and await self._redis.exists(f"wa_sent:{checkout_token}"):
+            return True
+        return bool(await self._redis.exists(f"wa_step:{checkout_token}:{step_idx}"))
+
+    async def mark_step_sent(self, checkout_token: str, step_idx: int) -> None:
+        await self._redis.setex(f"wa_step:{checkout_token}:{step_idx}", self._CHECKOUT_TTL, "1")
+        if step_idx == 0:
+            await self._redis.setex(f"wa_sent:{checkout_token}", self._CHECKOUT_TTL, "1")
+
+    # ── Opt-out yönetimi ────────────────────────────────────────────────────────
+
+    _OPTOUT_TTL = 86400 * 365  # 1 yıl
+
+    async def add_optout(self, phone: str) -> None:
+        normalized = phone.strip().lstrip("+")
+        await self._redis.setex(f"optout:{normalized}", self._OPTOUT_TTL, "1")
+
+    async def is_optout(self, phone: str) -> bool:
+        normalized = phone.strip().lstrip("+")
+        return bool(await self._redis.exists(f"optout:{normalized}"))
+
+    async def remove_optout(self, phone: str) -> None:
+        normalized = phone.strip().lstrip("+")
+        await self._redis.delete(f"optout:{normalized}")
+
+    async def get_all_optouts(self) -> list[str]:
+        result = []
+        async for key in self._redis.scan_iter("optout:*"):
+            result.append("+" + key.split("optout:", 1)[1])
+        return sorted(result)
+
+    # ── Dönüşüm takibi ──────────────────────────────────────────────────────────
+
+    async def mark_flow_converted(self, username: str, brand: str, checkout_token: str) -> None:
+        key = f"flow_converted:{username}:{brand}"
+        await self._redis.sadd(key, checkout_token)
+        await self._redis.expire(key, 86400 * 30)
+
+    async def get_converted_tokens(self, username: str, brand: str) -> set:
+        members = await self._redis.smembers(f"flow_converted:{username}:{brand}")
+        return {m.decode() if isinstance(m, bytes) else m for m in members}
+
     # ── Flow ayarları ────────────────────────────────────────────────────────────
 
     async def save_flow_settings(self, username: str, brand: str, settings: dict) -> None:

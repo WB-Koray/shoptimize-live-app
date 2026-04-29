@@ -610,6 +610,29 @@ async def shopify_orders_webhook(
     checkout_token = str(order.get("checkout_token") or "").strip()
     if checkout_token:
         await store.mark_checkout_completed(checkout_token)
+        await store.mark_flow_converted(username, brand, checkout_token)
+
+    # Sipariş sonrası WA gönder (ayarlarda post_order aktifse)
+    settings = await store.get_flow_settings(username, brand)
+    post_order = settings.get("post_order") or {}
+    if post_order.get("enabled") and settings.get("wa_token") and settings.get("phone_number_id"):
+        phone = ""
+        phone_src = order.get("billing_address") or order.get("shipping_address") or {}
+        phone = str(order.get("phone") or customer.get("phone") or phone_src.get("phone") or "").strip()
+        if phone:
+            digits = "".join(c for c in phone if c.isdigit())
+            if digits.startswith("0"):
+                phone = f"+9{digits}"
+            elif not phone.startswith("+"):
+                phone = f"+{digits}"
+            from services.wa_sender import send_wa_template
+            customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+            tmpl = post_order.get("template", "siparis_onay")
+            await send_wa_template(
+                settings["wa_token"], settings["phone_number_id"], phone,
+                name=customer_name, order_number=str(order.get("name") or order.get("order_number") or ""),
+                template_name=tmpl,
+            )
 
     session_info = _customer_to_tid.get(customer_id) if customer_id else None
 
@@ -768,3 +791,42 @@ async def get_webhook_status(username: str = Query(""), brand: str = Query("defa
     except Exception:
         pass
     return {"ok": False, "webhooks": []}
+
+
+# ── Meta WA gelen mesaj webhook'u (opt-out) ───────────────────────────────────
+
+@router.get("/api/wa/webhook")
+async def wa_webhook_verify(
+    request: Request,
+    hub_mode: str = Query("", alias="hub.mode"),
+    hub_challenge: str = Query("", alias="hub.challenge"),
+    hub_verify_token: str = Query("", alias="hub.verify_token"),
+):
+    import os
+    expected = os.getenv("WA_WEBHOOK_VERIFY_TOKEN", "shoptimize_wa_verify")
+    if hub_mode == "subscribe" and hub_verify_token == expected:
+        return Response(content=hub_challenge, media_type="text/plain")
+    return JSONResponse({"ok": False}, status_code=403)
+
+
+@router.post("/api/wa/webhook")
+async def wa_webhook_incoming(request: Request):
+    """Meta WA gelen mesaj webhook'u — opt-out işler."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": True})
+    try:
+        from services.wa_sender import handle_incoming_message
+        for entry in body.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                phone_number_id = value.get("metadata", {}).get("phone_number_id", "")
+                for msg in value.get("messages", []):
+                    from_phone = msg.get("from", "")
+                    text_body  = (msg.get("text") or {}).get("body", "")
+                    if from_phone and text_body:
+                        await handle_incoming_message(phone_number_id, from_phone, text_body)
+    except Exception as e:
+        logger.warning("[WA] Webhook işleme hatası: %s", e)
+    return JSONResponse({"ok": True})

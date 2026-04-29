@@ -23,7 +23,9 @@ from routers import flow
 async def _abandoned_checkout_worker():
     import asyncio
     import time
+    import logging
     from services.wa_sender import send_wa_template
+    _log = logging.getLogger(__name__)
     while True:
         try:
             await asyncio.sleep(60)
@@ -33,32 +35,60 @@ async def _abandoned_checkout_worker():
                 co = await store.get_checkout(token)
                 if not co:
                     continue
+                if await store.is_checkout_completed(token):
+                    await store.remove_pending_checkout(token)
+                    continue
                 username = co.get("username", "")
                 brand    = co.get("brand", "default")
                 settings = await store.get_flow_settings(username, brand)
                 if not settings.get("enabled"):
-                    continue
-                delay_ms = settings.get("delay_minutes", 15) * 60 * 1000
-                if now_ms - co.get("ts", 0) < delay_ms:
-                    continue
-                if await store.is_wa_sent(token):
                     continue
                 wa_token = settings.get("wa_token", "")
                 phone_id = settings.get("phone_number_id", "")
                 phone    = co.get("phone", "")
                 if not wa_token or not phone_id or not phone:
                     continue
-                
-                
-                result   = await send_wa_template(wa_token, phone_id, phone, name=co.get("name", ""), product=co.get("product", ""))
-                await store.mark_wa_sent(token)
-                entry = {
-                    "ts": int(now_ms), "token": token[:16] + "…",
-                    "phone": "***" + phone[-4:], "name": co.get("name", ""),
-                    "product": co.get("product", ""), "ok": result.get("ok"),
-                    "message_id": result.get("message_id", ""), "error": result.get("error", ""),
-                }
-                await store.append_flow_log(username, brand, entry)
+
+                # Sequence: [{delay_minutes, template, enabled, label}, ...]
+                sequence = settings.get("sequence") or [{
+                    "delay_minutes": settings.get("delay_minutes", 15),
+                    "template": "sepet_hatirlatma",
+                    "enabled": True,
+                    "label": "İlk hatırlatma",
+                }]
+
+                checkout_ts = co.get("ts", 0)
+                for step_idx, step in enumerate(sequence):
+                    if not step.get("enabled"):
+                        continue
+                    step_delay_ms = step.get("delay_minutes", 15) * 60 * 1000
+                    if now_ms - checkout_ts < step_delay_ms:
+                        continue
+                    if await store.is_step_sent(token, step_idx):
+                        continue
+
+                    tmpl = step.get("template", "sepet_hatirlatma")
+                    result = await send_wa_template(
+                        wa_token, phone_id, phone,
+                        name=co.get("name", ""), product=co.get("product", ""),
+                        template_name=tmpl,
+                    )
+                    await store.mark_step_sent(token, step_idx)
+
+                    entry = {
+                        "ts": int(now_ms), "token": token,
+                        "phone": "***" + phone[-4:], "name": co.get("name", ""),
+                        "product": co.get("product", ""), "ok": result.get("ok"),
+                        "message_id": result.get("message_id", ""),
+                        "error": result.get("error", ""),
+                        "step": step_idx,
+                        "step_label": step.get("label", f"Adım {step_idx + 1}"),
+                        "opted_out": result.get("opted_out", False),
+                    }
+                    if not result.get("opted_out"):
+                        await store.append_flow_log(username, brand, entry)
+                        status = "✓" if result.get("ok") else "✗"
+                        _log.info("[FLOW] %s [%s] WA→%s token=%s…", status, step.get("label", f"adım{step_idx}"), "***" + phone[-4:], token[:8])
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("[FLOW] Worker hatası: %s", e)
