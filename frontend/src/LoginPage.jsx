@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Zap, User, Lock, Tag, Hash, AlertCircle } from 'lucide-react';
+import { Zap, User, Lock, Tag, AlertCircle } from 'lucide-react';
+import logo from './assets/1200 px icon logo.png';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 
@@ -31,7 +32,6 @@ export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
   const [brand, setBrand] = useState('default');
   const [password, setPassword] = useState('');
-  const [manualTid, setManualTid] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,12 +53,7 @@ export default function LoginPage({ onLogin }) {
         setError(data.detail || data.error || 'Login failed');
         return;
       }
-      const tid = data.tid || manualTid.trim();
-      if (!tid) {
-        setError('Tracking ID not found — please fill in the TID field below');
-        return;
-      }
-      onLogin({ token: data.token, username: data.username, brand: data.brand, tid });
+      onLogin({ token: data.token, username: data.username, brand: data.brand, tid: data.tid || '' });
     } catch {
       setError('Could not connect to server');
     } finally {
@@ -74,15 +69,9 @@ export default function LoginPage({ onLogin }) {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-2xl bg-greenSoft border border-green/30">
-              <Zap size={28} className="text-green" />
-            </div>
-            <div className="text-left">
-              <h1 className="text-2xl font-bold text-text">Shoptimize Live</h1>
-              <p className="text-sm text-textMute">Real-time store activity</p>
-            </div>
-          </div>
+          <img src={logo} alt="Shoptimize Live" className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
+          <h1 className="text-2xl font-bold text-text">Shoptimize Live</h1>
+          <p className="text-sm text-textMute mt-1">Real-time store activity</p>
         </div>
 
         {/* Card */}
@@ -105,9 +94,6 @@ export default function LoginPage({ onLogin }) {
           <Field label="Password" icon={Lock} type="password" value={password}
             onChange={setPassword} onKeyDown={onKey} />
 
-          <Field label="Tracking ID (TID)" icon={Hash} value={manualTid} onChange={setManualTid}
-            placeholder="you@yourstore.com_default_abc123…"
-            helpText="Enter manually if not found automatically — the ?tid= value from the pixel URL" />
 
           <button
             onClick={handleSubmit}
@@ -132,9 +118,6 @@ export default function LoginPage({ onLogin }) {
           </button>
         </div>
 
-        <p className="text-center text-[11px] text-textMute mt-4">
-          TID example: you@yourstore.com_default_89f03476cdd41216
-        </p>
       </div>
     </div>
   );
