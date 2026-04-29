@@ -107,8 +107,8 @@ function StatCard({ label, value, icon: Icon, color = 'blue', pulse, onClick }) 
         {pulse && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green animate-ping" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-textDim text-[10px] uppercase font-bold tracking-wide truncate">{label}</p>
-        <p className={`text-lg font-bold leading-tight tabular-nums ${pulse ? c.text : 'text-text'}`}>{value}</p>
+        <p className="text-textDim text-[10px] uppercase font-bold leading-tight">{label}</p>
+        <p className={`text-xl font-bold leading-tight tabular-nums ${pulse ? c.text : 'text-text'}`}>{value}</p>
       </div>
       {onClick && <ArrowRight size={12} className="text-textMute shrink-0" />}
     </div>
@@ -143,22 +143,22 @@ function ProductCard({ product, flash }) {
         )}
         <div className="flex items-center gap-1 pt-1 border-t border-border">
           <Eye size={9} className="text-purple" />
-          <span className="text-[9px] text-textDim">Views</span>
-          <span className="text-[9px] font-bold text-purple ml-auto tabular-nums">{product.views}</span>
+          <span className="text-[10px] text-textDim">Views</span>
+          <span className="text-[10px] font-bold text-purple ml-auto tabular-nums">{product.views}</span>
         </div>
         <div className="flex items-center gap-1">
           <ShoppingCart size={9} className="text-green" />
-          <span className="text-[9px] text-textDim">Add to Cart</span>
-          <span className="text-[9px] font-bold text-green ml-auto tabular-nums">{product.carts}</span>
+          <span className="text-[10px] text-textDim">Add to Cart</span>
+          <span className="text-[10px] font-bold text-green ml-auto tabular-nums">{product.carts}</span>
         </div>
         {product.views > 0 && product.carts > 0 && (
           <div className="text-center">
-            <span className="text-[9px] font-bold text-amber bg-amberSoft px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-amber bg-amberSoft px-2 py-0.5 rounded-full">
               {((product.carts / product.views) * 100).toFixed(0)}% conversion
             </span>
           </div>
         )}
-        {product.vendor && <p className="text-[9px] text-textMute truncate">{product.vendor}</p>}
+        {product.vendor && <p className="text-[10px] text-textMute truncate">{product.vendor}</p>}
       </div>
     </div>
   );
@@ -181,23 +181,23 @@ function VisitorCard({ profile, customerName, onClick }) {
           <DevIcon size={11} className="text-textMute" />
           <span className="text-[10px] text-textDim font-mono">{shortVid(profile.vid)}</span>
         </div>
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
+        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
       </div>
       {fullName
         ? <p className="text-[10px] text-green font-semibold truncate">{fullName}</p>
         : profile.customer_id
-          ? <p className="text-[9px] text-green/60 font-mono truncate">Member #{profile.customer_id}</p>
+          ? <p className="text-[10px] text-green/60 font-mono truncate">Member #{profile.customer_id}</p>
           : null
       }
       {profile.lastProduct && (
         <p className="text-[10px] text-text/70 truncate" title={profile.lastProduct}>{profile.lastProduct}</p>
       )}
       {profile.utm?.utm_campaign && (
-        <p className="text-[9px] text-blue truncate">{profile.utm.utm_source || 'utm'} / {profile.utm.utm_campaign}</p>
+        <p className="text-[10px] text-blue truncate">{profile.utm.utm_source || 'utm'} / {profile.utm.utm_campaign}</p>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-textMute">{profile.referrer}</span>
-        <span className="text-[9px] text-textMute">{timeAgo(profile.lastTs)}</span>
+        <span className="text-[11px] text-textMute">{profile.referrer}</span>
+        <span className="text-[11px] text-textMute">{timeAgo(profile.lastTs)}</span>
       </div>
     </div>
   );
@@ -240,7 +240,7 @@ function EventRow({ ev, isNew }) {
           )}
         </div>
         {d.line_items?.length > 0 && (
-          <p className="text-[9px] text-textMute mt-0.5 truncate">
+          <p className="text-[10px] text-textMute mt-0.5 truncate">
             {d.line_items.slice(0, 3).map(li => `${li.title} ×${li.quantity}`).join(' · ')}
             {d.line_items.length > 3 ? ` +${d.line_items.length - 3}` : ''}
           </p>
@@ -250,12 +250,12 @@ function EventRow({ ev, isNew }) {
         )}
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.dot}`} />
-          <span className="text-[9px] text-textMute">{shortVid(ev.vid)}</span>
-          {ev.customer_id && <span className="text-[9px] text-green">Member #{ev.customer_id}</span>}
+          <span className="text-[10px] text-textMute">{shortVid(ev.vid)}</span>
+          {ev.customer_id && <span className="text-[10px] text-green">Member #{ev.customer_id}</span>}
           {ev.utm?.utm_campaign && (
-            <span className="text-[9px] text-blue bg-blueSoft px-1 rounded">{ev.utm.utm_campaign}</span>
+            <span className="text-[10px] text-blue bg-blueSoft px-1 rounded">{ev.utm.utm_campaign}</span>
           )}
-          <span className="text-[9px] text-textMute">{fmtTime(ev.ts)}</span>
+          <span className="text-[10px] text-textMute">{fmtTime(ev.ts)}</span>
         </div>
       </div>
     </div>
@@ -355,7 +355,7 @@ function SearchTable({ searches }) {
                 style={{ width: `${Math.min(100, (s.count / searches[0].count) * 100)}%` }} />
             </div>
             <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
-            <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(s.lastTs)}</span>
+            <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(s.lastTs)}</span>
           </div>
         ))}
       </div>
@@ -425,9 +425,9 @@ function JourneyModal({ profile, customerName, onClose }) {
                     {ev.data?.product_title && <span className="text-[10px] text-text/70 truncate max-w-[160px]">{ev.data.product_title}</span>}
                     {ev.data?.query && <span className="text-[10px] text-text/70">"{ev.data.query}"</span>}
                   </div>
-                  <p className="text-[9px] text-textMute truncate">{fmtUrl(ev.url)}</p>
+                  <p className="text-[10px] text-textMute truncate">{fmtUrl(ev.url)}</p>
                 </div>
-                <span className="text-[9px] text-textMute shrink-0">{fmtTime(ev.ts)}</span>
+                <span className="text-[10px] text-textMute shrink-0">{fmtTime(ev.ts)}</span>
               </div>
             );
           })}
@@ -469,12 +469,12 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs font-bold text-purple tabular-nums">{p.views}</p>
-                    <p className="text-[9px] text-textMute">views</p>
+                    <p className="text-[10px] text-textMute">views</p>
                   </div>
                   {p.carts > 0 && (
                     <div className="text-right shrink-0">
                       <p className="text-xs font-bold text-green tabular-nums">{p.carts}</p>
-                      <p className="text-[9px] text-textMute">cart</p>
+                      <p className="text-[10px] text-textMute">cart</p>
                     </div>
                   )}
                 </div>
@@ -489,10 +489,10 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
                 const c2 = CM[sm2.color] || CM.slate;
                 return (
                   <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
-                    <span className="text-[9px] font-mono text-textMute w-16">{shortVid(v.vid)}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{sm2.label}</span>
+                    <span className="text-[10px] font-mono text-textMute w-16">{shortVid(v.vid)}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{sm2.label}</span>
                     {v.lastProduct && <span className="text-[10px] text-text/60 flex-1 truncate">{v.lastProduct}</span>}
-                    <span className="text-[9px] text-textMute shrink-0">{timeAgo(v.lastTs)}</span>
+                    <span className="text-[10px] text-textMute shrink-0">{timeAgo(v.lastTs)}</span>
                   </div>
                 );
               })}
@@ -863,8 +863,8 @@ function FlowPanel({ session }) {
                     <span className="text-text font-medium text-xs">{entry.name || 'Customer'}</span>
                     <span className="text-textMute text-[10px]">{entry.phone}</span>
                     {entry.product && <span className="text-textMute text-[10px] truncate max-w-[130px]">{entry.product}</span>}
-                    {entry.step_label && <span className="text-[9px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>}
-                    {entry.converted && <span className="text-[9px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Order</span>}
+                    {entry.step_label && <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>}
+                    {entry.converted && <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Order</span>}
                   </div>
                   {entry.error && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
                 </div>
@@ -1374,11 +1374,11 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* 7 stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        <StatCard label="Total Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
+        <StatCard label="Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
           onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Unique Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
+        <StatCard label="Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
           onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Active Members" value={memberCount} icon={CheckCircle} color="teal"
+        <StatCard label="Members" value={memberCount} icon={CheckCircle} color="teal"
           onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
             products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
             visitors: visitorProfiles.filter(v => v.customer_id) })} />
@@ -1386,14 +1386,14 @@ export default function Dashboard({ session, onLogout }) {
           onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
             products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
             visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Checkout Started" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
+        <StatCard label="Checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
           onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
             products: productStats.slice(0, 20),
             visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Completed" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
+        <StatCard label="Orders" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
           onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${evStats['checkout_completed'] || 0} orders`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Abandoned Checkout" value={abandonedVisitors.length} icon={CreditCard} color="orange"
+        <StatCard label="Abandoned" value={abandonedVisitors.length} icon={CreditCard} color="orange"
           onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
             products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
             visitors: abandonedVisitors })} />
@@ -1422,7 +1422,7 @@ export default function Dashboard({ session, onLogout }) {
                       : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
                     {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
                   </div>
-                  <span className="text-[9px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
+                  <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
                 </div>
               );
             })}
@@ -1454,7 +1454,7 @@ export default function Dashboard({ session, onLogout }) {
                     style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
                 </div>
                 <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
-                <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(col.lastTs)}</span>
+                <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(col.lastTs)}</span>
               </div>
             ))}
           </div>
@@ -1479,13 +1479,13 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
-                    <p className="text-[9px] text-textMute">unique</p>
+                    <p className="text-[10px] text-textMute">unique</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
-                    <p className="text-[9px] text-textMute">hits</p>
+                    <p className="text-[10px] text-textMute">hits</p>
                   </div>
-                  <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(item.lastTs)}</span>
+                  <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(item.lastTs)}</span>
                 </div>
               </div>
             ))}
@@ -1512,13 +1512,13 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                    <p className="text-[9px] text-textMute">unique</p>
+                    <p className="text-[10px] text-textMute">unique</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
-                    <p className="text-[9px] text-textMute">views</p>
+                    <p className="text-[10px] text-textMute">views</p>
                   </div>
-                  <span className="text-[9px] text-textMute w-16 text-right">{timeAgo(page.lastTs)}</span>
+                  <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(page.lastTs)}</span>
                 </div>
               </div>
             ))}
@@ -1550,15 +1550,15 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="text-right">
                     <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
-                    <p className="text-[9px] text-textMute">views</p>
+                    <p className="text-[10px] text-textMute">views</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
-                    <p className="text-[9px] text-textMute">cart</p>
+                    <p className="text-[10px] text-textMute">cart</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
-                    <p className="text-[9px] text-textMute">visitors</p>
+                    <p className="text-[10px] text-textMute">visitors</p>
                   </div>
                   <ArrowRight size={11} className="text-textMute" />
                 </div>
@@ -1609,7 +1609,7 @@ export default function Dashboard({ session, onLogout }) {
             <Activity size={16} className="text-textDim" />
             <span className="text-text text-sm font-bold">Live Feed</span>
             {events.length > 0 && (
-              <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length} event</span>
+              <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length} events</span>
             )}
           </div>
           <div className="flex items-center gap-2">
