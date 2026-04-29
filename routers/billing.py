@@ -138,7 +138,16 @@ async def billing_callback(
     })
 
     logger.info("[BILLING] Charge aktive edildi: id=%s shop=%s", charge_id, shop)
-    return RedirectResponse(f"{APP_URL}/install/success?shop={shop}&billing=active")
+
+    from services.auth import create_access_token
+    token = create_access_token(username, brand)
+    tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    redirect = (
+        f"{APP_URL}/?auto_token={token}"
+        f"&u={username}&b={brand}"
+        + (f"&tid={tid}" if tid else "")
+    )
+    return RedirectResponse(redirect)
 
 
 # ---------------------------------------------------------------------------

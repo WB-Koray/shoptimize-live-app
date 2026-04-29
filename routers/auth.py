@@ -67,22 +67,28 @@ def _verify_hmac(params: dict, hmac_value: str) -> bool:
 # Install başlangıcı — mağaza sahibi buraya yönlendirilir
 # ---------------------------------------------------------------------------
 
+def _shop_to_username(shop: str) -> str:
+    """59fc15-cd.myshopify.com → 59fc15-cd"""
+    return shop.replace(".myshopify.com", "").strip()
+
+
 @router.get("/auth/shopify/install")
 async def shopify_install(
     shop: str = Query(...),
-    username: str = Query(""),
+    username: str = Query(""),   # opsiyonel — verilmezse shop'tan türetilir
     brand: str = Query("default"),
 ):
-    """
-    Shopify OAuth kurulum başlangıcı.
-    Kullanım: GET /auth/shopify/install?shop=mystore.myshopify.com&username=x&brand=default
-    """
+    """Shopify OAuth kurulum başlangıcı. App Store kurulumlarında username gerekmez."""
     shop = shop.strip().lower()
     if not shop.endswith(".myshopify.com"):
         raise HTTPException(400, "Geçersiz shop domain")
 
     if not SHOPIFY_CLIENT_ID:
         raise HTTPException(500, "SHOPIFY_CLIENT_ID ayarlanmamış")
+
+    # App Store'dan gelen kurulumda username yok — shop'tan türet
+    if not username:
+        username = _shop_to_username(shop)
 
     state = _create_state(username, brand)
 
@@ -208,8 +214,16 @@ async def shopify_callback(
         confirmation_url = create_charge(shop, access_token, username, brand)
         return RedirectResponse(confirmation_url)
     except Exception as e:
-        logger.warning("[OAuth] Billing oluşturulamadı, direkt success'e yönlendiriliyor: %s", e)
-        return RedirectResponse(f"{APP_URL}/install/success?shop={shop}")
+        logger.warning("[OAuth] Billing oluşturulamadı, direkt giriş yapılıyor: %s", e)
+        from services.auth import create_access_token
+        token = create_access_token(username, brand)
+        tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+        redirect = (
+            f"{APP_URL}/?auto_token={token}"
+            f"&u={username}&b={brand}"
+            + (f"&tid={tid}" if tid else "")
+        )
+        return RedirectResponse(redirect)
 
 
 class TokenRequest(BaseModel):
