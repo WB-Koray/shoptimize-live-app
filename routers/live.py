@@ -643,6 +643,7 @@ async def shopify_orders_webhook(
             "product":       co_data.get("product", ""),
             "line_items":    _items,
             "channel":       channel,
+            "vid":           co_data.get("vid", ""),
             "ts":            int(time.time() * 1000),
         })
 
@@ -697,6 +698,19 @@ async def shopify_orders_webhook(
         await store.push_event(tid, ev)
         return JSONResponse({"ok": True, "matched": True, "tid": tid})
 
+    # Fallback: checkout webhook stored vid+tid — push event via that path
+    if checkout_token and co_data.get("vid") and co_data.get("tid"):
+        tid = co_data["tid"]
+        vid = co_data["vid"]
+        ev = {
+            "tid": tid, "vid": vid, "event_type": "checkout_completed",
+            "url": "", "referrer": "", "ts": int(time.time() * 1000),
+            "ua": "", "sw": 0, "ip": "", "utm": {}, "customer_id": customer_id,
+            "data": ev_data,
+        }
+        await store.push_event(tid, ev)
+        return JSONResponse({"ok": True, "matched": True, "via": "checkout_data", "tid": tid})
+
     return JSONResponse({"ok": True, "matched": False})
 
 
@@ -748,6 +762,7 @@ async def shopify_checkouts_webhook(
     line_items = checkout.get("line_items") or []
     product = line_items[0].get("title", "") if line_items else ""
     if checkout_token and phone:
+        pixel_tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
         await store.save_checkout(checkout_token, {
             "token": checkout_token,
             "phone": phone,
@@ -755,6 +770,8 @@ async def shopify_checkouts_webhook(
             "product": product,
             "username": username,
             "brand": brand,
+            "vid": matched_vid or "",
+            "tid": pixel_tid or "",
             "ts": int(time.time() * 1000),
         })
         logger.info("[CHECKOUT] kaydedildi phone=***%s name=%s product=%s", phone[-4:], customer_name or "-", product[:30] or "-")

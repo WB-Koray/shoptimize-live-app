@@ -1065,12 +1065,14 @@ export default function Dashboard({ session, onLogout }) {
   const [installing, setInstalling]     = useState(false);
   const [webhookStatus, setWebhookStatus]   = useState(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
+  const [convertedOrders, setConvertedOrders] = useState([]);
 
   const esRef        = useRef(null);
   const pausedRef    = useRef(false);
   const uidCounter   = useRef(0);
   const customerCache = useRef({});
   const retryRef     = useRef(null);
+  const fetchOrdersRef = useRef(null);
 
   const connectSSE = useCallback(() => {
     if (!tid || !token) return;
@@ -1109,6 +1111,7 @@ export default function Dashboard({ session, onLogout }) {
 
         if (ev.event_type === 'checkout_completed') {
           playOrderSound();
+          fetchOrdersRef.current?.();
           if ('Notification' in window && Notification.permission === 'granted') {
             const price = ev.data?.total_price;
             const amt = price ? ` — ₺${parseFloat(price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '';
@@ -1156,6 +1159,19 @@ export default function Dashboard({ session, onLogout }) {
   }, [qs]);
 
   useEffect(() => { fetchPixelStatus(); }, [fetchPixelStatus]);
+
+  const fetchConvertedOrders = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_URL}/api/flow/orders?${qs}&limit=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (d.ok) setConvertedOrders(d.orders || []);
+    } catch {}
+  }, [qs, token]);
+
+  useEffect(() => { fetchOrdersRef.current = fetchConvertedOrders; }, [fetchConvertedOrders]);
+  useEffect(() => { fetchConvertedOrders(); }, [fetchConvertedOrders]);
 
   const fetchWebhookStatus = useCallback(async () => {
     try {
@@ -1265,12 +1281,26 @@ export default function Dashboard({ session, onLogout }) {
       else if (ev.event_type === 'product_viewed' && p.stage === 'browsing') p.stage = 'product';
       if (ev.event_type === 'product_viewed' && ev.data?.product_title) p.lastProduct = ev.data.product_title;
     }
+    // Cross-reference with WA converted orders — handles case where checkout_completed
+    // event was never pushed (guest checkout / server restart lost in-memory session dict)
+    const convertedVids = new Set(convertedOrders.map(o => o.vid).filter(Boolean));
+    const ordersWithoutVid = convertedOrders.filter(o => !o.vid);
+    for (const p of Object.values(map)) {
+      if (p.stage === 'converted') continue;
+      if (convertedVids.has(p.vid)) {
+        p.stage = 'converted';
+      } else if (p.stage === 'checkout' && ordersWithoutVid.length > 0) {
+        // Timestamp fallback: order placed after visitor's last activity, within 2 hours
+        const matched = ordersWithoutVid.some(o => o.ts >= p.lastTs && o.ts - p.lastTs < 120 * 60 * 1000);
+        if (matched) p.stage = 'converted';
+      }
+    }
     const nowTR = Date.now() + 3 * 3_600_000;
     const todayStartMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
     return Object.values(map)
       .map(p => ({ ...p, isReturning: p.firstTs < todayStartMs && p.lastTs >= todayStartMs }))
       .sort((a, b) => b.lastTs - a.lastTs);
-  }, [events]);
+  }, [events, convertedOrders]);
 
   const memberCount = useMemo(() => visitorProfiles.filter(p => p.customer_id).length, [visitorProfiles]);
 
@@ -1538,8 +1568,8 @@ export default function Dashboard({ session, onLogout }) {
           onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
             products: productStats.slice(0, 20),
             visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Orders" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
-          onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${evStats['checkout_completed'] || 0} orders`,
+        <StatCard label="Orders" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
+          onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
         <StatCard label="Revenue" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : '—'} icon={TrendingUp} color="green"
           onClick={() => setDrillDown({ title: "Today's Revenue", subtitle: `₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} today`,
