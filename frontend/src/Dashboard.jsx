@@ -589,6 +589,9 @@ function FlowPanel({ session }) {
   const [logsLoading, setLogsL]   = useState(false);
   const [logsOpen, setLogsOpen]   = useState(true);
 
+  const [orders, setOrders]         = useState([]);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+
   const [optouts, setOptouts]         = useState([]);
   const [optoutsOpen, setOptoutsOpen] = useState(false);
   const [optoutPhone, setOptoutPhone] = useState('');
@@ -624,6 +627,14 @@ function FlowPanel({ session }) {
     setLogsL(false);
   }, [username, brand]);
 
+  const fetchOrders = useCallback(async () => {
+    try {
+      const r = await fetch(`${base}/api/flow/orders${qp}&limit=50`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setOrders(d.orders || []);
+    } catch { /* ignore */ }
+  }, [username, brand]);
+
   const fetchOptouts = useCallback(async () => {
     try {
       const r = await fetch(`${base}/api/flow/optouts`, { headers: authH });
@@ -632,7 +643,7 @@ function FlowPanel({ session }) {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchSettings(); fetchLogs(); fetchOptouts(); }, [username, brand]);
+  useEffect(() => { fetchSettings(); fetchLogs(); fetchOrders(); fetchOptouts(); }, [username, brand]);
 
   async function handleSave() {
     setSaving(true); setSaved(false); setSaveErr('');
@@ -714,16 +725,87 @@ function FlowPanel({ session }) {
       {/* Özet istatistikler */}
       {logs.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Sent',    value: sentCount,      color: 'text-green' },
-            { label: 'Orders',  value: convertedCount, color: 'text-blue' },
-            { label: 'Rate',    value: sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—', color: 'text-purple' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-surface border border-border rounded-xl p-3 text-center">
-              <p className={`text-lg font-bold ${color}`}>{value}</p>
-              <p className="text-textMute text-[10px]">{label}</p>
+          <div className="bg-surface border border-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-green">{sentCount}</p>
+            <p className="text-textMute text-[10px]">Sent</p>
+          </div>
+          <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-blue/40 transition-colors"
+            onClick={() => { setOrdersOpen(o => !o); if (!ordersOpen) fetchOrders(); }}>
+            <p className="text-lg font-bold text-blue">{convertedCount}</p>
+            <p className="text-textMute text-[10px]">Orders {ordersOpen ? '▲' : '▼'}</p>
+          </div>
+          <div className="bg-surface border border-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-purple">{sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—'}</p>
+            <p className="text-textMute text-[10px]">Rate</p>
+          </div>
+        </div>
+      )}
+
+      {/* Sipariş detay paneli */}
+      {ordersOpen && (
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <ShoppingBag size={13} className="text-blue" />
+            <span className="text-text font-semibold text-sm flex-1">WA Converted Orders</span>
+            <span className="text-textMute text-[10px]">{orders.length} orders</span>
+            <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+              <RefreshCw size={11} />
+            </button>
+          </div>
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <ShoppingBag size={18} className="text-textMute/40" />
+              <p className="text-textMute text-xs">No order details yet — new orders will appear here</p>
             </div>
-          ))}
+          ) : (
+            <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
+              {orders.map((o, i) => (
+                <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {o.order_number && (
+                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
+                          #{o.order_number}
+                        </span>
+                      )}
+                      {o.channel && o.channel !== 'Direct' && (
+                        <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
+                          {o.channel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-text">
+                        {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
+                      </p>
+                      <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{o.customer_name}</p>}
+                      {o.phone && <p className="text-[10px] text-textMute font-mono">***{o.phone.slice(-4)}</p>}
+                    </div>
+                  </div>
+                  {o.line_items?.length > 0 && (
+                    <div className="space-y-0.5">
+                      {o.line_items.slice(0, 3).map((item, j) => (
+                        <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
+                          <span className="truncate flex-1">{item.quantity}× {item.title}</span>
+                          <span className="shrink-0 ml-2 tabular-nums">
+                            {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                          </span>
+                        </div>
+                      ))}
+                      {o.line_items.length > 3 && (
+                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} more items</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

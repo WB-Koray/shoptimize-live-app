@@ -612,6 +612,40 @@ async def shopify_orders_webhook(
         await store.mark_checkout_completed(checkout_token)
         await store.mark_flow_converted(username, brand, checkout_token)
 
+        # WA dönüşüm sipariş detaylarını kaydet
+        co_data = await store.get_checkout(checkout_token) or {}
+        landing = order.get("landing_site") or ""
+        channel = "Direct"
+        try:
+            from urllib.parse import urlparse, parse_qs as _parse_qs
+            _qs = _parse_qs(urlparse(landing).query)
+            _src = _qs.get("utm_source", [""])[0]
+            _med = _qs.get("utm_medium", [""])[0]
+            if _src:
+                channel = f"{_src} / {_med}" if _med else _src
+        except Exception:
+            pass
+        if channel == "Direct":
+            _sname = order.get("source_name", "")
+            if _sname and _sname not in ("web", ""):
+                channel = _sname
+        _cname = f"{customer.get('first_name','').strip()} {customer.get('last_name','').strip()}".strip()
+        _items = []
+        for _it in (order.get("line_items") or [])[:5]:
+            _items.append({"title": _it.get("title",""), "quantity": _it.get("quantity",1), "price": str(_it.get("price","0"))})
+        await store.save_converted_order(username, brand, {
+            "order_id":      str(order.get("id", "")),
+            "order_number":  str(order.get("order_number") or order.get("name") or ""),
+            "total_price":   str(order.get("total_price", "0")),
+            "currency":      order.get("currency", "TRY"),
+            "customer_name": _cname or co_data.get("name", ""),
+            "phone":         co_data.get("phone", ""),
+            "product":       co_data.get("product", ""),
+            "line_items":    _items,
+            "channel":       channel,
+            "ts":            int(time.time() * 1000),
+        })
+
     # Sipariş sonrası WA gönder (ayarlarda post_order aktifse)
     settings = await store.get_flow_settings(username, brand)
     post_order = settings.get("post_order") or {}

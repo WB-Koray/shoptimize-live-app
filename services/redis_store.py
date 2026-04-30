@@ -277,6 +277,26 @@ class RedisStore:
     async def clear_flow_logs(self, username: str, brand: str) -> None:
         await self._redis.delete(f"flow_logs:{username}:{brand}")
 
+    # ── WA dönüşüm sipariş detayları ────────────────────────────────────────────
+
+    async def save_converted_order(self, username: str, brand: str, order_data: dict) -> None:
+        key = f"wa_orders:{username}:{brand}"
+        pipe = self._redis.pipeline()
+        pipe.lpush(key, json.dumps(order_data, ensure_ascii=False))
+        pipe.ltrim(key, 0, 199)
+        pipe.expire(key, 86400 * 30)
+        await pipe.execute()
+
+    async def get_converted_orders(self, username: str, brand: str, limit: int = 50) -> list[dict]:
+        raws = await self._redis.lrange(f"wa_orders:{username}:{brand}", 0, min(limit, 200) - 1)
+        result = []
+        for r in raws:
+            try:
+                result.append(json.loads(r))
+            except Exception:
+                pass
+        return result
+
     # ── GDPR / cleanup ──────────────────────────────────────────────────────────
 
     async def delete_tid_events(self, tid: str) -> None:

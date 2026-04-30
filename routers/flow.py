@@ -130,6 +130,17 @@ async def clear_flow_logs(
     return {"ok": True}
 
 
+@router.get("/api/flow/orders")
+async def get_converted_orders(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    limit: int = Query(50),
+    current_user: dict = Depends(get_current_user),
+):
+    orders = await store.get_converted_orders(username, brand, limit=min(limit, 100))
+    return {"ok": True, "orders": orders}
+
+
 # ── Opt-out yönetimi ─────────────────────────────────────────────────────────
 
 @router.get("/api/flow/optouts")
