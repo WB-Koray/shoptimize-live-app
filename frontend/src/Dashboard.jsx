@@ -180,6 +180,9 @@ function VisitorCard({ profile, customerName, onClick }) {
         <div className="flex items-center gap-1.5">
           <DevIcon size={11} className="text-textMute" />
           <span className="text-[10px] text-textDim font-mono">{shortVid(profile.vid)}</span>
+          {profile.isReturning && (
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20">↩ Returning</span>
+          )}
         </div>
         <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
       </div>
@@ -1180,7 +1183,11 @@ export default function Dashboard({ session, onLogout }) {
       else if (ev.event_type === 'product_viewed' && p.stage === 'browsing') p.stage = 'product';
       if (ev.event_type === 'product_viewed' && ev.data?.product_title) p.lastProduct = ev.data.product_title;
     }
-    return Object.values(map).sort((a, b) => b.lastTs - a.lastTs);
+    const nowTR = Date.now() + 3 * 3_600_000;
+    const todayStartMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
+    return Object.values(map)
+      .map(p => ({ ...p, isReturning: p.firstTs < todayStartMs && p.lastTs >= todayStartMs }))
+      .sort((a, b) => b.lastTs - a.lastTs);
   }, [events]);
 
   const memberCount = useMemo(() => visitorProfiles.filter(p => p.customer_id).length, [visitorProfiles]);
@@ -1436,7 +1443,7 @@ export default function Dashboard({ session, onLogout }) {
         <StatCard label="Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
           onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
         <StatCard label="Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
-          onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+          onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors · ${visitorProfiles.filter(v => v.isReturning).length} returning`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
         <StatCard label="Members" value={memberCount} icon={CheckCircle} color="teal"
           onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
             products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
