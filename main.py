@@ -74,10 +74,11 @@ async def _abandoned_checkout_worker():
                         continue
 
                     tmpl = step.get("template", "sepet_hatirlatma")
+                    lang = step.get("language", "tr")
                     result = await send_wa_template(
                         wa_token, phone_id, phone,
                         name=co.get("name", ""), product=co.get("product", ""),
-                        template_name=tmpl,
+                        template_name=tmpl, language=lang,
                     )
                     await store.mark_step_sent(token, step_idx)
 

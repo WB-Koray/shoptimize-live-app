@@ -51,6 +51,7 @@ async def send_wa_template(
     product: str = "",
     template_name: str = WA_TEMPLATE_NAME,
     order_number: str = "",
+    language: str = WA_TEMPLATE_LANG,
 ) -> dict:
     """
     WhatsApp Cloud API üzerinden onaylı template mesajı gönderir.
@@ -79,7 +80,7 @@ async def send_wa_template(
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {"code": WA_TEMPLATE_LANG},
+            "language": {"code": language or WA_TEMPLATE_LANG},
             "components": [{"type": "body", "parameters": body_params}] if body_params else [],
         },
     }

@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DEFAULT_SEQUENCE = [
-    {"delay_minutes": 15,   "template": "sepet_hatirlatma", "enabled": True,  "label": "İlk hatırlatma"},
-    {"delay_minutes": 1440, "template": "sepet_hatirlatma", "enabled": False, "label": "24 saat sonra"},
-    {"delay_minutes": 2880, "template": "sepet_hatirlatma", "enabled": False, "label": "48 saat sonra"},
+    {"delay_minutes": 15,   "template": "sepet_hatirlatma", "language": "tr", "enabled": True,  "label": "İlk hatırlatma"},
+    {"delay_minutes": 1440, "template": "sepet_hatirlatma", "language": "tr", "enabled": False, "label": "24 saat sonra"},
+    {"delay_minutes": 2880, "template": "sepet_hatirlatma", "language": "tr", "enabled": False, "label": "48 saat sonra"},
 ]
 
 
@@ -55,6 +55,7 @@ async def save_flow_settings(
         sequence.append({
             "delay_minutes": max(5, min(43200, int(step.get("delay_minutes", 15)))),
             "template":      str(step.get("template", "sepet_hatirlatma")).strip(),
+            "language":      str(step.get("language", "tr")).strip() or "tr",
             "enabled":       bool(step.get("enabled", False)),
             "label":         str(step.get("label", "Adım")).strip()[:50],
         })
