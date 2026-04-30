@@ -538,6 +538,28 @@ function fmtDelay(m) {
   return `${Math.round(m / 1440)} day`;
 }
 
+function playOrderSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1100].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.15;
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.start(t); osc.stop(t + 0.4);
+    });
+  } catch { /* audio blocked */ }
+}
+
+function fmtRevenue(amount) {
+  if (amount >= 1_000_000) return `₺${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000)     return `₺${(amount / 1_000).toFixed(1)}K`;
+  return `₺${amount.toFixed(0)}`;
+}
+
 function FlowPanel({ session }) {
   const { token, username, brand } = session;
   const base = API_URL;
@@ -999,6 +1021,19 @@ export default function Dashboard({ session, onLogout }) {
             setTimeout(() => setFlashProducts(prev => { const n = new Set(prev); n.delete(key); return n; }), 1500);
           }
         }
+
+        if (ev.event_type === 'checkout_completed') {
+          playOrderSound();
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const price = ev.data?.total_price;
+            const amt = price ? ` — ₺${parseFloat(price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '';
+            new Notification(`🛍️ New Order${amt}`, {
+              body: ev.data?.customer_name ? `Customer: ${ev.data.customer_name}` : 'A new order was placed',
+              icon: '/favicon.ico',
+              tag: 'order',
+            });
+          }
+        }
       } catch { /* ignore malformed */ }
     };
 
@@ -1019,6 +1054,12 @@ export default function Dashboard({ session, onLogout }) {
   }, [connectSSE]);
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const fetchPixelStatus = useCallback(async () => {
     setPixelLoading(true);
@@ -1098,6 +1139,15 @@ export default function Dashboard({ session, onLogout }) {
     acc[ev.event_type] = (acc[ev.event_type] || 0) + 1;
     return acc;
   }, {}), [events]);
+
+  const todayRevenue = useMemo(() => {
+    const nowTR = Date.now() + 3 * 3_600_000;
+    const startOfDayTR = nowTR - (nowTR % 86_400_000);
+    const startMs = startOfDayTR - 3 * 3_600_000;
+    return events
+      .filter(ev => ev.event_type === 'checkout_completed' && ev.ts >= startMs)
+      .reduce((sum, ev) => sum + parseFloat(ev.data?.total_price || 0), 0);
+  }, [events]);
 
   const uniqueVisitorCount = useMemo(() => new Set(events.map(e => e.vid)).size, [events]);
 
@@ -1381,8 +1431,8 @@ export default function Dashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* 7 stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      {/* 8 stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
         <StatCard label="Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
           onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
         <StatCard label="Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
@@ -1401,6 +1451,9 @@ export default function Dashboard({ session, onLogout }) {
             visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
         <StatCard label="Orders" value={evStats['checkout_completed'] || 0} icon={CheckCircle} color="emerald"
           onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${evStats['checkout_completed'] || 0} orders`,
+            products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
+        <StatCard label="Revenue" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : '—'} icon={TrendingUp} color="green"
+          onClick={() => setDrillDown({ title: "Today's Revenue", subtitle: `₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} today`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
         <StatCard label="Abandoned" value={abandonedVisitors.length} icon={CreditCard} color="orange"
           onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
