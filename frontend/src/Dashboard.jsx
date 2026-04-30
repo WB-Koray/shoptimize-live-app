@@ -527,9 +527,9 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
 // ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
 
 const DEFAULT_SEQUENCE = [
-  { delay_minutes: 15,   template: 'sepet_hatirlatma', enabled: true,  label: 'First reminder' },
-  { delay_minutes: 1440, template: 'sepet_hatirlatma', enabled: false, label: 'After 24 hours' },
-  { delay_minutes: 2880, template: 'sepet_hatirlatma', enabled: false, label: 'After 48 hours' },
+  { delay_minutes: 15,   template: 'sepet_hatirlatma', language: 'tr', enabled: true,  label: 'First reminder' },
+  { delay_minutes: 1440, template: 'sepet_hatirlatma', language: 'tr', enabled: false, label: 'After 24 hours' },
+  { delay_minutes: 2880, template: 'sepet_hatirlatma', language: 'tr', enabled: false, label: 'After 48 hours' },
 ];
 
 function fmtDelay(m) {
@@ -746,7 +746,7 @@ function FlowPanel({ session }) {
               </button>
             </div>
             {step.enabled && (
-              <div className="grid grid-cols-2 gap-2 pl-7">
+              <div className="grid grid-cols-3 gap-2 pl-7">
                 <div>
                   <p className="text-[10px] text-textMute mb-1">Delay</p>
                   <div className="flex items-center gap-1.5">
@@ -760,6 +760,15 @@ function FlowPanel({ session }) {
                   <p className="text-[10px] text-textMute mb-1">Template name</p>
                   <input value={step.template} onChange={e => updateStep(idx, { template: e.target.value })}
                     className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-textMute mb-1">Language</p>
+                  <select value={step.language || 'tr'} onChange={e => updateStep(idx, { language: e.target.value })}
+                    className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text focus:outline-none focus:border-green/60">
+                    <option value="tr">TR</option>
+                    <option value="en">EN</option>
+                    <option value="en_US">en_US</option>
+                  </select>
                 </div>
               </div>
             )}
