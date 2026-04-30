@@ -408,7 +408,7 @@ async def sse_stream(request: Request, tid: str = Query(...), current_user: dict
     q = store.subscribe(tid)
 
     async def generate():
-        for ev in await store.get_recent_events(tid, limit=200):
+        for ev in await store.get_recent_events(tid, limit=500):
             yield f"data: {json.dumps(ev)}\n\n"
         try:
             while True:

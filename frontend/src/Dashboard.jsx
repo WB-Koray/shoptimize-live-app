@@ -11,7 +11,7 @@ import {
 import { ThemeSwitch } from './ThemeContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
-const MAX_EVENTS = 500;
+const MAX_EVENTS = 2000;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
