@@ -66,6 +66,7 @@ async def save_flow_settings(
         "phone_number_id": str(request_data.get("phone_number_id", "")).strip(),
         "delay_minutes":   sequence[0]["delay_minutes"] if sequence else 15,
         "sequence":        sequence,
+        "cooldown_hours":  max(1, min(168, int(request_data.get("cooldown_hours", 48)))),
     }
 
     await store.save_flow_settings(username, brand, settings)

@@ -229,6 +229,18 @@ class RedisStore:
             result.append("+" + key.split("optout:", 1)[1])
         return sorted(result)
 
+    # ── Telefon bazlı aktif sequence takibi (cooldown dedup) ────────────────────
+
+    async def get_phone_active_token(self, phone: str) -> str | None:
+        """Bu telefon için aktif sequence token'ını döner; yoksa None."""
+        normalized = phone.strip().lstrip("+")
+        return await self._redis.get(f"wa_phone_active:{normalized}")
+
+    async def set_phone_active_token(self, phone: str, checkout_token: str, ttl_hours: int = 48) -> None:
+        """Telefon için aktif sequence token'ını kaydeder. TTL = cooldown süresi."""
+        normalized = phone.strip().lstrip("+")
+        await self._redis.setex(f"wa_phone_active:{normalized}", int(ttl_hours * 3600), checkout_token)
+
     # ── Dönüşüm takibi ──────────────────────────────────────────────────────────
 
     async def mark_flow_converted(self, username: str, brand: str, checkout_token: str) -> None:

@@ -761,6 +761,7 @@ async def shopify_checkouts_webhook(
     checkout_token = str(checkout.get("token") or checkout.get("id") or "").strip()
     line_items = checkout.get("line_items") or []
     product = line_items[0].get("title", "") if line_items else ""
+    co_items = [{"title": li.get("title", ""), "quantity": li.get("quantity", 1)} for li in line_items[:5]]
     if checkout_token and phone:
         pixel_tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
         await store.save_checkout(checkout_token, {
@@ -768,6 +769,7 @@ async def shopify_checkouts_webhook(
             "phone": phone,
             "name": customer_name,
             "product": product,
+            "line_items": co_items,
             "username": username,
             "brand": brand,
             "vid": matched_vid or "",

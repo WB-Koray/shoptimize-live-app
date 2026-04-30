@@ -573,6 +573,7 @@ function FlowPanel({ session }) {
     enabled: false, wa_token: '', phone_number_id: '',
     sequence: DEFAULT_SEQUENCE,
     post_order: { enabled: false, template: 'siparis_onay' },
+    cooldown_hours: 48,
   });
   const [maskedToken, setMasked] = useState('');
   const [loading, setLoading]   = useState(true);
@@ -610,6 +611,7 @@ function FlowPanel({ session }) {
           phone_number_id: s.phone_number_id || '',
           sequence:        s.sequence?.length ? s.sequence : DEFAULT_SEQUENCE,
           post_order:      s.post_order || { enabled: false, template: 'siparis_onay' },
+          cooldown_hours:  s.cooldown_hours ?? 48,
         });
         setMasked(s.wa_token_masked || '');
       }
@@ -881,6 +883,23 @@ function FlowPanel({ session }) {
             )}
           </div>
         ))}
+
+        {/* Duplicate önleme — cooldown */}
+        <div className="mt-1 pt-3 border-t border-border flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-amber shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-text">Duplicate Prevention</p>
+              <p className="text-[10px] text-textMute">Same customer won't get a new sequence within this window</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <input type="number" min={1} max={168} value={settings.cooldown_hours}
+              onChange={e => setSettings(s => ({ ...s, cooldown_hours: parseInt(e.target.value) || 48 }))}
+              className="w-14 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-amber/60" />
+            <span className="text-textMute text-[10px]">hrs</span>
+          </div>
+        </div>
       </div>
 
       {/* Sipariş onayı */}
@@ -971,24 +990,32 @@ function FlowPanel({ session }) {
                 <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
                 <p className="text-textMute text-sm">No sends yet</p>
               </div>
-            ) : logs.map((entry, i) => (
-              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
-                <div className="mt-0.5 shrink-0">{entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}</div>
+            ) : logs.map((entry, i) => {
+              const isCooldown = entry.status === 'cooldown_skip';
+              return (
+              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm
+                ${isCooldown ? 'bg-amberSoft/30 border-amber/20' : entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
+                <div className="mt-0.5 shrink-0">
+                  {isCooldown ? <Clock size={13} className="text-amber" /> : entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-text font-medium text-xs">{entry.name || 'Customer'}</span>
                     <span className="text-textMute text-[10px]">{entry.phone}</span>
                     {entry.product && <span className="text-textMute text-[10px] truncate max-w-[130px]">{entry.product}</span>}
-                    {entry.step_label && <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>}
+                    {isCooldown
+                      ? <span className="text-[10px] bg-amberSoft text-amber px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><Clock size={8} />Cooldown</span>
+                      : entry.step_label && <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>
+                    }
                     {entry.converted && <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Order</span>}
                   </div>
-                  {entry.error && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
+                  {entry.error && !isCooldown && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
                 </div>
                 <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
                   {new Date(entry.ts).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
                 </span>
               </div>
-            ))}
+            );})}
           </div>
         )}
       </div>

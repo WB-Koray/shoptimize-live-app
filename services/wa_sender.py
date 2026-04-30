@@ -15,12 +15,26 @@ WA_TEMPLATE_LANG = "tr"
 OPTOUT_KEYWORDS = {"dur", "stop", "iptal", "istemiyorum", "çıkış", "cikis", "unsubscribe", "hayır", "hayir"}
 
 
-def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "") -> list:
+def _build_product_text(product: str, products: list | None) -> str:
+    """Ürün listesini {{2}} parametresi için tek string'e dönüştürür."""
+    if not products or len(products) <= 1:
+        return product or "ürün"
+    titles = [p.get("title", "") for p in products if p.get("title")]
+    if not titles:
+        return product or "ürün"
+    if len(titles) == 2:
+        return f"{titles[0]} ve {titles[1]}"
+    if len(titles) >= 3:
+        return f"{titles[0]}, {titles[1]} ve {len(titles) - 2} ürün daha"
+    return titles[0]
+
+
+def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "", products: list | None = None) -> list:
     """Her şablon için doğru body parametrelerini döner."""
-    if template_name == "sepet_hatirlatma":
+    if template_name in ("sepet_hatirlatma", "sepet_hatirlatma_2", "sepet_hatirlatma_3"):
         return [
             {"type": "text", "text": name or "Değerli müşterimiz"},
-            {"type": "text", "text": product or "ürün"},
+            {"type": "text", "text": _build_product_text(product, products)},
         ]
     if template_name == "siparis_onay":
         return [
@@ -52,6 +66,7 @@ async def send_wa_template(
     template_name: str = WA_TEMPLATE_NAME,
     order_number: str = "",
     language: str = WA_TEMPLATE_LANG,
+    products: list | None = None,
 ) -> dict:
     """
     WhatsApp Cloud API üzerinden onaylı template mesajı gönderir.
@@ -72,7 +87,7 @@ async def send_wa_template(
         "Content-Type": "application/json",
     }
     # Şablona göre body parametrelerini oluştur
-    body_params = _build_params(template_name, name=name, product=product, order_number=order_number)
+    body_params = _build_params(template_name, name=name, product=product, order_number=order_number, products=products)
 
     payload = {
         "messaging_product": "whatsapp",

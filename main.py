@@ -49,10 +49,30 @@ async def _abandoned_checkout_worker():
                 settings = await store.get_flow_settings(username, brand)
                 if not settings.get("enabled"):
                     continue
-                wa_token = settings.get("wa_token", "")
-                phone_id = settings.get("phone_number_id", "")
-                phone    = co.get("phone", "")
+                wa_token      = settings.get("wa_token", "")
+                phone_id      = settings.get("phone_number_id", "")
+                phone         = co.get("phone", "")
+                cooldown_hours = int(settings.get("cooldown_hours", 48))
                 if not wa_token or not phone_id or not phone:
+                    continue
+
+                # Telefon bazlı aktif sequence kontrolü — duplicate checkout tokenlarını önle
+                active_token = await store.get_phone_active_token(phone)
+                if active_token and active_token != token:
+                    # Bu telefon için başka bir sequence zaten aktif → tüm adımları atla
+                    log_key = f"cooldown_logged:{token}"
+                    if not await store._redis.exists(log_key):
+                        await store.append_flow_log(username, brand, {
+                            "ts": int(now_ms), "token": token,
+                            "phone": "***" + phone[-4:], "name": co.get("name", ""),
+                            "product": co.get("product", ""), "ok": False,
+                            "step": -1, "step_label": "Cooldown",
+                            "status": "cooldown_skip",
+                            "error": f"Aktif sequence devam ediyor — {cooldown_hours}s bekleniyor",
+                        })
+                        await store._redis.setex(log_key, 86400, "1")
+                        _log.info("[FLOW] ⏸ Cooldown atlandı — telefon=%s aktif=%s…", "***" + phone[-4:], active_token[:8])
+                    await store.remove_pending_checkout(token)
                     continue
 
                 # Sequence: [{delay_minutes, template, enabled, label}, ...]
@@ -63,6 +83,7 @@ async def _abandoned_checkout_worker():
                     "label": "İlk hatırlatma",
                 }]
 
+                products    = co.get("line_items", [])
                 checkout_ts = co.get("ts", 0)
                 for step_idx, step in enumerate(sequence):
                     if not step.get("enabled"):
@@ -78,9 +99,13 @@ async def _abandoned_checkout_worker():
                     result = await send_wa_template(
                         wa_token, phone_id, phone,
                         name=co.get("name", ""), product=co.get("product", ""),
-                        template_name=tmpl, language=lang,
+                        template_name=tmpl, language=lang, products=products,
                     )
                     await store.mark_step_sent(token, step_idx)
+
+                    # İlk adım başarıyla gönderildiğinde telefonu aktif sequence'a kaydet
+                    if step_idx == 0 and result.get("ok"):
+                        await store.set_phone_active_token(phone, token, cooldown_hours)
 
                     entry = {
                         "ts": int(now_ms), "token": token,
