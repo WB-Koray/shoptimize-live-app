@@ -589,6 +589,7 @@ function FlowPanel({ session }) {
   const [logs, setLogs]           = useState([]);
   const [logsLoading, setLogsL]   = useState(false);
   const [logsOpen, setLogsOpen]   = useState(true);
+  const [expandedCustomers, setExpandedCustomers] = useState(new Set());
 
   const [orders, setOrders]         = useState([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
@@ -703,10 +704,44 @@ function FlowPanel({ session }) {
 
   const sentCount      = logs.filter(l => l.ok).length;
   const convertedCount = logs.filter(l => l.converted).length;
-  // WA-attributed siparişler: log'da başarılı gönderim olan telefon numaraları
   const waAttributedLast4 = new Set(
     logs.filter(l => l.converted && l.ok).map(l => l.phone?.slice(-4)).filter(Boolean)
   );
+
+  // Logları müşteri bazında grupla (telefon = anahtar)
+  const customerGroups = useMemo(() => {
+    const map = {};
+    for (const entry of logs) {
+      const key = entry.phone || 'unknown';
+      if (!map[key]) {
+        map[key] = {
+          key, name: entry.name || 'Customer',
+          phone: entry.phone, product: entry.product,
+          entries: [], converted: false,
+          lastTs: 0, firstTs: Infinity,
+          sentCount: 0, cooldownCount: 0,
+        };
+      }
+      const g = map[key];
+      g.entries.push(entry);
+      if (entry.ts > g.lastTs) g.lastTs = entry.ts;
+      if (entry.ts < g.firstTs) g.firstTs = entry.ts;
+      if (!g.name || g.name === 'Customer') g.name = entry.name || g.name;
+      if (!g.product && entry.product) g.product = entry.product;
+      if (entry.converted) g.converted = true;
+      if (entry.ok) g.sentCount++;
+      if (entry.status === 'cooldown_skip') g.cooldownCount++;
+    }
+    return Object.values(map).sort((a, b) => b.lastTs - a.lastTs);
+  }, [logs]);
+
+  function toggleCustomer(key) {
+    setExpandedCustomers(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -1007,37 +1042,112 @@ function FlowPanel({ session }) {
         </div>
         {logsOpen && (
           <div className="overflow-y-auto max-h-80 p-3 space-y-2 custom-scrollbar">
-            {logs.length === 0 ? (
+            {customerGroups.length === 0 ? (
               <div className="py-10 text-center">
                 <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
                 <p className="text-textMute text-sm">No sends yet</p>
               </div>
-            ) : logs.map((entry, i) => {
-              const isCooldown = entry.status === 'cooldown_skip';
+            ) : customerGroups.map(group => {
+              const isOpen = expandedCustomers.has(group.key);
+              const sortedEntries = [...group.entries].sort((a, b) => a.ts - b.ts);
               return (
-              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm
-                ${isCooldown ? 'bg-amberSoft/30 border-amber/20' : entry.ok ? 'bg-greenSoft/30 border-green/20' : 'bg-roseSoft border-rose/20'}`}>
-                <div className="mt-0.5 shrink-0">
-                  {isCooldown ? <Clock size={13} className="text-amber" /> : entry.ok ? <CheckCircle size={13} className="text-green" /> : <XCircle size={13} className="text-rose" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-text font-medium text-xs">{entry.name || 'Customer'}</span>
-                    <span className="text-textMute text-[10px]">{entry.phone}</span>
-                    {entry.product && <span className="text-textMute text-[10px] truncate max-w-[130px]">{entry.product}</span>}
-                    {isCooldown
-                      ? <span className="text-[10px] bg-amberSoft text-amber px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><Clock size={8} />Cooldown</span>
-                      : entry.step_label && <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">{entry.step_label}</span>
-                    }
-                    {entry.converted && <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><ShoppingBag size={8} />Order</span>}
+                <div key={group.key} className={`rounded-xl border overflow-hidden transition-colors
+                  ${group.converted ? 'border-green/30' : group.cooldownCount > 0 ? 'border-amber/20' : 'border-border'}`}>
+                  {/* Müşteri özet satırı */}
+                  <div onClick={() => toggleCustomer(group.key)}
+                    className="flex items-center gap-2.5 p-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
+                    <div className="shrink-0">
+                      {group.converted
+                        ? <ShoppingBag size={13} className="text-green" />
+                        : group.sentCount > 0
+                          ? <CheckCircle size={13} className="text-green" />
+                          : <Clock size={13} className="text-amber" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-text font-semibold text-xs">{group.name}</span>
+                        <span className="text-textMute text-[10px] font-mono">{group.phone}</span>
+                        {group.converted && (
+                          <span className="text-[10px] bg-greenSoft text-green border border-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                            <ShoppingBag size={8} />Ordered
+                          </span>
+                        )}
+                      </div>
+                      {group.product && (
+                        <p className="text-[10px] text-textMute truncate max-w-[220px] mt-0.5">{group.product}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">
+                        {group.sentCount} sent{group.cooldownCount > 0 ? ` · ${group.cooldownCount} skipped` : ''}
+                      </span>
+                      <span className="text-textMute text-[10px]">
+                        {new Date(group.firstTs).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {isOpen ? <ChevronUp size={11} className="text-textMute" /> : <ChevronDown size={11} className="text-textMute" />}
+                    </div>
                   </div>
-                  {entry.error && !isCooldown && <p className="text-rose text-[10px] mt-0.5">{entry.error}</p>}
+
+                  {/* Açılan journey timeline */}
+                  {isOpen && (
+                    <div className="border-t border-border/60 px-4 pt-2.5 pb-3 bg-surfaceAlt/20 space-y-0">
+                      {sortedEntries.map((entry, i) => {
+                        const isCooldown = entry.status === 'cooldown_skip';
+                        const isLast = i === sortedEntries.length - 1;
+                        return (
+                          <div key={i} className="flex gap-2.5">
+                            {/* Dikey bağlantı çizgisi */}
+                            <div className="flex flex-col items-center shrink-0 pt-1">
+                              <div className={`w-2 h-2 rounded-full shrink-0
+                                ${isCooldown ? 'bg-amber' : entry.ok ? 'bg-green' : 'bg-rose'}`} />
+                              {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+                            </div>
+                            {/* Adım detayı */}
+                            <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : ''}`}>
+                              <div className="min-w-0">
+                                {isCooldown ? (
+                                  <span className="text-[11px] text-amber flex items-center gap-1">
+                                    <Clock size={10} />Cooldown — duplicate skipped
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`text-[11px] font-medium ${entry.ok ? 'text-text' : 'text-rose'}`}>
+                                      {entry.ok ? '✓' : '✗'} {entry.step_label || `Step ${(entry.step ?? 0) + 1}`}
+                                    </span>
+                                    {entry.converted && (
+                                      <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
+                                        <ShoppingBag size={8} />sipariş sonrası
+                                      </span>
+                                    )}
+                                    {entry.error && (
+                                      <span className="text-[10px] text-rose">{entry.error}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
+                                {new Date(entry.ts).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {/* Sipariş verildi satırı */}
+                      {group.converted && (
+                        <div className="flex gap-2.5 pt-1">
+                          <div className="flex flex-col items-center shrink-0 pt-1">
+                            <div className="w-2 h-2 rounded-full bg-green shrink-0" />
+                          </div>
+                          <span className="text-[11px] text-green font-semibold flex items-center gap-1 pb-0.5">
+                            <ShoppingBag size={11} />Order placed
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
-                  {new Date(entry.ts).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
-                </span>
-              </div>
-            );})}
+              );
+            })}
           </div>
         )}
       </div>
