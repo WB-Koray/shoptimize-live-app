@@ -703,6 +703,10 @@ function FlowPanel({ session }) {
 
   const sentCount      = logs.filter(l => l.ok).length;
   const convertedCount = logs.filter(l => l.converted).length;
+  // WA-attributed siparişler: log'da başarılı gönderim olan telefon numaraları
+  const waAttributedLast4 = new Set(
+    logs.filter(l => l.converted && l.ok).map(l => l.phone?.slice(-4)).filter(Boolean)
+  );
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -726,19 +730,23 @@ function FlowPanel({ session }) {
 
       {/* Özet istatistikler */}
       {logs.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <div className="bg-surface border border-border rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-green">{sentCount}</p>
             <p className="text-textMute text-[10px]">Sent</p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-blue/40 transition-colors"
             onClick={() => { setOrdersOpen(o => !o); if (!ordersOpen) fetchOrders(); }}>
-            <p className="text-lg font-bold text-blue">{convertedCount}</p>
-            <p className="text-textMute text-[10px]">Orders {ordersOpen ? '▲' : '▼'}</p>
+            <p className="text-lg font-bold text-blue">{orders.length || '—'}</p>
+            <p className="text-textMute text-[10px]">Tracked {ordersOpen ? '▲' : '▼'}</p>
+          </div>
+          <div className="bg-surface border border-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-emerald-500">{convertedCount}</p>
+            <p className="text-textMute text-[10px]">WA Attr.</p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-purple">{sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—'}</p>
-            <p className="text-textMute text-[10px]">Rate</p>
+            <p className="text-textMute text-[10px]">WA Rate</p>
           </div>
         </div>
       )}
@@ -748,8 +756,17 @@ function FlowPanel({ session }) {
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <ShoppingBag size={13} className="text-blue" />
-            <span className="text-text font-semibold text-sm flex-1">WA Converted Orders</span>
-            <span className="text-textMute text-[10px]">{orders.length} orders</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-text font-semibold text-sm">WA Tracked Orders</span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-textMute text-[10px]">{orders.length} total</span>
+                {convertedCount > 0 && (
+                  <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
+                    {convertedCount} WA attributed
+                  </span>
+                )}
+              </div>
+            </div>
             <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
               <RefreshCw size={11} />
             </button>
@@ -768,6 +785,11 @@ function FlowPanel({ session }) {
                       {o.order_number && (
                         <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
                           #{o.order_number}
+                        </span>
+                      )}
+                      {waAttributedLast4.has(o.phone?.slice(-4)) && (
+                        <span className="text-[10px] bg-greenSoft text-green border border-green/30 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          <MessageCircle size={8} />WA ✓
                         </span>
                       )}
                       {o.channel && o.channel !== 'Direct' && (
@@ -1272,10 +1294,20 @@ export default function Dashboard({ session, onLogout }) {
     const nowTR = Date.now() + 3 * 3_600_000;
     const startOfDayTR = nowTR - (nowTR % 86_400_000);
     const startMs = startOfDayTR - 3 * 3_600_000;
-    return events
+    // SSE event'lerinden gelen siparişler (order_id ile dedup için sakla)
+    const eventOrderIds = new Set(
+      events.filter(ev => ev.event_type === 'checkout_completed' && ev.data?.order_id)
+            .map(ev => ev.data.order_id)
+    );
+    const fromEvents = events
       .filter(ev => ev.event_type === 'checkout_completed' && ev.ts >= startMs)
       .reduce((sum, ev) => sum + parseFloat(ev.data?.total_price || 0), 0);
-  }, [events]);
+    // WA orders listesinden, SSE'de olmayanlar (checkout_completed event push edilmemiş siparişler)
+    const fromOrders = convertedOrders
+      .filter(o => o.ts >= startMs && !eventOrderIds.has(o.order_id))
+      .reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
+    return fromEvents + fromOrders;
+  }, [events, convertedOrders]);
 
   const uniqueVisitorCount = useMemo(() => new Set(events.map(e => e.vid)).size, [events]);
 
@@ -1598,8 +1630,8 @@ export default function Dashboard({ session, onLogout }) {
         <StatCard label="Orders" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
           onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Revenue" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : '—'} icon={TrendingUp} color="green"
-          onClick={() => setDrillDown({ title: "Today's Revenue", subtitle: `₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} today`,
+        <StatCard label="Today Rev." value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
+          onClick={() => setDrillDown({ title: "Revenue", subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
         <StatCard label="Abandoned" value={abandonedVisitors.length} icon={CreditCard} color="orange"
           onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
