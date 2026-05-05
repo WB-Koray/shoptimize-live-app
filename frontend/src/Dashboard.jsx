@@ -574,6 +574,9 @@ function FlowPanel({ session }) {
     sequence: DEFAULT_SEQUENCE,
     post_order: { enabled: false, template: 'siparis_onay' },
     cooldown_hours: 48,
+    min_cart_value: 0,
+    send_window_start: 9,
+    send_window_end: 21,
   });
   const [maskedToken, setMasked] = useState('');
   const [loading, setLoading]   = useState(true);
@@ -610,9 +613,12 @@ function FlowPanel({ session }) {
           enabled:         s.enabled ?? false,
           wa_token:        '',
           phone_number_id: s.phone_number_id || '',
-          sequence:        s.sequence?.length ? s.sequence : DEFAULT_SEQUENCE,
-          post_order:      s.post_order || { enabled: false, template: 'siparis_onay' },
-          cooldown_hours:  s.cooldown_hours ?? 48,
+          sequence:          s.sequence?.length ? s.sequence : DEFAULT_SEQUENCE,
+          post_order:        s.post_order || { enabled: false, template: 'siparis_onay' },
+          cooldown_hours:    s.cooldown_hours ?? 48,
+          min_cart_value:    s.min_cart_value ?? 0,
+          send_window_start: s.send_window_start ?? 9,
+          send_window_end:   s.send_window_end ?? 21,
         });
         setMasked(s.wa_token_masked || '');
       }
@@ -955,6 +961,44 @@ function FlowPanel({ session }) {
               onChange={e => setSettings(s => ({ ...s, cooldown_hours: parseInt(e.target.value) || 48 }))}
               className="w-14 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-amber/60" />
             <span className="text-textMute text-[10px]">hrs</span>
+          </div>
+        </div>
+
+        {/* Gönderim penceresi */}
+        <div className="mt-1 pt-3 border-t border-border flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-blue shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-text">Send Window</p>
+              <p className="text-[10px] text-textMute">Only send WA messages within these hours (Turkey time)</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <input type="number" min={0} max={23} value={settings.send_window_start}
+              onChange={e => setSettings(s => ({ ...s, send_window_start: parseInt(e.target.value) ?? 9 }))}
+              className="w-12 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-blue/60" />
+            <span className="text-textMute text-[10px]">–</span>
+            <input type="number" min={1} max={24} value={settings.send_window_end}
+              onChange={e => setSettings(s => ({ ...s, send_window_end: parseInt(e.target.value) ?? 21 }))}
+              className="w-12 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-blue/60" />
+            <span className="text-textMute text-[10px]">:00</span>
+          </div>
+        </div>
+
+        {/* Minimum sepet tutarı */}
+        <div className="mt-1 pt-3 border-t border-border flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <ShoppingBag size={12} className="text-green shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-text">Minimum Cart Value</p>
+              <p className="text-[10px] text-textMute">Skip sequence if cart total is below this amount (0 = disabled)</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <input type="number" min={0} max={99999} step={50} value={settings.min_cart_value}
+              onChange={e => setSettings(s => ({ ...s, min_cart_value: parseFloat(e.target.value) || 0 }))}
+              className="w-20 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
+            <span className="text-textMute text-[10px]">TRY</span>
           </div>
         </div>
       </div>

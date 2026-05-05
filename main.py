@@ -30,11 +30,6 @@ async def _abandoned_checkout_worker():
     while True:
         try:
             await asyncio.sleep(60)
-            # Türkiye saati kontrolü (UTC+3, DST yok)
-            tr_hour = (datetime.datetime.utcnow().hour + 3) % 24
-            if tr_hour < 9 or tr_hour >= 21:
-                continue  # 09:00–21:00 dışında gönderme
-
             now_ms = time.time() * 1000
             pending = await store.get_pending_checkouts_before(int(now_ms))
             for token in pending:
@@ -52,9 +47,29 @@ async def _abandoned_checkout_worker():
                 wa_token      = settings.get("wa_token", "")
                 phone_id      = settings.get("phone_number_id", "")
                 phone         = co.get("phone", "")
-                cooldown_hours = int(settings.get("cooldown_hours", 48))
+                cooldown_hours    = int(settings.get("cooldown_hours", 48))
+                min_cart_value    = float(settings.get("min_cart_value", 0))
+                send_window_start = int(settings.get("send_window_start", 9))
+                send_window_end   = int(settings.get("send_window_end", 21))
                 if not wa_token or not phone_id or not phone:
                     continue
+
+                # Gönderim penceresi kontrolü (Türkiye saati UTC+3)
+                tr_hour = (datetime.datetime.utcnow().hour + 3) % 24
+                if send_window_start < send_window_end:
+                    outside_window = tr_hour < send_window_start or tr_hour >= send_window_end
+                else:
+                    outside_window = tr_hour < send_window_start and tr_hour >= send_window_end
+                if outside_window:
+                    continue
+
+                # Minimum sepet tutarı kontrolü
+                if min_cart_value > 0:
+                    cart_total = float(co.get("total_price", 0) or 0)
+                    if cart_total < min_cart_value:
+                        await store.remove_pending_checkout(token)
+                        _log.info("[FLOW] ⏭ Sepet tutarı eşiğin altında — token=%s… total=%.2f min=%.2f", token[:8], cart_total, min_cart_value)
+                        continue
 
                 # Telefon bazlı aktif sequence kontrolü — duplicate checkout tokenlarını önle
                 active_token = await store.get_phone_active_token(phone)

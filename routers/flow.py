@@ -61,12 +61,15 @@ async def save_flow_settings(
         })
 
     settings = {
-        "enabled":         bool(request_data.get("enabled", False)),
-        "wa_token":        wa_token,
-        "phone_number_id": str(request_data.get("phone_number_id", "")).strip(),
-        "delay_minutes":   sequence[0]["delay_minutes"] if sequence else 15,
-        "sequence":        sequence,
-        "cooldown_hours":  max(1, min(168, int(request_data.get("cooldown_hours", 48)))),
+        "enabled":           bool(request_data.get("enabled", False)),
+        "wa_token":          wa_token,
+        "phone_number_id":   str(request_data.get("phone_number_id", "")).strip(),
+        "delay_minutes":     sequence[0]["delay_minutes"] if sequence else 15,
+        "sequence":          sequence,
+        "cooldown_hours":    max(1, min(168, int(request_data.get("cooldown_hours", 48)))),
+        "min_cart_value":    max(0, float(request_data.get("min_cart_value", 0))),
+        "send_window_start": max(0, min(23, int(request_data.get("send_window_start", 9)))),
+        "send_window_end":   max(1, min(24, int(request_data.get("send_window_end", 21)))),
     }
 
     await store.save_flow_settings(username, brand, settings)
