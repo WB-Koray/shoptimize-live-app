@@ -706,15 +706,7 @@ function FlowPanel({ session }) {
     fetchOptouts();
   }
 
-  if (loading) return <div className="flex items-center justify-center py-32"><RefreshCw size={20} className="text-textMute animate-spin" /></div>;
-
-  const sentCount      = logs.filter(l => l.ok).length;
-  const convertedCount = logs.filter(l => l.converted).length;
-  const waAttributedLast4 = new Set(
-    logs.filter(l => l.converted && l.ok).map(l => l.phone?.slice(-4)).filter(Boolean)
-  );
-
-  // Logları müşteri bazında grupla (telefon = anahtar)
+  // useMemo erken return'den önce — Hooks kuralı gereği
   const customerGroups = useMemo(() => {
     const map = {};
     for (const entry of logs) {
@@ -740,6 +732,14 @@ function FlowPanel({ session }) {
     }
     return Object.values(map).sort((a, b) => b.lastTs - a.lastTs);
   }, [logs]);
+
+  if (loading) return <div className="flex items-center justify-center py-32"><RefreshCw size={20} className="text-textMute animate-spin" /></div>;
+
+  const sentCount      = logs.filter(l => l.ok).length;
+  const convertedCount = logs.filter(l => l.converted).length;
+  const waAttributedLast4 = new Set(
+    logs.filter(l => l.converted && l.ok).map(l => l.phone?.slice(-4)).filter(Boolean)
+  );
 
   function toggleCustomer(key) {
     setExpandedCustomers(prev => {
