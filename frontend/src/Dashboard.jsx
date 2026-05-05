@@ -96,21 +96,24 @@ function parseReferrer(ref = '') {
 
 // ── StatCard ─────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, icon: Icon, color = 'blue', pulse, onClick }) {
+function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClick }) {
   const c = CM[color] || CM.blue;
   return (
     <div onClick={onClick}
-      className={`bg-surface border border-border rounded-xl p-3 flex items-center gap-3 transition-colors
+      className={`bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3 transition-colors
         ${onClick ? 'cursor-pointer hover:border-[#5A4535]' : ''}`}>
-      <div className={`p-2 rounded-lg ${c.bg} shrink-0 relative`}>
-        <Icon size={16} className={c.text} />
-        {pulse && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green animate-ping" />}
+      <div className="flex items-start justify-between">
+        <div className={`p-2.5 rounded-xl ${c.bg} relative`}>
+          <Icon size={18} className={c.text} />
+          {pulse && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green animate-ping" />}
+        </div>
+        {onClick && <ArrowRight size={12} className="text-textMute mt-0.5" />}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-textDim text-[10px] uppercase font-bold leading-tight">{label}</p>
-        <p className={`text-xl font-bold leading-tight tabular-nums ${pulse ? c.text : 'text-text'}`}>{value}</p>
+      <div>
+        <p className={`text-2xl font-bold tabular-nums leading-none ${pulse ? c.text : 'text-text'}`}>{value}</p>
+        <p className="text-textDim text-[11px] uppercase font-bold tracking-wide mt-1.5">{label}</p>
+        {sub && <p className="text-textMute text-[10px] mt-0.5 leading-snug">{sub}</p>}
       </div>
-      {onClick && <ArrowRight size={12} className="text-textMute shrink-0" />}
     </div>
   );
 }
@@ -629,7 +632,7 @@ function FlowPanel({ session }) {
   const fetchLogs = useCallback(async () => {
     setLogsL(true);
     try {
-      const r = await fetch(`${base}/api/flow/logs${qp}&limit=100`, { headers: authH });
+      const r = await fetch(`${base}/api/flow/logs${qp}&limit=500`, { headers: authH });
       const d = await r.json();
       if (d.ok) setLogs(d.logs || []);
     } catch { /* ignore */ }
@@ -1763,31 +1766,31 @@ export default function Dashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* 8 stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
-        <StatCard label="Events" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
+      {/* 8 stat cards — 4×2 funnel grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Events" sub="Page interactions" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
           onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Visitors" value={uniqueVisitorCount} icon={Users} color="purple"
+        <StatCard label="Visitors" sub="Unique sessions" value={uniqueVisitorCount} icon={Users} color="purple"
           onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors · ${visitorProfiles.filter(v => v.isReturning).length} returning`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Members" value={memberCount} icon={CheckCircle} color="teal"
+        <StatCard label="Members" sub="Logged-in users" value={memberCount} icon={CheckCircle} color="teal"
           onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
             products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
             visitors: visitorProfiles.filter(v => v.customer_id) })} />
-        <StatCard label="Add to Cart" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
+        <StatCard label="Add to Cart" sub="Cart events" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
           onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
             products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
             visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
+        <StatCard label="Checkout" sub="Started checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
           onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
             products: productStats.slice(0, 20),
             visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Orders" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
+        <StatCard label="Orders" sub="Completed today" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
           onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Today Rev." value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
+        <StatCard label="Today Rev." sub="Revenue tracked" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
           onClick={() => setDrillDown({ title: "Revenue", subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
             products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Abandoned" value={abandonedVisitors.length} icon={CreditCard} color="orange"
+        <StatCard label="Abandoned" sub="Not converted yet" value={abandonedVisitors.length} icon={CreditCard} color="orange"
           onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
             products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
             visitors: abandonedVisitors })} />

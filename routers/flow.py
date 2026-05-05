@@ -116,7 +116,7 @@ async def get_flow_logs(
     limit: int = Query(50),
     current_user: dict = Depends(get_current_user),
 ):
-    logs = await store.get_flow_logs(username, brand, limit=min(limit, 200))
+    logs = await store.get_flow_logs(username, brand, limit=min(limit, 500))
     converted = await store.get_converted_tokens(username, brand)
     for entry in logs:
         token = entry.get("token", "")
