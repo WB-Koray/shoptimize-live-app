@@ -1297,6 +1297,13 @@ export default function Dashboard({ session, onLogout }) {
   const qs = `username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
 
   const [activeView, setActiveView] = useState('live');
+  const [liveTab, setLiveTab]           = useState('realtime');
+  const [prodOpen, setProdOpen]         = useState(true);
+  const [collOpen, setCollOpen]         = useState(false);
+  const [searchOpen, setSearchOpen]     = useState(false);
+  const [pageOpen, setPageOpen]         = useState(false);
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
+  const [utmOpen, setUtmOpen]           = useState(true);
   const [events, setEvents]           = useState([]);
   const [sseStatus, setSseStatus]     = useState('connecting');
   const [paused, setPaused]           = useState(false);
@@ -1765,7 +1772,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {activeView === 'live' && <>
 
-      {/* Pixel panel */}
+      {/* Pixel panel — always visible */}
       <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
         ${pixelStatus?.installed ? 'bg-greenSoft/50 border-green/20' : 'bg-surfaceAlt/50 border-[#5A4535]'}`}>
         <div className="flex items-center gap-3">
@@ -1808,297 +1815,390 @@ export default function Dashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* 8 stat cards — 4×2 funnel grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Events" sub="Page interactions" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
-          onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Visitors" sub="Unique sessions" value={uniqueVisitorCount} icon={Users} color="purple"
-          onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors · ${visitorProfiles.filter(v => v.isReturning).length} returning`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-        <StatCard label="Members" sub="Logged-in users" value={memberCount} icon={CheckCircle} color="teal"
-          onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
-            products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
-            visitors: visitorProfiles.filter(v => v.customer_id) })} />
-        <StatCard label="Add to Cart" sub="Cart events" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
-          onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
-            products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
-            visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Checkout" sub="Started checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
-          onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
-            products: productStats.slice(0, 20),
-            visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-        <StatCard label="Orders" sub="Completed today" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
-          onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
-            products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Today Rev." sub="Revenue tracked" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
-          onClick={() => setDrillDown({ title: "Revenue", subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
-            products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-        <StatCard label="Abandoned" sub="Not converted yet" value={abandonedVisitors.length} icon={CreditCard} color="orange"
-          onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
-            products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
-            visitors: abandonedVisitors })} />
+      {/* Inner tab switcher */}
+      <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5 w-fit">
+        <button onClick={() => setLiveTab('realtime')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'realtime' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+          <Radio size={11} /> Canlı
+        </button>
+        <button onClick={() => setLiveTab('analytics')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'analytics' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+          <BarChart2 size={11} /> Analiz
+        </button>
       </div>
 
-      {/* Abandoned checkout alert */}
-      {abandonedVisitors.length > 0 && (
-        <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <CreditCard size={15} className="text-amber" />
-            <span className="text-amber text-sm font-bold">Abandoned Checkouts</span>
-            <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full">
-              {abandonedVisitors.length} visitors started checkout but did not complete
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {abandonedVisitors.slice(0, 6).map(profile => {
-              const cn = customerNames[profile.customer_id];
-              const name = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
-              return (
-                <div key={profile.vid} onClick={() => setSelectedVisitor(profile)}
-                  className="flex items-center gap-3 bg-surfaceSoft border border-amber/20 rounded-lg p-3 cursor-pointer hover:border-amber/40 transition-colors">
-                  <div className="p-1.5 rounded-lg bg-amberSoft shrink-0"><CreditCard size={13} className="text-amber" /></div>
-                  <div className="flex-1 min-w-0">
-                    {name ? <p className="text-xs font-bold text-green truncate">{name}</p>
-                      : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
-                    {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
-                  </div>
-                  <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ── CANLI TAB ── */}
+      {liveTab === 'realtime' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
 
-      {/* Product grid */}
-      {productStats.length > 0 && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={TrendingUp} iconClass="text-purple" title="Most Viewed Products" badge={`${productStats.length} products`} />
-          <div className="p-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
-          </div>
-        </div>
-      )}
+          {/* SOL — KPIs, Abandoned, Funnel */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard label="Events" sub="Page interactions" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
+                onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+              <StatCard label="Visitors" sub="Unique sessions" value={uniqueVisitorCount} icon={Users} color="purple"
+                onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors · ${visitorProfiles.filter(v => v.isReturning).length} returning`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+              <StatCard label="Members" sub="Logged-in users" value={memberCount} icon={CheckCircle} color="teal"
+                onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
+                  products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
+                  visitors: visitorProfiles.filter(v => v.customer_id) })} />
+              <StatCard label="Add to Cart" sub="Cart events" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
+                onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
+                  products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
+                  visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
+              <StatCard label="Checkout" sub="Started checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
+                onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
+                  products: productStats.slice(0, 20),
+                  visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
+              <StatCard label="Orders" sub="Completed today" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
+                onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
+                  products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
+              <StatCard label="Today Rev." sub="Revenue tracked" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
+                onClick={() => setDrillDown({ title: "Revenue", subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
+                  products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
+              <StatCard label="Abandoned" sub="Not converted yet" value={abandonedVisitors.length} icon={CreditCard} color="orange"
+                onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
+                  products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
+                  visitors: abandonedVisitors })} />
+            </div>
 
-      {/* Collections */}
-      {collectionStats.length > 0 && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Layers} iconClass="text-teal" title="Most Viewed Collections" badge={`${collectionStats.length} collections`} />
-          <div className="divide-y divide-border/60">
-            {collectionStats.map((col, i) => (
-              <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
-                <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
-                <span className="flex-1 text-sm text-text font-medium">{col.handle}</span>
-                <div className="w-24 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-[#6DC4B0] to-[#8FAECB] rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
+            {/* Abandoned checkout alert */}
+            {abandonedVisitors.length > 0 && (
+              <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CreditCard size={15} className="text-amber" />
+                  <span className="text-amber text-sm font-bold">Abandoned Checkouts</span>
+                  <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full ml-2">
+                    {abandonedVisitors.length}
+                  </span>
                 </div>
-                <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
-                <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(col.lastTs)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 404 pages */}
-      {notFoundStats.length > 0 && (
-        <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 p-4 border-b border-rose/15">
-            <span className="text-sm font-bold text-rose">404</span>
-            <span className="text-text text-sm font-bold">Not Found Pages</span>
-            <span className="text-[10px] bg-roseSoft text-rose px-2 py-0.5 rounded-full ml-auto">{notFoundStats.length} URL</span>
-          </div>
-          <div className="divide-y divide-rose/10">
-            {notFoundStats.map((item, i) => (
-              <div key={item.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-roseSoft/30 transition-colors">
-                <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-text font-mono truncate" title={item.url}>{item.path}</p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
-                    <p className="text-[10px] text-textMute">unique</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
-                    <p className="text-[10px] text-textMute">hits</p>
-                  </div>
-                  <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(item.lastTs)}</span>
+                <div className="space-y-2">
+                  {abandonedVisitors.slice(0, 4).map(profile => {
+                    const cn = customerNames[profile.customer_id];
+                    const name = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
+                    return (
+                      <div key={profile.vid} onClick={() => setSelectedVisitor(profile)}
+                        className="flex items-center gap-3 bg-surfaceSoft border border-amber/20 rounded-lg p-3 cursor-pointer hover:border-amber/40 transition-colors">
+                        <div className="p-1.5 rounded-lg bg-amberSoft shrink-0"><CreditCard size={13} className="text-amber" /></div>
+                        <div className="flex-1 min-w-0">
+                          {name ? <p className="text-xs font-bold text-green truncate">{name}</p>
+                            : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
+                          {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
+                        </div>
+                        <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Page stats */}
-      {pageStats.length > 0 && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Eye} title="Page Statistics" badge={`${pageStats.length} pages`} extra="Blog, content and other pages" />
-          <div className="divide-y divide-border/60">
-            {pageStats.map((page, i) => (
-              <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
-                <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-text font-medium truncate" title={page.title}>{page.title}</p>
-                  <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
+            {/* Conversion funnel */}
+            {visitorProfiles.length > 0 && <FunnelWidget stats={funnelStats} />}
+          </div>
+
+          {/* SAĞ — Visitors + Live Feed */}
+          <div className="space-y-4">
+            {visitorProfiles.length > 0 && (
+              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+                <SectionHead icon={Users} title="Active Visitors" badge={visitorProfiles.length} extra="Click card → see journey" />
+                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {visitorProfiles.slice(0, 18).map(profile => (
+                    <VisitorCard key={profile.vid} profile={profile}
+                      customerName={customerNames[profile.customer_id]}
+                      onClick={() => setSelectedVisitor(profile)} />
+                  ))}
                 </div>
-                <div className="w-20 h-1.5 bg-surfaceAlt rounded-full overflow-hidden shrink-0">
-                  <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (page.vids.size / (pageStats[0]?.vids.size || 1)) * 100)}%` }} />
+                {visitorProfiles.length > 18 && (
+                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 18} more</p>
+                )}
+              </div>
+            )}
+
+            {/* Live feed */}
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-textDim" />
+                  <span className="text-text text-sm font-bold">Live Feed</span>
+                  {events.length > 0 && (
+                    <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length}</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                    <p className="text-[10px] text-textMute">unique</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
-                    <p className="text-[10px] text-textMute">views</p>
-                  </div>
-                  <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(page.lastTs)}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setPaused(p => !p)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
+                      ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
+                    {paused ? '▶ Resume' : '⏸ Pause'}
+                  </button>
+                  <button onClick={() => setEvents([])}
+                    className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
+                    <Trash2 size={12} />
+                  </button>
+                  <button onClick={() => setFeedOpen(o => !o)}
+                    className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-text transition-colors">
+                    {feedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Live searches */}
-      <SearchTable searches={searchStats} />
-
-      {/* UTM campaigns */}
-      {utmStats.length > 0 && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={BarChart2} iconClass="text-blue" title="Campaign Based (UTM)" badge={`${utmStats.length} campaigns`} extra="Google Ads · Meta · TikTok" />
-          <div className="divide-y divide-border/60">
-            {utmStats.map(camp => (
-              <div key={camp.campaign}
-                onClick={() => setDrillDown({
-                  title: `Campaign: ${camp.campaign}`,
-                  subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${camp.vids.size} visitors · ${camp.views} views`,
-                  products: camp.products,
-                  visitors: visitorProfiles.filter(v => camp.vids.has(v.vid)),
-                })}
-                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-text font-semibold truncate">{camp.campaign}</p>
-                  <p className="text-[10px] text-textMute truncate">{[camp.source, camp.medium].filter(Boolean).join(' / ')}</p>
+              {feedOpen && (
+                <div className="overflow-y-auto max-h-[520px] p-3 space-y-2 custom-scrollbar">
+                  {events.length === 0
+                    ? <div className="py-16 text-center space-y-2">
+                        <p className="text-textMute text-sm font-medium">No events yet</p>
+                        <p className="text-textMute text-xs">Visit your store — activity will appear here in real-time</p>
+                      </div>
+                    : events.map(ev => (
+                        <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
+                          ev={ev} isNew={newIds.has(ev._uid)} />
+                      ))
+                  }
                 </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
-                    <p className="text-[10px] text-textMute">views</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
-                    <p className="text-[10px] text-textMute">cart</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
-                    <p className="text-[10px] text-textMute">visitors</p>
-                  </div>
-                  <ArrowRight size={11} className="text-textMute" />
+              )}
+            </div>
+
+            {/* Empty state when no pixel */}
+            {!pixelStatus?.installed && !pixelLoading && events.length === 0 && (
+              <div className="bg-surface border border-border rounded-2xl p-8 text-center">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
+                  <Radio size={24} className="text-textMute" />
+                </div>
+                <h3 className="text-text font-bold text-base mb-2">How It Works</h3>
+                <div className="text-textDim text-sm space-y-2 max-w-sm mx-auto text-left">
+                  <p>① Click "One-Click Install" → pixel is installed automatically</p>
+                  <p>② When customers visit your store, activity streams here in real-time</p>
+                  <p>③ Product views, add-to-cart, and checkout events are tracked live</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Funnel + Traffic */}
-      {visitorProfiles.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FunnelWidget stats={funnelStats} />
-          <TrafficTable traffic={trafficStats} onSourceClick={src => {
-            const prods = Object.values(sourceProductsMap[src] || {}).sort((a, b) => b.views - a.views);
-            const vids = new Set(events.filter(ev => parseReferrer(ev.referrer) === src).map(ev => ev.vid));
-            setDrillDown({
-              title: `Visitors from ${src}`,
-              subtitle: `${vids.size} visitors · ${prods.length} products`,
-              products: prods,
-              visitors: visitorProfiles.filter(v => vids.has(v.vid)),
-            });
-          }} />
-        </div>
-      )}
-
-      {/* Visitor grid */}
-      {visitorProfiles.length > 0 && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <SectionHead icon={Users} title="Active Visitors" badge={visitorProfiles.length} extra="Click card → see journey" />
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {visitorProfiles.slice(0, 24).map(profile => (
-              <VisitorCard key={profile.vid} profile={profile}
-                customerName={customerNames[profile.customer_id]}
-                onClick={() => setSelectedVisitor(profile)} />
-            ))}
-          </div>
-          {visitorProfiles.length > 24 && (
-            <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 24} more visitors</p>
-          )}
-        </div>
-      )}
-
-      {/* Live feed */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Activity size={16} className="text-textDim" />
-            <span className="text-text text-sm font-bold">Live Feed</span>
-            {events.length > 0 && (
-              <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length} events</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setPaused(p => !p)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
-                ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
-              {paused ? '▶ Resume' : '⏸ Pause'}
-            </button>
-            <button onClick={() => setEvents([])}
-              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
-              <Trash2 size={12} />
-            </button>
-            <button onClick={() => setFeedOpen(o => !o)}
-              className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-text transition-colors">
-              {feedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          </div>
         </div>
-        {feedOpen && (
-          <div className="overflow-y-auto max-h-[480px] p-3 space-y-2 custom-scrollbar">
-            {events.length === 0
-              ? <div className="py-16 text-center space-y-2">
-                  <p className="text-textMute text-sm font-medium">No events yet</p>
-                  <p className="text-textMute text-xs">Visit your store — activity will appear here in real-time</p>
-                </div>
-              : events.map(ev => (
-                  <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
-                    ev={ev} isNew={newIds.has(ev._uid)} />
-                ))
-            }
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Empty state when no pixel */}
-      {!pixelStatus?.installed && !pixelLoading && events.length === 0 && (
-        <div className="bg-surface border border-border rounded-2xl p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
-            <Radio size={24} className="text-textMute" />
+      {/* ── ANALİZ TAB ── */}
+      {liveTab === 'analytics' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
+
+          {/* SOL — Products, Collections, Searches, Traffic */}
+          <div className="space-y-3">
+
+            {/* Products accordion */}
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <button onClick={() => setProdOpen(o => !o)}
+                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                <TrendingUp size={13} className="text-purple shrink-0" />
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Most Viewed Products</span>
+                {productStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{productStats.length}</span>}
+                {prodOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+              </button>
+              {prodOpen && (
+                productStats.length > 0
+                  ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-border/60">
+                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
+                    </div>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No product views yet</p>
+              )}
+            </div>
+
+            {/* Collections accordion */}
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <button onClick={() => setCollOpen(o => !o)}
+                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                <Layers size={13} className="text-teal shrink-0" />
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Collections</span>
+                {collectionStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{collectionStats.length}</span>}
+                {collOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+              </button>
+              {collOpen && (
+                collectionStats.length > 0
+                  ? <div className="divide-y divide-border/60 border-t border-border/60">
+                      {collectionStats.map((col, i) => (
+                        <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+                          <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
+                          <span className="flex-1 text-sm text-text font-medium">{col.handle}</span>
+                          <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-[#6DC4B0] to-[#8FAECB] rounded-full"
+                              style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No collection views yet</p>
+              )}
+            </div>
+
+            {/* Searches accordion */}
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <button onClick={() => setSearchOpen(o => !o)}
+                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                <Search size={13} className="text-textDim shrink-0" />
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Live Searches</span>
+                {searchStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{searchStats.length}</span>}
+                {searchOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+              </button>
+              {searchOpen && (
+                searchStats.length > 0
+                  ? <div className="divide-y divide-border/60 border-t border-border/60">
+                      {searchStats.map((s, i) => (
+                        <div key={s.query} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+                          <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
+                          <span className="flex-1 text-sm text-text font-medium">"{s.query}"</span>
+                          <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full"
+                              style={{ width: `${Math.min(100, (s.count / searchStats[0].count) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No searches yet</p>
+              )}
+            </div>
+
+            {/* Traffic sources */}
+            {visitorProfiles.length > 0 && (
+              <TrafficTable traffic={trafficStats} onSourceClick={src => {
+                const prods = Object.values(sourceProductsMap[src] || {}).sort((a, b) => b.views - a.views);
+                const vids = new Set(events.filter(ev => parseReferrer(ev.referrer) === src).map(ev => ev.vid));
+                setDrillDown({
+                  title: `Visitors from ${src}`,
+                  subtitle: `${vids.size} visitors · ${prods.length} products`,
+                  products: prods,
+                  visitors: visitorProfiles.filter(v => vids.has(v.vid)),
+                });
+              }} />
+            )}
           </div>
-          <h3 className="text-text font-bold text-base mb-2">How It Works</h3>
-          <div className="text-textDim text-sm space-y-2 max-w-sm mx-auto text-left">
-            <p>① Click "One-Click Install" → pixel is installed automatically</p>
-            <p>② When customers visit your store, activity streams here in real-time</p>
-            <p>③ Product views, add-to-cart, and checkout events are tracked live</p>
+
+          {/* SAĞ — Funnel, UTM, Pages, 404s */}
+          <div className="space-y-3">
+
+            {/* Funnel */}
+            {visitorProfiles.length > 0 && <FunnelWidget stats={funnelStats} />}
+
+            {/* UTM campaigns accordion */}
+            {utmStats.length > 0 && (
+              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+                <button onClick={() => setUtmOpen(o => !o)}
+                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                  <BarChart2 size={13} className="text-blue shrink-0" />
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">UTM Campaigns</span>
+                  <span className="text-[10px] text-textMute mr-1">{utmStats.length}</span>
+                  {utmOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+                </button>
+                {utmOpen && (
+                  <div className="divide-y divide-border/60 border-t border-border/60">
+                    {utmStats.map(camp => (
+                      <div key={camp.campaign}
+                        onClick={() => setDrillDown({
+                          title: `Campaign: ${camp.campaign}`,
+                          subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${camp.vids.size} visitors · ${camp.views} views`,
+                          products: camp.products,
+                          visitors: visitorProfiles.filter(v => camp.vids.has(v.vid)),
+                        })}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-text font-semibold truncate">{camp.campaign}</p>
+                          <p className="text-[10px] text-textMute truncate">{[camp.source, camp.medium].filter(Boolean).join(' / ')}</p>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
+                            <p className="text-[10px] text-textMute">views</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
+                            <p className="text-[10px] text-textMute">cart</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
+                            <p className="text-[10px] text-textMute">visitors</p>
+                          </div>
+                          <ArrowRight size={11} className="text-textMute" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Page stats accordion */}
+            {pageStats.length > 0 && (
+              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+                <button onClick={() => setPageOpen(o => !o)}
+                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                  <Eye size={13} className="text-textDim shrink-0" />
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Page Statistics</span>
+                  <span className="text-[10px] text-textMute mr-1">{pageStats.length}</span>
+                  {pageOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+                </button>
+                {pageOpen && (
+                  <div className="divide-y divide-border/60 border-t border-border/60">
+                    {pageStats.map((page, i) => (
+                      <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
+                        <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-text font-medium truncate">{page.title}</p>
+                          <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
+                            <p className="text-[10px] text-textMute">unique</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
+                            <p className="text-[10px] text-textMute">views</p>
+                          </div>
+                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(page.lastTs)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 404 pages accordion */}
+            {notFoundStats.length > 0 && (
+              <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
+                <button onClick={() => setNotFoundOpen(o => !o)}
+                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-roseSoft/60 transition-colors">
+                  <span className="text-sm font-bold text-rose shrink-0">404</span>
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Not Found Pages</span>
+                  <span className="text-[10px] bg-roseSoft text-rose px-1.5 py-0.5 rounded-full mr-1">{notFoundStats.length}</span>
+                  {notFoundOpen ? <ChevronUp size={13} className="text-rose/60 shrink-0" /> : <ChevronDown size={13} className="text-rose/60 shrink-0" />}
+                </button>
+                {notFoundOpen && (
+                  <div className="divide-y divide-rose/10 border-t border-rose/15">
+                    {notFoundStats.map((item, i) => (
+                      <div key={item.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-roseSoft/30 transition-colors">
+                        <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
+                        <p className="flex-1 text-xs text-text font-mono truncate">{item.path}</p>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
+                            <p className="text-[10px] text-textMute">unique</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
+                            <p className="text-[10px] text-textMute">hits</p>
+                          </div>
+                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(item.lastTs)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Modals */}
+      {/* Modals — always rendered regardless of tab */}
       <JourneyModal profile={selectedVisitor}
         customerName={selectedVisitor && customerNames[selectedVisitor.customer_id]}
         onClose={() => setSelectedVisitor(null)} />
