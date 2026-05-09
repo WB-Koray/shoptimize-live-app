@@ -753,7 +753,7 @@ function FlowPanel({ session }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -795,87 +795,11 @@ function FlowPanel({ session }) {
         </div>
       )}
 
-      {/* Sipariş detay paneli */}
-      {ordersOpen && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <ShoppingBag size={13} className="text-blue" />
-            <div className="flex-1 min-w-0">
-              <span className="text-text font-semibold text-sm">WA Tracked Orders</span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-textMute text-[10px]">{orders.length} total</span>
-                {convertedCount > 0 && (
-                  <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
-                    {convertedCount} WA attributed
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
-              <RefreshCw size={11} />
-            </button>
-          </div>
-          {orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2">
-              <ShoppingBag size={18} className="text-textMute/40" />
-              <p className="text-textMute text-xs">No order details yet — new orders will appear here</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
-              {orders.map((o, i) => (
-                <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {o.order_number && (
-                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
-                          #{o.order_number}
-                        </span>
-                      )}
-                      {waAttributedLast4.has(o.phone?.slice(-4)) && (
-                        <span className="text-[10px] bg-greenSoft text-green border border-green/30 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <MessageCircle size={8} />WA ✓
-                        </span>
-                      )}
-                      {o.channel && o.channel !== 'Direct' && (
-                        <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
-                          {o.channel}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-text">
-                        {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
-                      </p>
-                      <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{o.customer_name}</p>}
-                      {o.phone && <p className="text-[10px] text-textMute font-mono">***{o.phone.slice(-4)}</p>}
-                    </div>
-                  </div>
-                  {o.line_items?.length > 0 && (
-                    <div className="space-y-0.5">
-                      {o.line_items.slice(0, 3).map((item, j) => (
-                        <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
-                          <span className="truncate flex-1">{item.quantity}× {item.title}</span>
-                          <span className="shrink-0 ml-2 tabular-nums">
-                            {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-                          </span>
-                        </div>
-                      ))}
-                      {o.line_items.length > 3 && (
-                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} more items</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── 2 Kolon Grid ── */}
+      <div className="grid grid-cols-[2fr_3fr] gap-4 items-start">
+
+        {/* SOL — Ayarlar */}
+        <div className="space-y-4">
 
       {/* Bağlantı ayarları */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
@@ -1068,6 +992,93 @@ function FlowPanel({ session }) {
         )}
       </div>
 
+        </div>{/* /sol */}
+
+        {/* SAĞ — Veriler */}
+        <div className="space-y-4">
+
+      {/* WA Tracked Orders */}
+      {ordersOpen && (
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <ShoppingBag size={13} className="text-blue" />
+            <div className="flex-1 min-w-0">
+              <span className="text-text font-semibold text-sm">WA Tracked Orders</span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-textMute text-[10px]">{orders.length} total</span>
+                {convertedCount > 0 && (
+                  <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
+                    {convertedCount} WA attributed
+                  </span>
+                )}
+              </div>
+            </div>
+            <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+              <RefreshCw size={11} />
+            </button>
+          </div>
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <ShoppingBag size={18} className="text-textMute/40" />
+              <p className="text-textMute text-xs">No order details yet — new orders will appear here</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
+              {orders.map((o, i) => (
+                <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {o.order_number && (
+                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
+                          #{o.order_number}
+                        </span>
+                      )}
+                      {waAttributedLast4.has(o.phone?.slice(-4)) && (
+                        <span className="text-[10px] bg-greenSoft text-green border border-green/30 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          <MessageCircle size={8} />WA ✓
+                        </span>
+                      )}
+                      {o.channel && o.channel !== 'Direct' && (
+                        <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
+                          {o.channel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-text">
+                        {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
+                      </p>
+                      <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{o.customer_name}</p>}
+                      {o.phone && <p className="text-[10px] text-textMute font-mono">***{o.phone.slice(-4)}</p>}
+                    </div>
+                  </div>
+                  {o.line_items?.length > 0 && (
+                    <div className="space-y-0.5">
+                      {o.line_items.slice(0, 3).map((item, j) => (
+                        <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
+                          <span className="truncate flex-1">{item.quantity}× {item.title}</span>
+                          <span className="shrink-0 ml-2 tabular-nums">
+                            {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                          </span>
+                        </div>
+                      ))}
+                      {o.line_items.length > 3 && (
+                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} more items</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Gönderim Geçmişi */}
       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
@@ -1243,6 +1254,9 @@ function FlowPanel({ session }) {
           </div>
         )}
       </div>
+
+        </div>{/* /sağ */}
+      </div>{/* /grid */}
 
     </div>
   );
