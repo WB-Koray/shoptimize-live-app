@@ -4,7 +4,7 @@ import {
   Layers, CheckCircle, WifiOff, Zap, RefreshCw, Trash2,
   Radio, Users, ChevronDown, ChevronUp, TrendingUp,
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
-  MessageCircle, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
+  MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
   ShoppingBag, Ban, UserX, Plus, Minus,
 } from 'lucide-react';
@@ -605,6 +605,10 @@ function FlowPanel({ session }) {
   const [optoutPhone, setOptoutPhone] = useState('');
   const [removingOptout, setRmOptout] = useState('');
 
+  const [connOpen, setConnOpen]   = useState(true);
+  const [seqOpen, setSeqOpen]     = useState(true);
+  const [testOpen, setTestOpen]   = useState(false);
+
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     try {
@@ -802,36 +806,49 @@ function FlowPanel({ session }) {
         <div className="space-y-4">
 
       {/* Bağlantı ayarları */}
-      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Connection</p>
-
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">WhatsApp Token</label>
-          <div className="relative">
-            <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-            <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
-              placeholder={maskedToken || 'EAAxxxxxxx…'}
-              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <button onClick={() => setConnOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+          <Key size={13} className="text-textDim shrink-0" />
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Connection</span>
+          {maskedToken && <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">Connected</span>}
+          {connOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+        </button>
+        {connOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-border/60">
+            <div className="space-y-1.5 pt-3">
+              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">WhatsApp Token</label>
+              <div className="relative">
+                <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
+                  placeholder={maskedToken || 'EAAxxxxxxx…'}
+                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">Phone Number ID</label>
+              <div className="relative">
+                <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
+                  placeholder="123456789012345"
+                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">Phone Number ID</label>
-          <div className="relative">
-            <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-            <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
-              placeholder="123456789012345"
-              className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Sequence */}
-      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <div>
-          <p className="text-textDim font-semibold text-xs uppercase tracking-wide">Cart Reminder Sequence</p>
-          <p className="text-textMute text-[10px] mt-0.5">Sequence stops automatically when order is placed</p>
-        </div>
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <button onClick={() => setSeqOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+          <MessageSquare size={13} className="text-textDim shrink-0" />
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Cart Reminder Sequence</span>
+          <span className="text-[10px] text-textMute mr-1">{settings.sequence.filter(s => s.enabled).length}/{settings.sequence.length} active</span>
+          {seqOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+        </button>
+        {seqOpen && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border/60">
         {settings.sequence.map((step, idx) => (
           <div key={idx} className={`rounded-xl border p-3 space-y-2 ${step.enabled ? 'border-green/30 bg-greenSoft/20' : 'border-border bg-surfaceAlt/30'}`}>
             <div className="flex items-center gap-2">
@@ -928,6 +945,8 @@ function FlowPanel({ session }) {
             <span className="text-textMute text-[10px]">TRY</span>
           </div>
         </div>
+        </div>
+        )}
       </div>
 
       {/* Sipariş onayı */}
@@ -965,8 +984,15 @@ function FlowPanel({ session }) {
       </button>
 
       {/* Test */}
-      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <h3 className="text-text font-semibold text-sm flex items-center gap-2"><Send size={13} className="text-green" />Test Message</h3>
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <button onClick={() => setTestOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+          <Send size={13} className="text-textDim shrink-0" />
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Test Message</span>
+          {testOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+        </button>
+        {testOpen && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border/60 pt-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
@@ -989,6 +1015,8 @@ function FlowPanel({ session }) {
             {testResult.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
             {testResult.ok ? `Sent — ID: ${testResult.message_id}` : (testResult.error || 'Failed')}
           </div>
+        )}
+        </div>
         )}
       </div>
 
