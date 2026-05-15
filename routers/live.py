@@ -392,6 +392,23 @@ async def receive_event(request: Request):
 
     owner = await store.get_tid_owner(tid)
 
+    # Auto-recover: parse old-format TID ({username}_{brand}_{16_hex}) when owner unknown
+    if not owner and not tid.startswith("spt_"):
+        parts = tid.rsplit("_", 2)
+        import re as _re
+        if len(parts) == 3 and _re.fullmatch(r"[0-9a-f]{8,32}", parts[2]):
+            _u, _b = parts[0], parts[1]
+            await store.register_tid_owner(tid, _u, _b)
+            owner = (_u, _b)
+            # Save pixel_tracking_id back to DB if missing
+            try:
+                from services.db import get_setting as _gs, set_connection_settings as _scs
+                if not _gs(_u, _b, "shopify", "pixel_tracking_id", ""):
+                    _scs(_u, _b, "shopify", {"pixel_tracking_id": tid})
+                    logger.info("[LIVE] TID auto-recovered and saved to DB: %s", tid[:24])
+            except Exception as _e:
+                logger.warning("[LIVE] TID DB recovery failed: %s", _e)
+
     if event.get("customer_id"):
         _customer_to_tid[event["customer_id"]] = {
             "tid": tid, "vid": event["vid"],
@@ -518,6 +535,19 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
             "ok": True,
             "installed": bool(owner),
             "tracking_id": tid,
+            "script_tag_id": None,
+            "script_url": None,
+            "detected_via": "events",
+        }
+
+    # Last resort: check reverse mapping populated by receive_event auto-recovery
+    recovered_tid = await store.get_user_tid(username, brand)
+    if recovered_tid:
+        logger.info("[PIXEL] TID recovered from reverse mapping: %s", recovered_tid[:24])
+        return {
+            "ok": True,
+            "installed": True,
+            "tracking_id": recovered_tid,
             "script_tag_id": None,
             "script_url": None,
             "detected_via": "events",

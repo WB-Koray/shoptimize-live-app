@@ -104,10 +104,17 @@ class RedisStore:
     async def register_tid_owner(self, tid: str, username: str, brand: str) -> None:
         if not tid:
             return
+        brand = brand or "default"
         await self._redis.hset(f"tid_owner:{tid}", mapping={
             "username": username or "",
-            "brand": brand or "default",
+            "brand": brand,
         })
+        if username:
+            await self._redis.set(f"user_tid:{username}:{brand}", tid)
+
+    async def get_user_tid(self, username: str, brand: str = "default") -> str:
+        val = await self._redis.get(f"user_tid:{username}:{brand}")
+        return val or ""
 
     async def get_tid_owner(self, tid: str) -> Optional[tuple[str, str]]:
         data = await self._redis.hgetall(f"tid_owner:{tid}")
