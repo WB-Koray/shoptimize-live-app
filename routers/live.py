@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.shoptimize.com.tr").rstrip("/")
+_SHOPIFY_APP_URL = os.getenv("SHOPIFY_APP_URL", "").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Geriye dönük uyumluluk
@@ -469,8 +470,10 @@ def _find_our_scripttag(domain: str, token: str, version: str = None) -> Optiona
         )
         if r.status_code != 200:
             return None
+        search_bases = [b for b in [API_BASE_URL, _SHOPIFY_APP_URL] if b]
         for tag in r.json().get("script_tags", []):
-            if tag.get("src", "").startswith(API_BASE_URL + "/pixel.js"):
+            src = tag.get("src", "")
+            if any(src.startswith(base + "/pixel.js") for base in search_bases):
                 return tag
     except Exception:
         pass

@@ -39,9 +39,12 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
                     data = row["payload_json"]
                     if isinstance(data, str):
                         data = json.loads(data)
-                    # Önce settings alt anahtarına bak
-                    settings = data.get("settings", data)
-                    return settings.get(key, default)
+                    # settings alt anahtarı varsa orada ara, yoksa kök seviyede
+                    sub = data.get("settings", {})
+                    val = sub.get(key) if isinstance(sub, dict) else None
+                    if val is None:
+                        val = data.get(key)
+                    return val if val is not None else default
     except Exception as e:
         logger.error("[DB] get_setting hatası: %s", e)
     return default

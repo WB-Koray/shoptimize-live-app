@@ -1318,6 +1318,7 @@ export default function Dashboard({ session, onLogout }) {
   const [pixelStatus, setPixelStatus]   = useState(null);
   const [pixelLoading, setPixelLoading] = useState(true);
   const [installing, setInstalling]     = useState(false);
+  const [effectiveTid, setEffectiveTid] = useState(tid);
   const [webhookStatus, setWebhookStatus]   = useState(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [convertedOrders, setConvertedOrders] = useState([]);
@@ -1330,12 +1331,12 @@ export default function Dashboard({ session, onLogout }) {
   const fetchOrdersRef = useRef(null);
 
   const connectSSE = useCallback(() => {
-    if (!tid || !token) return;
+    if (!effectiveTid || !token) return;
     if (esRef.current) { esRef.current.close(); esRef.current = null; }
     clearTimeout(retryRef.current);
     setSseStatus('connecting');
 
-    const url = `${API_URL}/api/live/stream?tid=${encodeURIComponent(tid)}&token=${encodeURIComponent(token)}`;
+    const url = `${API_URL}/api/live/stream?tid=${encodeURIComponent(effectiveTid)}&token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     esRef.current = es;
 
@@ -1386,7 +1387,7 @@ export default function Dashboard({ session, onLogout }) {
       esRef.current = null;
       retryRef.current = setTimeout(connectSSE, 5000);
     };
-  }, [tid, token]);
+  }, [effectiveTid, token]);
 
   useEffect(() => {
     connectSSE();
@@ -1408,10 +1409,12 @@ export default function Dashboard({ session, onLogout }) {
     setPixelLoading(true);
     try {
       const r = await fetch(`${API_URL}/api/shopify/pixel/status?${qs}`);
-      setPixelStatus(await r.json());
+      const data = await r.json();
+      setPixelStatus(data);
+      if (!tid && data?.tracking_id) setEffectiveTid(data.tracking_id);
     } catch { setPixelStatus(null); }
     setPixelLoading(false);
-  }, [qs]);
+  }, [qs, tid]);
 
   useEffect(() => { fetchPixelStatus(); }, [fetchPixelStatus]);
 
