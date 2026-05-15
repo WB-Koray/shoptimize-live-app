@@ -328,18 +328,46 @@ class RedisStore:
             await self._redis.delete(key)
 
     async def warmup_tid_cache(self):
+        import re as _re
+        count = 0
         try:
-            from services.db import get_all_shopify_connections
+            from services.db import get_all_shopify_connections, set_connection_settings as _scs, get_setting as _gs
             connections = get_all_shopify_connections()
-            count = 0
             for item in connections:
                 tid = (item["connection"].get("settings") or {}).get("pixel_tracking_id", "")
                 if tid:
                     await self.register_tid_owner(tid, item["username"], item["brand"])
                     count += 1
-            logger.info("[REDIS] TID warmup: %d kayıt", count)
         except Exception as e:
-            logger.error("[REDIS] Warmup hatası: %s", e)
+            logger.error("[REDIS] Warmup (DB) hatası: %s", e)
+
+        # Redis-based recovery: scan active events:{tid} keys, parse old-format TIDs
+        try:
+            recovered = 0
+            async for key in self._redis.scan_iter("events:*"):
+                tid = key[7:] if isinstance(key, str) else key.decode()[7:]
+                if tid.startswith("spt_"):
+                    continue
+                if await self._redis.exists(f"tid_owner:{tid}"):
+                    continue
+                parts = tid.rsplit("_", 2)
+                if len(parts) == 3 and _re.fullmatch(r"[0-9a-f]{8,32}", parts[2]):
+                    u, b = parts[0], parts[1]
+                    await self.register_tid_owner(tid, u, b)
+                    recovered += 1
+                    # Persist to DB so future warmups find it too
+                    try:
+                        from services.db import get_setting as _gs, set_connection_settings as _scs
+                        if not _gs(u, b, "shopify", "pixel_tracking_id", ""):
+                            _scs(u, b, "shopify", {"pixel_tracking_id": tid})
+                    except Exception:
+                        pass
+            if recovered:
+                logger.info("[REDIS] TID warmup (Redis recovery): %d kayıt kurtarıldı", recovered)
+        except Exception as e:
+            logger.error("[REDIS] Warmup (Redis scan) hatası: %s", e)
+
+        logger.info("[REDIS] TID warmup tamamlandı: DB=%d", count)
 
 
 store = RedisStore()
