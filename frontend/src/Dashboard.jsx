@@ -1794,27 +1794,35 @@ export default function Dashboard({ session, onLogout }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {pixelStatus?.installed && (
-            <button onClick={handleRegisterWebhook} disabled={webhookLoading}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:opacity-50
-                ${webhookStatus?.registered
-                  ? 'bg-greenSoft border-green/20 text-green'
-                  : 'bg-blueSoft border-blue/20 text-blue hover:bg-blueSoft/80'}`}>
-              {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Installing...</>
-                : webhookStatus?.registered ? <><CheckCircle size={11} /> Order Tracking Active</>
-                : <><Zap size={11} /> Set Up Order Tracking</>}
-            </button>
+          {pixelStatus?.detected_via === 'events' ? (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-greenSoft border border-green/20 text-green text-xs font-bold rounded-lg">
+              <CheckCircle size={11} /> Active via Shopify
+            </span>
+          ) : (
+            <>
+              {pixelStatus?.installed && (
+                <button onClick={handleRegisterWebhook} disabled={webhookLoading}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:opacity-50
+                    ${webhookStatus?.registered
+                      ? 'bg-greenSoft border-green/20 text-green'
+                      : 'bg-blueSoft border-blue/20 text-blue hover:bg-blueSoft/80'}`}>
+                  {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Installing...</>
+                    : webhookStatus?.registered ? <><CheckCircle size={11} /> Order Tracking Active</>
+                    : <><Zap size={11} /> Set Up Order Tracking</>}
+                </button>
+              )}
+              {pixelStatus?.installed
+                ? <button onClick={handleUninstall} disabled={installing || pixelLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
+                    <Trash2 size={12} /> Remove
+                  </button>
+                : <button onClick={handleInstall} disabled={installing || pixelLoading}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
+                    {installing ? <><RefreshCw size={12} className="animate-spin" /> Installing...</> : <><Zap size={12} /> One-Click Install</>}
+                  </button>
+              }
+            </>
           )}
-          {pixelStatus?.installed
-            ? <button onClick={handleUninstall} disabled={installing || pixelLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
-                <Trash2 size={12} /> Remove
-              </button>
-            : <button onClick={handleInstall} disabled={installing || pixelLoading}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
-                {installing ? <><RefreshCw size={12} className="animate-spin" /> Installing...</> : <><Zap size={12} /> One-Click Install</>}
-              </button>
-          }
         </div>
       </div>
 

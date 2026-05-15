@@ -487,27 +487,43 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = get_setting(username, brand, "shopify", "admin_api_token", "")
     tid    = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
-    if not domain or not token:
-        return {"ok": False, "error": "shopify_not_connected"}
-    tag = _find_our_scripttag(domain, token)
-    # If DB has no TID but the script tag is installed, extract TID from tag URL and save it
-    if tag and not tid:
-        from urllib.parse import urlparse, parse_qs as _parse_qs
-        _src_qs = _parse_qs(urlparse(tag.get("src", "")).query)
-        extracted = (_src_qs.get("tid") or [""])[0]
-        if extracted:
-            tid = extracted
-            set_connection_settings(username, brand, "shopify", {"pixel_tracking_id": tid})
-            logger.info("[PIXEL] TID extracted from script tag and saved: %s", tid[:16])
+
+    # Primary path: verify via Shopify API when credentials available
+    if domain and token:
+        tag = _find_our_scripttag(domain, token)
+        # If DB has no TID but the script tag is installed, extract TID from tag URL and save it
+        if tag and not tid:
+            from urllib.parse import urlparse, parse_qs as _parse_qs
+            _src_qs = _parse_qs(urlparse(tag.get("src", "")).query)
+            extracted = (_src_qs.get("tid") or [""])[0]
+            if extracted:
+                tid = extracted
+                set_connection_settings(username, brand, "shopify", {"pixel_tracking_id": tid})
+                logger.info("[PIXEL] TID extracted from script tag and saved: %s", tid[:16])
+        if tid:
+            await store.register_tid_owner(tid, username, brand)
+        return {
+            "ok": True,
+            "installed": tag is not None,
+            "tracking_id": tid or None,
+            "script_tag_id": tag["id"] if tag else None,
+            "script_url": tag.get("src") if tag else None,
+        }
+
+    # Fallback: no Shopify credentials (password-login user) — use Redis event presence
     if tid:
         await store.register_tid_owner(tid, username, brand)
-    return {
-        "ok": True,
-        "installed": tag is not None,
-        "tracking_id": tid or None,
-        "script_tag_id": tag["id"] if tag else None,
-        "script_url": tag.get("src") if tag else None,
-    }
+        owner = await store.get_tid_owner(tid)
+        return {
+            "ok": True,
+            "installed": bool(owner),
+            "tracking_id": tid,
+            "script_tag_id": None,
+            "script_url": None,
+            "detected_via": "events",
+        }
+
+    return {"ok": True, "installed": False, "tracking_id": None}
 
 
 @router.post("/api/shopify/pixel/install")
