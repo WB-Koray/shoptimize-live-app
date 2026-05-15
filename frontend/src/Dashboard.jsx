@@ -1730,7 +1730,7 @@ export default function Dashboard({ session, onLogout }) {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-bg p-4">
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1840,7 +1840,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* ── CANLI TAB ── */}
       {liveTab === 'realtime' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] xl:grid-cols-[1fr_2fr] gap-4 items-start">
 
           {/* SOL — KPIs, Abandoned, Funnel */}
           <div className="space-y-4">
@@ -1913,7 +1913,7 @@ export default function Dashboard({ session, onLogout }) {
             {visitorProfiles.length > 0 && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                 <SectionHead icon={Users} title="Active Visitors" badge={visitorProfiles.length} extra="Click card → see journey" />
-                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
                   {visitorProfiles.slice(0, 18).map(profile => (
                     <VisitorCard key={profile.vid} profile={profile}
                       customerName={customerNames[profile.customer_id]}
@@ -1988,7 +1988,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* ── ANALİZ TAB ── */}
       {liveTab === 'analytics' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
 
           {/* SOL — Products, Collections, Searches, Traffic */}
           <div className="space-y-3">
@@ -2004,7 +2004,7 @@ export default function Dashboard({ session, onLogout }) {
               </button>
               {prodOpen && (
                 productStats.length > 0
-                  ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-border/60">
+                  ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
                       {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
                     </div>
                   : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No product views yet</p>
