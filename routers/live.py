@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.shoptimize.com.tr").rstrip("/")
-_SHOPIFY_APP_URL = os.getenv("SHOPIFY_APP_URL", "").rstrip("/")
+# SHOPIFY_APP_URL is the public URL of this service (e.g. https://live.shoptimize.com.tr).
+# We also check API_BASE_URL for legacy script tags installed when the two vars differed.
+_SHOPIFY_APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Geriye dönük uyumluluk
@@ -488,6 +490,15 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
     if not domain or not token:
         return {"ok": False, "error": "shopify_not_connected"}
     tag = _find_our_scripttag(domain, token)
+    # If DB has no TID but the script tag is installed, extract TID from tag URL and save it
+    if tag and not tid:
+        from urllib.parse import urlparse, parse_qs as _parse_qs
+        _src_qs = _parse_qs(urlparse(tag.get("src", "")).query)
+        extracted = (_src_qs.get("tid") or [""])[0]
+        if extracted:
+            tid = extracted
+            set_connection_settings(username, brand, "shopify", {"pixel_tracking_id": tid})
+            logger.info("[PIXEL] TID extracted from script tag and saved: %s", tid[:16])
     if tid:
         await store.register_tid_owner(tid, username, brand)
     return {
