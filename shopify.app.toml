@@ -1,10 +1,12 @@
 name = "Shoptimize Live"
 client_id = "1e80272ad8faa2261f770841ddee0377"
 application_url = "https://live.shoptimize.com.tr"
-embedded = true
+embedded = false
 
 [access_scopes]
-scopes = "read_customers,read_orders,write_orders,read_script_tags,write_script_tags,read_checkouts"
+# read_checkouts: required to receive checkouts/create + checkouts/update webhooks
+# write_script_tags: required to install/remove the storefront tracking pixel
+scopes = "read_customers,read_orders,read_checkouts,read_script_tags,write_script_tags"
 
 [auth]
 redirect_urls = [
@@ -13,6 +15,20 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2026-04"
+
+  # Webhooks below are also registered programmatically during OAuth install.
+  # Declaring them here ensures Shopify CLI / Partner Dashboard stays in sync.
+  [[webhooks.subscriptions]]
+  topics = ["orders/create"]
+  uri = "/api/shopify/webhook/orders-create"
+
+  [[webhooks.subscriptions]]
+  topics = ["checkouts/create", "checkouts/update"]
+  uri = "/api/shopify/webhook/checkouts-create"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks/app/uninstalled"
 
   [webhooks.privacy_compliance]
   customer_data_request_url = "https://live.shoptimize.com.tr/webhooks/customers/data_request"

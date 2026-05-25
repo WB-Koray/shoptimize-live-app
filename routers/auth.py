@@ -28,7 +28,7 @@ APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
 REDIRECT_URI = f"{APP_URL}/auth/shopify/callback"
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
-SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders"
+SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders,read_checkouts"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() == "true"
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 
