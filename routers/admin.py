@@ -32,7 +32,11 @@ async def list_merchants(admin_token: str = Query(...)):
     """Tüm merchant'ları billing durumu ve event sayısıyla döner."""
     _require_admin(admin_token)
 
-    connections = get_all_shopify_connections()
+    try:
+        connections = get_all_shopify_connections()
+    except Exception as e:
+        logger.exception("[ADMIN] get_all_shopify_connections hatası")
+        raise HTTPException(500, f"DB hatası: {e}")
     now = time.time()
     result = []
 
@@ -96,7 +100,7 @@ async def list_merchants(admin_token: str = Query(...)):
         "merchants": result,
         "stats": {
             "active": sum(1 for m in result if m["billing_status"] == "active"),
-            "trialing": sum(1 for m in result if m["billing_status"] in ("pending", "none") and m.get("trial_remaining_hours", 0) > 0),
+            "trialing": sum(1 for m in result if m["billing_status"] in ("pending", "none") and (m.get("trial_remaining_hours") or 0) > 0),
             "declined": sum(1 for m in result if m["billing_status"] == "declined"),
             "uninstalled": sum(1 for m in result if m["billing_status"] == "uninstalled"),
         },

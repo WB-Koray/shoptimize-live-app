@@ -513,11 +513,14 @@ async def request_access(body: AccessRequest):
     if lang == "en":
         lang = "en_US"
 
+    # TR → dashboard_erisim, EN → panel_access (farklı Meta template adları)
+    tpl_name = "dashboard_erisim" if lang == "tr" else "panel_access"
+
     from services.wa_sender import send_wa_template
     result = await send_wa_template(
         OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone_e164,
-        name=access_url,  # {{1}} = URL
-        template_name="dashboard_erisim",
+        name=access_url,  # {{link}} parametresi
+        template_name=tpl_name,
         language=lang,
     )
 

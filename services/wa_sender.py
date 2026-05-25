@@ -49,9 +49,9 @@ def _build_params(template_name: str, name: str = "", product: str = "", order_n
             {"type": "text", "text": product or ""},            # {{magaza}}
             {"type": "text", "text": order_number or ""},       # {{link}}
         ]
-    if template_name == "dashboard_erisim":
-        # Template: Shoptimize Live giriş linkiniz aşağıda:\n\n{{link}}\n\n...
-        # Named var → positional array: [link]
+    if template_name in ("dashboard_erisim", "panel_access"):
+        # TR: dashboard_erisim  |  EN: panel_access
+        # Her ikisinde de tek değişken: {{link}} = erişim URL'i
         return [
             {"type": "text", "text": name or ""},              # {{link}}
         ]
