@@ -334,6 +334,27 @@ class RedisStore:
         async for key in self._redis.scan_iter(f"visitor:{tid}:*"):
             await self._redis.delete(key)
 
+    # ── Mağaza sahibi telefon → username eşleşmesi ──────────────────────────────
+
+    async def set_owner_phone(self, username: str, brand: str, phone: str) -> None:
+        """Mağaza sahibi telefonu → username:brand eşleşmesini kaydeder (1 yıl TTL)."""
+        normalized = phone.strip().lstrip("+")
+        if not normalized:
+            return
+        await self._redis.set(f"owner_phone:{normalized}", f"{username}:{brand}", ex=86400 * 365)
+        logger.info("[REDIS] Sahip telefonu kaydedildi: %s → %s:%s", normalized[-4:], username, brand)
+
+    async def get_username_by_phone(self, phone: str) -> Optional[tuple[str, str]]:
+        """Telefon numarasına göre (username, brand) döner; bulunamazsa None."""
+        normalized = phone.strip().lstrip("+")
+        val = await self._redis.get(f"owner_phone:{normalized}")
+        if not val:
+            return None
+        parts = val.split(":", 1)
+        if len(parts) == 2:
+            return parts[0], parts[1]
+        return parts[0], "default"
+
     async def warmup_tid_cache(self):
         import re as _re
         count = 0

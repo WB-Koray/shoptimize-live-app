@@ -16,6 +16,30 @@ const translations = {
     'login.err.billing':    'Subscription required to access dashboard',
     'login.billing_activate': 'Activate your subscription →',
 
+    // Shopify re-auth
+    'login.shopify_title':      'Sign In with Shopify',
+    'login.shopify_placeholder':'mystore.myshopify.com',
+    'login.shopify_help':       'Enter your store address to log in via Shopify',
+    'login.shopify_btn':        'Continue with Shopify',
+
+    // WA access link
+    'login.wa_title':           'Send Access Link via WhatsApp',
+    'login.wa_placeholder':     '+90 5xx xxx xx xx',
+    'login.wa_help':            "We'll send a login link to your WhatsApp number",
+    'login.wa_btn':             'Send Link',
+    'login.wa_sent':            '✅ Link sent! Check your WhatsApp.',
+    'login.wa_not_found':       'Phone number not found in our system.',
+    'login.wa_unavailable':     'WhatsApp access is not yet configured.',
+
+    // Onboarding modal
+    'onboarding.title':         'Setup Complete!',
+    'onboarding.body':          'Your store is connected. Add your WhatsApp number to receive login links and notifications.',
+    'onboarding.phone_label':   'Your WhatsApp Number',
+    'onboarding.phone_placeholder': '+90 5xx xxx xx xx',
+    'onboarding.save':          'Save & Continue',
+    'onboarding.skip':          'Skip for now',
+    'onboarding.saved':         '✅ Number saved!',
+
     // Connection status
     'status.live':          'Live',
     'status.connecting':    'Connecting...',
@@ -240,6 +264,30 @@ const translations = {
     'login.err.server':     'Sunucuya bağlanılamadı',
     'login.err.billing':    'Dashboard erişimi için abonelik gereklidir',
     'login.billing_activate': 'Aboneliği aktive et →',
+
+    // Shopify re-auth
+    'login.shopify_title':      'Shopify ile Giriş Yap',
+    'login.shopify_placeholder':'mystore.myshopify.com',
+    'login.shopify_help':       'Mağaza adresinizi girin, Shopify üzerinden otomatik giriş yapın',
+    'login.shopify_btn':        'Shopify ile Devam Et',
+
+    // WA access link
+    'login.wa_title':           'WhatsApp ile Erişim Linki Al',
+    'login.wa_placeholder':     '+90 5xx xxx xx xx',
+    'login.wa_help':            'WhatsApp numaranıza giriş linki gönderilecek',
+    'login.wa_btn':             'Link Gönder',
+    'login.wa_sent':            '✅ Link gönderildi! WhatsApp\'ınızı kontrol edin.',
+    'login.wa_not_found':       'Bu numara sistemimizde kayıtlı değil.',
+    'login.wa_unavailable':     'WhatsApp erişim servisi henüz yapılandırılmamış.',
+
+    // Onboarding modal
+    'onboarding.title':         'Kurulum Tamamlandı!',
+    'onboarding.body':          'Mağazanız bağlandı. WhatsApp numaranızı ekleyin, giriş linkleri ve bildirimler alın.',
+    'onboarding.phone_label':   'WhatsApp Numaranız',
+    'onboarding.phone_placeholder': '+90 5xx xxx xx xx',
+    'onboarding.save':          'Kaydet ve Devam Et',
+    'onboarding.skip':          'Şimdi atla',
+    'onboarding.saved':         '✅ Numara kaydedildi!',
 
     // Bağlantı durumu
     'status.live':          'Canlı',

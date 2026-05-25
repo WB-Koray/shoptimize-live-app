@@ -21,11 +21,15 @@ def _secret() -> str:
     return AUTH_TOKEN_SECRET.strip() or "wb-dashboard-auth-secret"
 
 
-def create_access_token(username: str, brand: str = "default", expires_days: int = 30) -> str:
+def create_access_token(username: str, brand: str = "default", expires_days: int = 30, expires_hours: int = 0) -> str:
+    """expires_days=0, expires_hours=1 → 1 saatlik token."""
+    ttl = expires_days * 86400 + expires_hours * 3600
+    if ttl <= 0:
+        ttl = 3600  # varsayılan 1 saat
     payload = {
         "username": username,
         "brand": brand,
-        "exp": time.time() + expires_days * 86400,
+        "exp": time.time() + ttl,
     }
     payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     signature = hmac.new(_secret().encode(), payload_b64.encode(), hashlib.sha256).hexdigest()

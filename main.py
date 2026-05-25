@@ -182,6 +182,186 @@ async def health():
     return {"ok": True, "service": "shoptimize-live"}
 
 
+@app.get("/start", response_class=HTMLResponse)
+async def start_guide():
+    """Kurulum rehberi — Shopify listing ve WA mesajlarında paylaşılabilir."""
+    return """<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoptimize Live — Başlangıç Rehberi</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+           background: #0d1117; color: #e6edf3; line-height: 1.7; min-height: 100vh; }
+    .hero { background: linear-gradient(135deg, #1a2f1a 0%, #0d1117 60%);
+            padding: 64px 24px 48px; text-align: center; border-bottom: 1px solid #21262d; }
+    .logo { width: 72px; height: 72px; border-radius: 20px; margin: 0 auto 20px;
+            background: linear-gradient(135deg, #5a7a3c, #3e8d7a);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 800;
+         background: linear-gradient(135deg, #7ec858, #56c4a4); -webkit-background-clip: text;
+         -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 12px; }
+    .subtitle { font-size: 1.1rem; color: #8b949e; max-width: 520px; margin: 0 auto 32px; }
+    .cta-btn { display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px;
+               background: linear-gradient(135deg, #5a7a3c, #3e8d7a); color: #fff;
+               border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none;
+               box-shadow: 0 4px 20px rgba(90,122,60,0.3); transition: opacity 0.2s; }
+    .cta-btn:hover { opacity: 0.88; }
+    .container { max-width: 820px; margin: 0 auto; padding: 48px 24px 80px; }
+    .section { margin-bottom: 48px; }
+    h2 { font-size: 1.3rem; font-weight: 700; color: #e6edf3; margin-bottom: 20px;
+         display: flex; align-items: center; gap: 10px; }
+    .step-grid { display: grid; gap: 16px; }
+    .step { background: #161b22; border: 1px solid #21262d; border-radius: 16px; padding: 20px 24px;
+            display: flex; gap: 16px; align-items: flex-start; }
+    .step-num { min-width: 36px; height: 36px; border-radius: 50%;
+                background: linear-gradient(135deg, #5a7a3c, #3e8d7a);
+                display: flex; align-items: center; justify-content: center;
+                font-weight: 800; font-size: 0.9rem; color: #fff; flex-shrink: 0; }
+    .step-content h3 { font-size: 1rem; font-weight: 700; color: #e6edf3; margin-bottom: 4px; }
+    .step-content p { font-size: 0.9rem; color: #8b949e; }
+    .step-content code { background: #21262d; padding: 2px 6px; border-radius: 4px;
+                          font-family: monospace; font-size: 0.85rem; color: #79c0ff; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .feature { background: #161b22; border: 1px solid #21262d; border-radius: 14px; padding: 18px; }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 8px; }
+    .feature h3 { font-size: 0.95rem; font-weight: 700; color: #e6edf3; margin-bottom: 4px; }
+    .feature p { font-size: 0.85rem; color: #8b949e; }
+    .faq { background: #161b22; border: 1px solid #21262d; border-radius: 16px; overflow: hidden; }
+    .faq-item { padding: 18px 24px; border-bottom: 1px solid #21262d; }
+    .faq-item:last-child { border-bottom: none; }
+    .faq-q { font-weight: 700; color: #e6edf3; font-size: 0.95rem; margin-bottom: 6px; }
+    .faq-a { color: #8b949e; font-size: 0.9rem; }
+    .login-box { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 28px;
+                 text-align: center; }
+    .login-box h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .login-box p { color: #8b949e; font-size: 0.9rem; margin-bottom: 20px; }
+    .login-link { display: inline-flex; align-items: center; gap-6px; padding: 12px 24px;
+                  background: #21262d; border: 1px solid #30363d; color: #e6edf3;
+                  border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 0.9rem;
+                  transition: border-color 0.2s; }
+    .login-link:hover { border-color: #7ec858; }
+    footer { text-align: center; padding: 24px; color: #484f58; font-size: 0.85rem;
+             border-top: 1px solid #21262d; }
+    footer a { color: #56c4a4; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="logo">⚡</div>
+  <h1>Shoptimize Live</h1>
+  <p class="subtitle">Shopify mağazanızdaki anlık ziyaretçi aktivitesini takip edin, terk edilmiş sepetleri WhatsApp ile geri kazanın.</p>
+  <a href="/" class="cta-btn">📊 Dashboard'a Git</a>
+</div>
+
+<div class="container">
+
+  <div class="section">
+    <h2>✨ Neler Yapabilirsiniz?</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-icon">👁️</div>
+        <h3>Anlık Ziyaretçi Takibi</h3>
+        <p>Şu an kim mağazanızda, hangi ürünü inceliyor, nereden geliyor — canlı olarak görün.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💬</div>
+        <h3>WhatsApp Otomasyonu</h3>
+        <p>Sepete ürün ekliyip ayrılan müşterilere otomatik WhatsApp mesajı gönderin.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📈</div>
+        <h3>Dönüşüm Hunisi</h3>
+        <p>Hangi ürünler en çok bakılıyor, nereden çıkılıyor? Analitik dashboard ile takip edin.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔔</div>
+        <h3>Anlık Bildirimler</h3>
+        <p>Yeni sipariş geldiğinde tarayıcınıza bildirim alın.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🚀 Kurulum Adımları</h2>
+    <div class="step-grid">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Shopify App Store'dan Kurun</h3>
+          <p>Shoptimize Live uygulamasını Shopify mağazanıza ekleyin. Kurulum tamamen otomatiktir — pixel ve webhook'lar anında devreye girer.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Aboneliği Onaylayın</h3>
+          <p>7 günlük ücretsiz deneme sonrasında aylık planı Shopify üzerinden onaylayın. İstediğiniz zaman iptal edebilirsiniz.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Dashboard'a Giriş Yapın</h3>
+          <p>Kurulum tamamlanınca otomatik olarak dashboard'a yönlendirilirsiniz. Sonraki girişler için <code>live.shoptimize.com.tr</code> adresine gidin ve <strong>Shopify ile Giriş Yap</strong>'ı kullanın.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>WhatsApp Entegrasyonu (Opsiyonel)</h3>
+          <p>Dashboard'da <strong>WA Otomasyonu</strong> sekmesine gidin. Meta WhatsApp Business API token'ınızı ve telefon numarası ID'nizi girin. Terk edilmiş sepet hatırlatma mesajlarını ayarlayın.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>❓ Sık Sorulan Sorular</h2>
+    <div class="faq">
+      <div class="faq-item">
+        <div class="faq-q">Dashboard'a nasıl tekrar giriş yaparım?</div>
+        <div class="faq-a">live.shoptimize.com.tr adresine gidin ve "Shopify ile Giriş Yap" butonuna tıklayın. Mağaza adresinizi yazın (örnek: <code>mystore.myshopify.com</code>) — Shopify hesabınızla otomatik giriş yapılır.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Pixel nedir, ne işe yarar?</div>
+        <div class="faq-a">Pixel, mağazanıza eklenen küçük bir JavaScript kodudur. Ziyaretçi aktivitesini (sayfa görüntüleme, ürün inceleme, sepete ekleme vb.) takip eder ve dashboard'a iletir.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">WhatsApp entegrasyonu için ne gerekiyor?</div>
+        <div class="faq-a">Meta WhatsApp Business API erişimine ihtiyacınız var. Meta Business Manager üzerinden başvurabilirsiniz. Onaylı mesaj şablonları (sepet_hatirlatma vb.) gereklidir.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Verilerim ne kadar saklanır?</div>
+        <div class="faq-a">Ziyaretçi aktivite verileri 7 gün saklanır. Uygulama kaldırıldığında tüm veriler 48 saat içinde silinir.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Sorun yaşarsam ne yapmalıyım?</div>
+        <div class="faq-a">Dashboard'daki pixel durumunu kontrol edin. Yeşil ise sorun yok demektir. Devam eden sorunlar için destek alın.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-box">
+    <h3>Dashboard'a Erişin</h3>
+    <p>Mağazanızı zaten kurdunuz mu? Dashboard'a giriş yapın.</p>
+    <a href="/" class="login-link">Dashboard'a Git →</a>
+  </div>
+
+</div>
+
+<footer>
+  <p>Shoptimize Live &copy; 2026 &nbsp;|&nbsp; <a href="/privacy">Gizlilik Politikası</a></p>
+</footer>
+
+</body>
+</html>"""
+
+
 @app.get("/privacy", response_class=HTMLResponse)
 async def privacy_policy():
     return """<!DOCTYPE html>

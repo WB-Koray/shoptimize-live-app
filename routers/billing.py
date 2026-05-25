@@ -147,6 +147,20 @@ async def billing_callback(
         f"&u={username}&b={brand}"
         + (f"&tid={tid}" if tid else "")
     )
+
+    # Kurulum tamamlandı — WA hoş geldiniz mesajı gönder
+    try:
+        from routers.auth import _send_welcome_wa
+        _send_welcome_wa(
+            username, brand,
+            owner_name="",  # shop.json'dan alınmışsa Redis'te var
+            owner_phone="",  # telefon Redis'te var, oradan bulunacak
+            shop_domain=shop,
+            dashboard_url=f"{APP_URL}/?auto_token={token}&u={username}&b={brand}" + (f"&tid={tid}" if tid else ""),
+        )
+    except Exception as _e:
+        logger.warning("[BILLING] WA kurulum mesajı gönderilemedi: %s", _e)
+
     return RedirectResponse(redirect)
 
 

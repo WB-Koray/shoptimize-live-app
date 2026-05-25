@@ -27,6 +27,8 @@ SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
 REDIRECT_URI = f"{APP_URL}/auth/shopify/callback"
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+OPERATOR_WA_TOKEN    = os.getenv("OPERATOR_WA_TOKEN", "")
+OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 
 SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders,read_checkouts"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() == "true"
@@ -36,12 +38,13 @@ PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 _state_store: dict[str, dict] = {}
 
 
-def _create_state(username: str, brand: str) -> str:
+def _create_state(username: str, brand: str, reauth: bool = False) -> str:
     state = secrets.token_hex(16)
     _state_store[state] = {
         "username": username,
         "brand": brand,
         "ts": time.time(),
+        "reauth": reauth,
     }
     return state
 
@@ -179,6 +182,7 @@ async def shopify_callback(
 
     username = state_data["username"]
     brand = state_data["brand"]
+    is_reauth = state_data.get("reauth", False)
 
     # 3. Access token al
     try:
@@ -202,16 +206,60 @@ async def shopify_callback(
         raise HTTPException(500, f"Token exchange hatası: {e}")
 
     # 4. Mağaza bilgilerini kaydet
-    set_connection_settings(username, brand, "shopify", {
-        "shop_domain": shop,
-        "admin_api_token": access_token,
-        "granted_scopes": granted_scopes,
-        "installed_at": int(time.time()),
-    })
+    if is_reauth:
+        # Yeniden giriş: sadece token güncelle
+        set_connection_settings(username, brand, "shopify", {"admin_api_token": access_token})
+        logger.info("[OAuth] ✓ Yeniden giriş: shop=%s username=%s", shop, username)
+    else:
+        set_connection_settings(username, brand, "shopify", {
+            "shop_domain": shop,
+            "admin_api_token": access_token,
+            "granted_scopes": granted_scopes,
+            "installed_at": int(time.time()),
+        })
+        logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s", shop, username)
 
-    logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s", shop, username)
+    # 4b. Mağaza sahibi bilgilerini al ve kaydet
+    owner_phone = ""
+    owner_name = ""
+    try:
+        from routers.live import _shopify_headers, _shopify_url
+        shop_r = requests.get(
+            _shopify_url(shop, "shop.json"),
+            headers=_shopify_headers(access_token),
+            timeout=10,
+        )
+        if shop_r.status_code == 200:
+            shop_info = shop_r.json().get("shop", {})
+            owner_phone = str(shop_info.get("phone") or "").strip()
+            owner_name  = str(shop_info.get("shop_owner") or shop_info.get("name") or "").strip()
+            if owner_phone:
+                # E.164 formatına çevir (TR numaraları için)
+                digits = "".join(c for c in owner_phone if c.isdigit())
+                if digits and not owner_phone.startswith("+"):
+                    owner_phone = f"+9{digits}" if digits.startswith("0") else f"+{digits}"
+                from services.redis_store import store as _store
+                import asyncio
+                if asyncio.get_event_loop().is_running():
+                    asyncio.ensure_future(_store.set_owner_phone(username, brand, owner_phone))
+                logger.info("[OAuth] Mağaza sahibi telefonu kaydedildi: %s", owner_phone[-4:])
+    except Exception as e:
+        logger.warning("[OAuth] shop.json alınamadı: %s", e)
+
+    if is_reauth:
+        # Yeniden giriş: doğrudan dashboard'a yönlendir
+        from services.auth import create_access_token as _cat
+        new_token = _cat(username, brand)
+        tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+        redirect = (
+            f"{APP_URL}/?auto_token={new_token}"
+            f"&u={username}&b={brand}"
+            + (f"&tid={tid}" if tid else "")
+        )
+        return RedirectResponse(redirect)
 
     # 5. Pixel'i otomatik kur
+    tid = ""
     try:
         from routers.live import _get_or_create_tid, _shopify_headers, _shopify_url
         from services.redis_store import store
@@ -265,17 +313,21 @@ async def shopify_callback(
     try:
         from routers.billing import create_charge
         confirmation_url = create_charge(shop, access_token, username, brand)
+        # WA kurulum mesajı billing callback'te gönderilecek — orada auto_token var
         return RedirectResponse(confirmation_url)
     except Exception as e:
         logger.warning("[OAuth] Billing oluşturulamadı, direkt giriş yapılıyor: %s", e)
         from services.auth import create_access_token
         token = create_access_token(username, brand)
-        tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+        if not tid:
+            tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
         redirect = (
             f"{APP_URL}/?auto_token={token}"
             f"&u={username}&b={brand}"
             + (f"&tid={tid}" if tid else "")
         )
+        # WA kurulum mesajı gönder
+        _send_welcome_wa(username, brand, owner_name, owner_phone, shop, f"{APP_URL}/?auto_token={token}&u={username}&b={brand}")
         return RedirectResponse(redirect)
 
 
@@ -307,3 +359,189 @@ async def install_success(shop: str = Query("")):
         "message": f"Shoptimize Live başarıyla kuruldu!",
         "shop": shop,
     })
+
+
+# ---------------------------------------------------------------------------
+# Yardımcı — WA hoş geldiniz mesajı (kurulum tamamlandığında)
+# ---------------------------------------------------------------------------
+
+def _send_welcome_wa(username: str, brand: str, owner_name: str, owner_phone: str, shop_domain: str, dashboard_url: str) -> None:
+    """
+    Mağaza sahibine kurulum tamamlandı WA mesajı gönderir.
+    Operator WA credentials gerekir: OPERATOR_WA_TOKEN + OPERATOR_WA_PHONE_ID.
+
+    Meta'da onaylanması gereken template:
+      Adı      : shoptimize_kurulum
+      Kategori : Utility
+      Dil      : tr
+      Gövde    : {{1}}, Shoptimize Live mağazanıza başarıyla kuruldu! 🎉\n\nMağaza: {{2}}\n\nDashboard'unuza erişmek için:\n{{3}}\n\n(Link 24 saat geçerlidir)
+    """
+    if not OPERATOR_WA_TOKEN or not OPERATOR_WA_PHONE_ID:
+        return
+    if not owner_phone:
+        # Redis'te kayıtlı telefonu dene
+        try:
+            import asyncio
+            from services.redis_store import store as _store
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                async def _get():
+                    r = await _store.get_username_by_phone.__func__  # bulunamaz, pass
+                asyncio.ensure_future(_send_welcome_wa_async(username, brand, owner_name, shop_domain, dashboard_url))
+                return
+        except Exception:
+            pass
+        return
+    try:
+        import asyncio
+        asyncio.ensure_future(_send_welcome_wa_async_direct(owner_phone, owner_name, shop_domain, dashboard_url))
+    except Exception as e:
+        logger.warning("[AUTH] WA welcome async başlatılamadı: %s", e)
+
+
+async def _send_welcome_wa_async_direct(phone: str, name: str, shop_domain: str, dashboard_url: str) -> None:
+    try:
+        from services.wa_sender import send_wa_template
+        await send_wa_template(
+            OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone,
+            name=name or "Değerli üye",
+            product=shop_domain,
+            order_number=dashboard_url,
+            template_name="shoptimize_kurulum",
+            language="tr",
+        )
+    except Exception as e:
+        logger.warning("[AUTH] WA welcome gönderilemedi: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Shopify OAuth ile yeniden giriş (kurulum yapılmaz)
+# ---------------------------------------------------------------------------
+
+@router.get("/auth/shopify/reauth")
+async def shopify_reauth(
+    shop: str = Query(...),
+    brand: str = Query("default"),
+):
+    """Mevcut merchant yeniden giriş için Shopify OAuth başlatır (pixel/billing yok)."""
+    shop = shop.strip().lower()
+    # Sadece handle girilmişse .myshopify.com ekle
+    if "." not in shop:
+        shop = f"{shop}.myshopify.com"
+    elif not shop.endswith(".myshopify.com"):
+        raise HTTPException(400, "Geçersiz mağaza adresi. Örnek: mystore.myshopify.com")
+
+    if not SHOPIFY_CLIENT_ID:
+        raise HTTPException(500, "Shopify app yapılandırılmamış")
+
+    username = _shop_to_username(shop)
+    state = _create_state(username, brand, reauth=True)
+
+    auth_url = (
+        f"https://{shop}/admin/oauth/authorize"
+        f"?client_id={SHOPIFY_CLIENT_ID}"
+        f"&scope={SCOPES}"
+        f"&redirect_uri={REDIRECT_URI}"
+        f"&state={state}"
+    )
+    return RedirectResponse(auth_url)
+
+
+# ---------------------------------------------------------------------------
+# WA ile erişim linki isteği
+# ---------------------------------------------------------------------------
+
+class AccessRequest(BaseModel):
+    phone: str
+
+
+@router.post("/api/auth/request-access")
+async def request_access(body: AccessRequest):
+    """
+    Telefon numarasına 1 saatlik dashboard erişim linki gönderir.
+    Operator WA credentials gerekir: OPERATOR_WA_TOKEN + OPERATOR_WA_PHONE_ID.
+
+    Meta'da onaylanması gereken template:
+      Adı      : dashboard_erisim
+      Kategori : Utility
+      Dil      : tr
+      Gövde    : Shoptimize Live dashboard erişim linkiniz:\n\n{{1}}\n\nLink 1 saat geçerlidir. Başkasıyla paylaşmayın.
+    """
+    if not OPERATOR_WA_TOKEN or not OPERATOR_WA_PHONE_ID:
+        raise HTTPException(503, "WA erişim servisi henüz yapılandırılmamış")
+
+    phone = body.phone.strip()
+    if not phone:
+        raise HTTPException(400, "Telefon numarası gerekli")
+
+    # Normalize
+    digits = "".join(c for c in phone if c.isdigit())
+    if phone.startswith("+"):
+        phone_e164 = "+" + digits
+    elif digits.startswith("0"):
+        phone_e164 = "+9" + digits
+    else:
+        phone_e164 = "+" + digits
+
+    from services.redis_store import store
+    mapping = await store.get_username_by_phone(phone_e164)
+    if not mapping:
+        # Güvenlik: telefon bulunamasa da aynı mesajı döndür
+        logger.info("[AUTH] WA access: telefon bulunamadı %s", phone_e164[-4:])
+        return {"ok": True, "sent": False}
+
+    username, brand = mapping
+    from services.auth import create_access_token
+    tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    token = create_access_token(username, brand, expires_days=0, expires_hours=1)  # 1 saat
+    access_url = (
+        f"{APP_URL}/?auto_token={token}"
+        f"&u={username}&b={brand}"
+        + (f"&tid={tid}" if tid else "")
+    )
+
+    from services.wa_sender import send_wa_template
+    result = await send_wa_template(
+        OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone_e164,
+        name=access_url,  # {{1}} = URL
+        template_name="dashboard_erisim",
+        language="tr",
+    )
+
+    if result.get("ok"):
+        logger.info("[AUTH] WA access linki gönderildi: %s", phone_e164[-4:])
+    return {"ok": True, "sent": result.get("ok", False)}
+
+
+# ---------------------------------------------------------------------------
+# Sahip telefonu kaydet (onboarding modal'dan)
+# ---------------------------------------------------------------------------
+
+class OwnerPhoneRequest(BaseModel):
+    phone: str
+
+
+@router.post("/api/auth/owner-phone")
+async def save_owner_phone(body: OwnerPhoneRequest, request: Request):
+    """Onboarding sırasında mağaza sahibinin telefonunu kaydeder."""
+    from services.auth import get_current_user
+    user = await get_current_user(request)
+    username = user.get("username", "")
+    brand = user.get("brand", "default")
+
+    phone = body.phone.strip()
+    digits = "".join(c for c in phone if c.isdigit())
+    if len(digits) < 7:
+        raise HTTPException(400, "Geçersiz telefon numarası")
+
+    if phone.startswith("+"):
+        phone_e164 = "+" + digits
+    elif digits.startswith("0"):
+        phone_e164 = "+9" + digits
+    else:
+        phone_e164 = "+" + digits
+
+    from services.redis_store import store
+    await store.set_owner_phone(username, brand, phone_e164)
+    logger.info("[AUTH] Sahip telefonu kaydedildi: %s → %s:%s", phone_e164[-4:], username, brand)
+    return {"ok": True, "phone": phone_e164}

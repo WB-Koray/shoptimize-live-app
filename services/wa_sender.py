@@ -41,6 +41,18 @@ def _build_params(template_name: str, name: str = "", product: str = "", order_n
             {"type": "text", "text": name or "Değerli müşterimiz"},
             {"type": "text", "text": order_number or "-"},
         ]
+    if template_name == "shoptimize_kurulum":
+        # {{1}} isim, {{2}} mağaza domain, {{3}} dashboard URL
+        return [
+            {"type": "text", "text": name or "Değerli üye"},
+            {"type": "text", "text": product or ""},
+            {"type": "text", "text": order_number or ""},
+        ]
+    if template_name == "dashboard_erisim":
+        # {{1}} = dashboard URL
+        return [
+            {"type": "text", "text": name or ""},
+        ]
     # Bilinmeyen şablonlar için parametresiz gönder
     return []
 

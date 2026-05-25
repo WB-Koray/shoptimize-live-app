@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
+import OnboardingModal from './OnboardingModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 const MAX_EVENTS = 2000;
@@ -1317,6 +1318,15 @@ export default function Dashboard({ session, onLogout }) {
   const { token, username, brand, tid } = session;
   const qs = `username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
 
+  // Onboarding modal — ilk girişte telefon numarası sor
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('spt_onboarding_done');
+  });
+  function closeOnboarding() {
+    localStorage.setItem('spt_onboarding_done', '1');
+    setShowOnboarding(false);
+  }
+
   const [activeView, setActiveView] = useState('live');
   const [liveTab, setLiveTab]           = useState('realtime');
   const [prodOpen, setProdOpen]         = useState(true);
@@ -1751,6 +1761,9 @@ export default function Dashboard({ session, onLogout }) {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-bg p-4">
+    {/* Onboarding modal — ilk girişte göster */}
+    {showOnboarding && <OnboardingModal token={token} onClose={closeOnboarding} />}
+
     <div className="w-full space-y-4">
 
       {/* Header */}
