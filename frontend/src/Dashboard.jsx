@@ -9,6 +9,7 @@ import {
   ShoppingBag, Ban, UserX, Plus, Minus,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
+import { useLang, LangSwitch } from './LangContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 const MAX_EVENTS = 2000;
@@ -65,8 +66,13 @@ function fmtUrl(url) {
   try { return new URL(url).pathname || '/'; } catch { return url || '/'; }
 }
 function shortVid(vid) { return 'vis_' + (vid || '').slice(-6); }
-function timeAgo(ts) {
+function timeAgo(ts, lang = 'en') {
   const s = Math.floor((Date.now() - ts) / 1000);
+  if (lang === 'tr') {
+    if (s < 60) return `${s}sn önce`;
+    if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
+    return `${Math.floor(s / 3600)}sa önce`;
+  }
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   return `${Math.floor(s / 3600)}h ago`;
@@ -121,6 +127,7 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
 function ProductCard({ product, flash }) {
+  const { t } = useLang();
   return (
     <div className={`bg-surfaceSoft border rounded-xl overflow-hidden transition-all duration-300
       ${flash ? 'border-purple/50 shadow-lg' : 'border-border'}`}>
@@ -146,18 +153,18 @@ function ProductCard({ product, flash }) {
         )}
         <div className="flex items-center gap-1 pt-1 border-t border-border">
           <Eye size={9} className="text-purple" />
-          <span className="text-[10px] text-textDim">Views</span>
+          <span className="text-[10px] text-textDim">{t('product.views')}</span>
           <span className="text-[10px] font-bold text-purple ml-auto tabular-nums">{product.views}</span>
         </div>
         <div className="flex items-center gap-1">
           <ShoppingCart size={9} className="text-green" />
-          <span className="text-[10px] text-textDim">Add to Cart</span>
+          <span className="text-[10px] text-textDim">{t('product.cart')}</span>
           <span className="text-[10px] font-bold text-green ml-auto tabular-nums">{product.carts}</span>
         </div>
         {product.views > 0 && product.carts > 0 && (
           <div className="text-center">
             <span className="text-[10px] font-bold text-amber bg-amberSoft px-2 py-0.5 rounded-full">
-              {((product.carts / product.views) * 100).toFixed(0)}% conversion
+              {((product.carts / product.views) * 100).toFixed(0)}% {t('product.conv')}
             </span>
           </div>
         )}
@@ -170,6 +177,7 @@ function ProductCard({ product, flash }) {
 // ── VisitorCard ───────────────────────────────────────────────────────────────
 
 function VisitorCard({ profile, customerName, onClick }) {
+  const { t, lang } = useLang();
   const sm = STAGE_META[profile.stage] || STAGE_META.browsing;
   const c  = CM[sm.color] || CM.slate;
   const DevIcon = profile.device === 'mobile' ? Smartphone : profile.device === 'tablet' ? Tablet : Monitor;
@@ -184,10 +192,10 @@ function VisitorCard({ profile, customerName, onClick }) {
           <DevIcon size={11} className="text-textMute" />
           <span className="text-[10px] text-textDim font-mono">{shortVid(profile.vid)}</span>
           {profile.isReturning && (
-            <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20">↩ Returning</span>
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20">{t('visitors.returning')}</span>
           )}
         </div>
-        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
+        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
       </div>
       {fullName
         ? <p className="text-[10px] text-green font-semibold truncate">{fullName}</p>
@@ -203,7 +211,7 @@ function VisitorCard({ profile, customerName, onClick }) {
       )}
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-textMute">{profile.referrer}</span>
-        <span className="text-[11px] text-textMute">{timeAgo(profile.lastTs)}</span>
+        <span className="text-[11px] text-textMute">{timeAgo(profile.lastTs, lang)}</span>
       </div>
     </div>
   );
@@ -212,6 +220,7 @@ function VisitorCard({ profile, customerName, onClick }) {
 // ── EventRow ──────────────────────────────────────────────────────────────────
 
 function EventRow({ ev, isNew }) {
+  const { t } = useLang();
   const meta = EVENT_META[ev.event_type] || { label: ev.event_type, icon: Activity, color: 'slate' };
   const c = CM[meta.color] || CM.slate;
   const Icon = meta.icon;
@@ -224,7 +233,7 @@ function EventRow({ ev, isNew }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-bold ${c.text}`}>{meta.label}</span>
+          <span className={`text-xs font-bold ${c.text}`}>{t('event.' + ev.event_type) || meta.label}</span>
           {d.order_number && (
             <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
               #{d.order_number}
@@ -257,7 +266,7 @@ function EventRow({ ev, isNew }) {
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.dot}`} />
           <span className="text-[10px] text-textMute">{shortVid(ev.vid)}</span>
-          {ev.customer_id && <span className="text-[10px] text-green">Member #{ev.customer_id}</span>}
+          {ev.customer_id && <span className="text-[10px] text-green">{t('common.member')}{ev.customer_id}</span>}
           {ev.utm?.utm_campaign && (
             <span className="text-[10px] text-blue bg-blueSoft px-1 rounded">{ev.utm.utm_campaign}</span>
           )}
@@ -271,25 +280,26 @@ function EventRow({ ev, isNew }) {
 // ── FunnelWidget ──────────────────────────────────────────────────────────────
 
 function FunnelWidget({ stats }) {
+  const { t } = useLang();
   const total = stats.total || 1;
   const steps = [
-    { label: 'All Visitors',      count: stats.total,     color: 'bg-blue',   pct: 100 },
-    { label: 'Viewed Product',    count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
-    { label: 'Added to Cart',     count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
-    { label: 'Started Checkout',  count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
-    { label: 'Purchased',         count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
+    { key: 'all_visitors',    count: stats.total,     color: 'bg-blue',   pct: 100 },
+    { key: 'viewed_product',  count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
+    { key: 'added_to_cart',   count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
+    { key: 'started_checkout',count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
+    { key: 'purchased',       count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
   ];
   return (
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <TrendingUp size={15} className="text-blue" />
-        <span className="text-text text-sm font-bold">Conversion Funnel</span>
+        <span className="text-text text-sm font-bold">{t('funnel.title')}</span>
       </div>
       <div className="p-4 space-y-3">
         {steps.map((step, i) => (
-          <div key={step.label} className="space-y-1">
+          <div key={step.key} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-textDim">{step.label}</span>
+              <span className="text-textDim">{t('funnel.' + step.key)}</span>
               <div className="flex items-center gap-2">
                 <span className="text-text font-bold tabular-nums">{step.count}</span>
                 {i > 0 && <span className="text-[10px] text-textMute">({step.pct.toFixed(1)}%)</span>}
@@ -309,6 +319,7 @@ function FunnelWidget({ stats }) {
 // ── TrafficTable ──────────────────────────────────────────────────────────────
 
 function TrafficTable({ traffic, onSourceClick }) {
+  const { t } = useLang();
   if (!traffic.length) return null;
   const max = traffic[0]?.count || 1;
   const total = traffic.reduce((a, b) => a + b.count, 0) || 1;
@@ -316,8 +327,8 @@ function TrafficTable({ traffic, onSourceClick }) {
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Globe size={15} className="text-textDim" />
-        <span className="text-text text-sm font-bold">Traffic Sources</span>
-        <span className="text-[10px] text-textMute ml-auto">Click → see products</span>
+        <span className="text-text text-sm font-bold">{t('analytics.traffic')}</span>
+        <span className="text-[10px] text-textMute ml-auto">{t('analytics.traffic_click')}</span>
       </div>
       <div className="divide-y divide-border/60">
         {traffic.map(({ source, count }) => (
@@ -341,13 +352,14 @@ function TrafficTable({ traffic, onSourceClick }) {
 // ── SearchTable ───────────────────────────────────────────────────────────────
 
 function SearchTable({ searches }) {
+  const { t, lang } = useLang();
   if (!searches.length) return null;
   return (
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 p-4 border-b border-border">
         <Search size={15} className="text-textDim" />
-        <span className="text-text text-sm font-bold">Live Searches</span>
-        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-auto">{searches.length} terms</span>
+        <span className="text-text text-sm font-bold">{t('analytics.searches')}</span>
+        <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-auto">{searches.length} {t('common.terms')}</span>
       </div>
       <div className="divide-y divide-border/60">
         {searches.map((s, i) => (
@@ -361,7 +373,7 @@ function SearchTable({ searches }) {
                 style={{ width: `${Math.min(100, (s.count / searches[0].count) * 100)}%` }} />
             </div>
             <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
-            <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(s.lastTs)}</span>
+            <span className="text-[10px] text-textMute w-16 text-right">{timeAgo(s.lastTs, lang)}</span>
           </div>
         ))}
       </div>
@@ -372,6 +384,7 @@ function SearchTable({ searches }) {
 // ── JourneyModal ──────────────────────────────────────────────────────────────
 
 function JourneyModal({ profile, customerName, onClose }) {
+  const { t, lang } = useLang();
   if (!profile) return null;
   const sm = STAGE_META[profile.stage] || STAGE_META.browsing;
   const c = CM[sm.color] || CM.slate;
@@ -396,20 +409,20 @@ function JourneyModal({ profile, customerName, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${c.bg} ${c.text}`}>{sm.label}</span>
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
             <button onClick={onClose} className="p-1.5 hover:bg-surfaceAlt rounded-lg text-textDim hover:text-text transition-colors">
               <X size={14} />
             </button>
           </div>
         </div>
         <div className="flex items-center gap-3 px-4 py-2 border-b border-border/60 text-[10px] text-textMute flex-wrap">
-          <span>{profile.events.length} event</span>
-          <span>First: {fmtTime(profile.firstTs)}</span>
-          <span>Last: {fmtTime(profile.lastTs)}</span>
-          <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} min</span>
-          {profile.customer_id && !fullName && <span className="text-green font-semibold">Member #{profile.customer_id}</span>}
+          <span>{profile.events.length} {t('journey.event')}</span>
+          <span>{t('journey.first')} {fmtTime(profile.firstTs)}</span>
+          <span>{t('journey.last')} {fmtTime(profile.lastTs)}</span>
+          <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} {t('journey.min')}</span>
+          {profile.customer_id && !fullName && <span className="text-green font-semibold">{t('common.member')}{profile.customer_id}</span>}
           {customerName?.email && <span className="text-textDim">{customerName.email}</span>}
-          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} orders</span>}
+          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} {t('journey.orders')}</span>}
           {customerName?.total_spent && parseFloat(customerName.total_spent) > 0 && (
             <span className="text-green">{parseFloat(customerName.total_spent).toLocaleString('tr-TR')} ₺</span>
           )}
@@ -427,7 +440,7 @@ function JourneyModal({ profile, customerName, onClose }) {
                 <div className={`p-1 rounded-md ${ec.bg} shrink-0 mt-0.5`}><Icon size={11} className={ec.text} /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold ${ec.text}`}>{meta.label}</span>
+                    <span className={`text-[10px] font-bold ${ec.text}`}>{t('event.' + ev.event_type) || meta.label}</span>
                     {ev.data?.product_title && <span className="text-[10px] text-text/70 truncate max-w-[160px]">{ev.data.product_title}</span>}
                     {ev.data?.query && <span className="text-[10px] text-text/70">"{ev.data.query}"</span>}
                   </div>
@@ -446,6 +459,7 @@ function JourneyModal({ profile, customerName, onClose }) {
 // ── DrillDownModal ────────────────────────────────────────────────────────────
 
 function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
+  const { t } = useLang();
   if (!title) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -463,7 +477,7 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
         <div className="overflow-y-auto flex-1 p-3 space-y-1 custom-scrollbar">
           {products?.length > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Viewed Products ({products.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">{t('modal.viewed_products')} ({products.length})</p>
               {products.map((p, i) => (
                 <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
                   <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
@@ -475,12 +489,12 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs font-bold text-purple tabular-nums">{p.views}</p>
-                    <p className="text-[10px] text-textMute">views</p>
+                    <p className="text-[10px] text-textMute">{t('modal.views')}</p>
                   </div>
                   {p.carts > 0 && (
                     <div className="text-right shrink-0">
                       <p className="text-xs font-bold text-green tabular-nums">{p.carts}</p>
-                      <p className="text-[10px] text-textMute">cart</p>
+                      <p className="text-[10px] text-textMute">{t('modal.cart')}</p>
                     </div>
                   )}
                 </div>
@@ -489,23 +503,23 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
           )}
           {visitors?.length > 0 && (
             <div>
-              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">Visitors ({visitors.length})</p>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">{t('modal.visitors')} ({visitors.length})</p>
               {visitors.slice(0, 30).map((v, i) => {
                 const sm2 = STAGE_META[v.stage] || STAGE_META.browsing;
                 const c2 = CM[sm2.color] || CM.slate;
                 return (
                   <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
                     <span className="text-[10px] font-mono text-textMute w-16">{shortVid(v.vid)}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{sm2.label}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{t('stage.' + (v.stage || 'browsing'))}</span>
                     {v.lastProduct && <span className="text-[10px] text-text/60 flex-1 truncate">{v.lastProduct}</span>}
-                    <span className="text-[10px] text-textMute shrink-0">{timeAgo(v.lastTs)}</span>
+                    <span className="text-[10px] text-textMute shrink-0">{timeAgo(v.lastTs, lang)}</span>
                   </div>
                 );
               })}
             </div>
           )}
           {!products?.length && !visitors?.length && (
-            <div className="py-8 text-center text-textMute text-sm">No data</div>
+            <div className="py-8 text-center text-textMute text-sm">{t('modal.no_data')}</div>
           )}
         </div>
       </div>
@@ -538,7 +552,12 @@ const DEFAULT_SEQUENCE = [
   { delay_minutes: 2880, template: 'sepet_hatirlatma', language: 'tr', enabled: false, label: 'After 48 hours' },
 ];
 
-function fmtDelay(m) {
+function fmtDelay(m, lang = 'en') {
+  if (lang === 'tr') {
+    if (m < 60) return `${m} dk`;
+    if (m < 1440) return `${Math.round(m / 60)} sa`;
+    return `${Math.round(m / 1440)} gün`;
+  }
   if (m < 60) return `${m} min`;
   if (m < 1440) return `${Math.round(m / 60)} hr`;
   return `${Math.round(m / 1440)} day`;
@@ -567,6 +586,7 @@ function fmtRevenue(amount) {
 }
 
 function FlowPanel({ session }) {
+  const { t, lang } = useLang();
   const { token, username, brand } = session;
   const base = API_URL;
   const qp   = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
@@ -765,14 +785,14 @@ function FlowPanel({ session }) {
           <MessageCircle size={16} className="text-green" />
         </div>
         <div className="flex-1">
-          <h2 className="text-text font-bold text-sm">WhatsApp Automation</h2>
-          <p className="text-textMute text-xs">Cart recovery sequence and order notifications</p>
+          <h2 className="text-text font-bold text-sm">{t('flow.title')}</h2>
+          <p className="text-textMute text-xs">{t('flow.subtitle')}</p>
         </div>
         <button onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
           className="flex items-center gap-1.5 text-sm font-medium transition-colors">
           {settings.enabled
-            ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">Active</span></>
-            : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">Inactive</span></>}
+            ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">{t('flow.active')}</span></>
+            : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">{t('flow.inactive')}</span></>}
         </button>
       </div>
 
@@ -781,20 +801,20 @@ function FlowPanel({ session }) {
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-surface border border-border rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-green">{sentCount}</p>
-            <p className="text-textMute text-[10px]">Sent</p>
+            <p className="text-textMute text-[10px]">{t('flow.sent')}</p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-blue/40 transition-colors"
             onClick={() => { setOrdersOpen(o => !o); if (!ordersOpen) fetchOrders(); }}>
             <p className="text-lg font-bold text-blue">{orders.length || '—'}</p>
-            <p className="text-textMute text-[10px]">Tracked {ordersOpen ? '▲' : '▼'}</p>
+            <p className="text-textMute text-[10px]">{t('flow.tracked')} {ordersOpen ? '▲' : '▼'}</p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-emerald-500">{convertedCount}</p>
-            <p className="text-textMute text-[10px]">WA Attr.</p>
+            <p className="text-textMute text-[10px]">{t('flow.wa_attr')}</p>
           </div>
           <div className="bg-surface border border-border rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-purple">{sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—'}</p>
-            <p className="text-textMute text-[10px]">WA Rate</p>
+            <p className="text-textMute text-[10px]">{t('flow.wa_rate')}</p>
           </div>
         </div>
       )}
@@ -810,14 +830,14 @@ function FlowPanel({ session }) {
         <button onClick={() => setConnOpen(o => !o)}
           className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
           <Key size={13} className="text-textDim shrink-0" />
-          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Connection</span>
-          {maskedToken && <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">Connected</span>}
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.connection')}</span>
+          {maskedToken && <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">{t('flow.connected')}</span>}
           {connOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
         </button>
         {connOpen && (
           <div className="px-4 pb-4 space-y-3 border-t border-border/60">
             <div className="space-y-1.5 pt-3">
-              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">WhatsApp Token</label>
+              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.wa_token')}</label>
               <div className="relative">
                 <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
                 <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
@@ -826,7 +846,7 @@ function FlowPanel({ session }) {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">Phone Number ID</label>
+              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.phone_id')}</label>
               <div className="relative">
                 <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
                 <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
@@ -843,8 +863,8 @@ function FlowPanel({ session }) {
         <button onClick={() => setSeqOpen(o => !o)}
           className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
           <MessageSquare size={13} className="text-textDim shrink-0" />
-          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Cart Reminder Sequence</span>
-          <span className="text-[10px] text-textMute mr-1">{settings.sequence.filter(s => s.enabled).length}/{settings.sequence.length} active</span>
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.cart_seq')}</span>
+          <span className="text-[10px] text-textMute mr-1">{settings.sequence.filter(s => s.enabled).length}/{settings.sequence.length} {t('flow.active')}</span>
           {seqOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
         </button>
         {seqOpen && (
@@ -864,21 +884,21 @@ function FlowPanel({ session }) {
             {step.enabled && (
               <div className="grid grid-cols-3 gap-2 pl-7">
                 <div>
-                  <p className="text-[10px] text-textMute mb-1">Delay</p>
+                  <p className="text-[10px] text-textMute mb-1">{t('flow.delay')}</p>
                   <div className="flex items-center gap-1.5">
                     <input type="number" min={5} max={43200} value={step.delay_minutes}
                       onChange={e => updateStep(idx, { delay_minutes: parseInt(e.target.value) || 15 })}
                       className="w-16 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
-                    <span className="text-textMute text-[10px]">min · {fmtDelay(step.delay_minutes)}</span>
+                    <span className="text-textMute text-[10px]">dk · {fmtDelay(step.delay_minutes, lang)}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] text-textMute mb-1">Template name</p>
+                  <p className="text-[10px] text-textMute mb-1">{t('flow.template')}</p>
                   <input value={step.template} onChange={e => updateStep(idx, { template: e.target.value })}
                     className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text font-mono focus:outline-none focus:border-green/60" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-textMute mb-1">Language</p>
+                  <p className="text-[10px] text-textMute mb-1">{t('flow.language')}</p>
                   <select value={step.language || 'tr'} onChange={e => updateStep(idx, { language: e.target.value })}
                     className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text focus:outline-none focus:border-green/60">
                     <option value="tr">TR</option>
@@ -896,15 +916,15 @@ function FlowPanel({ session }) {
           <div className="flex items-center gap-1.5">
             <Clock size={12} className="text-amber shrink-0" />
             <div>
-              <p className="text-xs font-medium text-text">Duplicate Prevention</p>
-              <p className="text-[10px] text-textMute">Same customer won't get a new sequence within this window</p>
+              <p className="text-xs font-medium text-text">{t('flow.cooldown')}</p>
+              <p className="text-[10px] text-textMute">{t('flow.cooldown_sub')}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <input type="number" min={1} max={168} value={settings.cooldown_hours}
               onChange={e => setSettings(s => ({ ...s, cooldown_hours: parseInt(e.target.value) || 48 }))}
               className="w-14 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-amber/60" />
-            <span className="text-textMute text-[10px]">hrs</span>
+            <span className="text-textMute text-[10px]">{t('flow.hrs')}</span>
           </div>
         </div>
 
@@ -913,8 +933,8 @@ function FlowPanel({ session }) {
           <div className="flex items-center gap-1.5">
             <Clock size={12} className="text-blue shrink-0" />
             <div>
-              <p className="text-xs font-medium text-text">Send Window</p>
-              <p className="text-[10px] text-textMute">Only send WA messages within these hours (Turkey time)</p>
+              <p className="text-xs font-medium text-text">{t('flow.send_window')}</p>
+              <p className="text-[10px] text-textMute">{t('flow.send_window_sub')}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -934,8 +954,8 @@ function FlowPanel({ session }) {
           <div className="flex items-center gap-1.5">
             <ShoppingBag size={12} className="text-green shrink-0" />
             <div>
-              <p className="text-xs font-medium text-text">Minimum Cart Value</p>
-              <p className="text-[10px] text-textMute">Skip sequence if cart total is below this amount (0 = disabled)</p>
+              <p className="text-xs font-medium text-text">{t('flow.min_cart')}</p>
+              <p className="text-[10px] text-textMute">{t('flow.min_cart_sub')}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -954,8 +974,8 @@ function FlowPanel({ session }) {
         <div className="flex items-center gap-2">
           <ShoppingBag size={13} className="text-blue shrink-0" />
           <div className="flex-1">
-            <p className="text-text font-semibold text-sm">Order Confirmation WA</p>
-            <p className="text-textMute text-[10px]">Auto-send when order is completed</p>
+            <p className="text-text font-semibold text-sm">{t('flow.order_confirm')}</p>
+            <p className="text-textMute text-[10px]">{t('flow.order_confirm_sub')}</p>
           </div>
           <button onClick={() => setSettings(s => ({ ...s, post_order: { ...s.post_order, enabled: !s.post_order.enabled } }))}>
             {settings.post_order?.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
@@ -980,7 +1000,7 @@ function FlowPanel({ session }) {
       <button onClick={handleSave} disabled={saving}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50">
         {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-        {saved ? 'Saved ✓' : saving ? 'Saving...' : 'Save'}
+        {saved ? t('flow.saved') : saving ? t('flow.saving') : t('flow.save')}
       </button>
 
       {/* Test */}
@@ -988,7 +1008,7 @@ function FlowPanel({ session }) {
         <button onClick={() => setTestOpen(o => !o)}
           className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
           <Send size={13} className="text-textDim shrink-0" />
-          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">Test Message</span>
+          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.test')}</span>
           {testOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
         </button>
         {testOpen && (
@@ -1007,7 +1027,7 @@ function FlowPanel({ session }) {
           </select>
           <button onClick={handleTest} disabled={testLoading || !testPhone.trim()}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green hover:bg-green/90 text-bg transition-colors disabled:opacity-50 shrink-0">
-            {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} Send
+            {testLoading ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />} {t('flow.send_btn')}
           </button>
         </div>
         {testResult && (
@@ -1031,12 +1051,12 @@ function FlowPanel({ session }) {
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <ShoppingBag size={13} className="text-blue" />
             <div className="flex-1 min-w-0">
-              <span className="text-text font-semibold text-sm">WA Tracked Orders</span>
+              <span className="text-text font-semibold text-sm">{t('flow.wa_orders')}</span>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-textMute text-[10px]">{orders.length} total</span>
+                <span className="text-textMute text-[10px]">{orders.length} {t('flow.total')}</span>
                 {convertedCount > 0 && (
                   <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
-                    {convertedCount} WA attributed
+                    {convertedCount} {t('flow.wa_attributed')}
                   </span>
                 )}
               </div>
@@ -1048,7 +1068,7 @@ function FlowPanel({ session }) {
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
               <ShoppingBag size={18} className="text-textMute/40" />
-              <p className="text-textMute text-xs">No order details yet — new orders will appear here</p>
+              <p className="text-textMute text-xs">{t('flow.no_orders')}</p>
             </div>
           ) : (
             <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
@@ -1096,7 +1116,7 @@ function FlowPanel({ session }) {
                         </div>
                       ))}
                       {o.line_items.length > 3 && (
-                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} more items</p>
+                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} {t('flow.more_items').replace('+{n} ', '')}</p>
                       )}
                     </div>
                   )}
@@ -1111,8 +1131,8 @@ function FlowPanel({ session }) {
       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <FileText size={13} className="text-textDim" />
-          <span className="text-text font-semibold text-sm flex-1">Send History</span>
-          <span className="text-textMute text-xs">{logs.length} records</span>
+          <span className="text-text font-semibold text-sm flex-1">{t('flow.history')}</span>
+          <span className="text-textMute text-xs">{logs.length} {t('flow.records')}</span>
           <button onClick={fetchLogs} disabled={logsLoading}
             className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors disabled:opacity-50">
             <RefreshCw size={11} className={logsLoading ? 'animate-spin' : ''} />
@@ -1131,7 +1151,7 @@ function FlowPanel({ session }) {
             {customerGroups.length === 0 ? (
               <div className="py-10 text-center">
                 <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
-                <p className="text-textMute text-sm">No sends yet</p>
+                <p className="text-textMute text-sm">{t('flow.no_sends')}</p>
               </div>
             ) : customerGroups.map(group => {
               const isOpen = expandedCustomers.has(group.key);
@@ -1155,7 +1175,7 @@ function FlowPanel({ session }) {
                         <span className="text-textMute text-[10px] font-mono">{group.phone}</span>
                         {group.converted && (
                           <span className="text-[10px] bg-greenSoft text-green border border-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                            <ShoppingBag size={8} />Ordered
+                            <ShoppingBag size={8} />{t('flow.ordered')}
                           </span>
                         )}
                       </div>
@@ -1165,7 +1185,7 @@ function FlowPanel({ session }) {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">
-                        {group.sentCount} sent{group.cooldownCount > 0 ? ` · ${group.cooldownCount} skipped` : ''}
+                        {group.sentCount} {t('flow.sent')}{group.cooldownCount > 0 ? ` · ${group.cooldownCount} ${t('flow.skipped_n').replace('{n} ', '')}` : ''}
                       </span>
                       <span className="text-textMute text-[10px]">
                         {new Date(group.firstTs).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -1193,7 +1213,7 @@ function FlowPanel({ session }) {
                               <div className="min-w-0">
                                 {isCooldown ? (
                                   <span className="text-[11px] text-amber flex items-center gap-1">
-                                    <Clock size={10} />Cooldown — duplicate skipped
+                                    <Clock size={10} />{t('flow.cooldown_skip')}
                                   </span>
                                 ) : (
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1202,7 +1222,7 @@ function FlowPanel({ session }) {
                                     </span>
                                     {entry.converted && (
                                       <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
-                                        <ShoppingBag size={8} />sipariş sonrası
+                                        <ShoppingBag size={8} />{t('flow.post_order_lbl')}
                                       </span>
                                     )}
                                     {entry.error && (
@@ -1225,7 +1245,7 @@ function FlowPanel({ session }) {
                             <div className="w-2 h-2 rounded-full bg-green shrink-0" />
                           </div>
                           <span className="text-[11px] text-green font-semibold flex items-center gap-1 pb-0.5">
-                            <ShoppingBag size={11} />Order placed
+                            <ShoppingBag size={11} />{t('flow.order_placed')}
                           </span>
                         </div>
                       )}
@@ -1252,7 +1272,7 @@ function FlowPanel({ session }) {
         </div>
         {optoutsOpen && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-textMute">Customers who reply "stop / opt-out" are added automatically.</p>
+            <p className="text-[10px] text-textMute">{t('flow.optout_sub')}</p>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <UserX size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
@@ -1262,11 +1282,11 @@ function FlowPanel({ session }) {
               </div>
               <button onClick={handleAddOptout} disabled={!optoutPhone.trim()}
                 className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs bg-roseSoft border border-rose/20 text-rose hover:bg-rose/20 transition-colors disabled:opacity-40 shrink-0">
-                <Plus size={12} /> Add
+                <Plus size={12} /> {t('flow.add')}
               </button>
             </div>
             {optouts.length === 0
-              ? <p className="text-textMute text-xs text-center py-3">Empty list</p>
+              ? <p className="text-textMute text-xs text-center py-3">{t('flow.empty_list')}</p>
               : <div className="space-y-1 max-h-36 overflow-y-auto custom-scrollbar">
                   {optouts.map(phone => (
                     <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
@@ -1293,6 +1313,7 @@ function FlowPanel({ session }) {
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export default function Dashboard({ session, onLogout }) {
+  const { t, lang } = useLang();
   const { token, username, brand, tid } = session;
   const qs = `username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
 
@@ -1371,8 +1392,8 @@ export default function Dashboard({ session, onLogout }) {
           if ('Notification' in window && Notification.permission === 'granted') {
             const price = ev.data?.total_price;
             const amt = price ? ` — ₺${parseFloat(price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '';
-            new Notification(`🛍️ New Order${amt}`, {
-              body: ev.data?.customer_name ? `Customer: ${ev.data.customer_name}` : 'A new order was placed',
+            new Notification(`🛍️ ${t('notif.new_order')}${amt}`, {
+              body: ev.data?.customer_name ? `${t('notif.customer')} ${ev.data.customer_name}` : t('notif.order_body'),
               icon: '/favicon.ico',
               tag: 'order',
             });
@@ -1452,7 +1473,7 @@ export default function Dashboard({ session, onLogout }) {
   };
 
   const handleUninstall = async () => {
-    if (!confirm('Pixel will be removed and tracking will stop. Are you sure?')) return;
+    if (!confirm(t('pixel.uninstall_confirm'))) return;
     setInstalling(true);
     try {
       const r = await fetch(`${API_URL}/api/shopify/pixel/uninstall?${qs}`, { method: 'DELETE' });
@@ -1746,26 +1767,27 @@ export default function Dashboard({ session, onLogout }) {
         <div className="flex items-center gap-2 flex-wrap">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${statusBadge}`}>
             {sseStatus === 'connected'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> Live</>
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" /> {t('status.live')}</>
               : sseStatus === 'connecting'
-              ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> Connecting...</>
-              : <><WifiOff size={12} /> Disconnected</>}
+              ? <><span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" /> {t('status.connecting')}</>
+              : <><WifiOff size={12} /> {t('status.disconnected')}</>}
           </div>
           {/* View switcher */}
           <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5">
             <button onClick={() => setActiveView('live')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'live' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <Radio size={11} /> Live
+              <Radio size={11} /> {t('nav.live')}
             </button>
             <button onClick={() => setActiveView('flow')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'flow' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <MessageCircle size={11} /> WA Automation
+              <MessageCircle size={11} /> {t('nav.wa')}
             </button>
           </div>
+          <LangSwitch />
           <ThemeSwitch />
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
-            <LogOut size={12} /> Logout
+            <LogOut size={12} /> {t('nav.logout')}
           </button>
         </div>
       </div>
@@ -1784,19 +1806,19 @@ export default function Dashboard({ session, onLogout }) {
           </div>
           <div>
             <p className={`text-sm font-bold ${pixelStatus?.installed ? 'text-green' : 'text-text'}`}>
-              {pixelStatus?.installed ? 'Storefront Pixel Installed' : 'Storefront Pixel Not Installed'}
+              {pixelStatus?.installed ? t('pixel.installed') : t('pixel.not_installed')}
             </p>
             <p className="text-textMute text-[10px]">
               {pixelStatus?.installed
-                ? `Tracking ID: ${pixelStatus.tracking_id || '—'}`
-                : 'Install the pixel to track visitor activity'}
+                ? `${t('pixel.tracking_id')}: ${pixelStatus.tracking_id || '—'}`
+                : t('pixel.install_prompt')}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {pixelStatus?.detected_via === 'events' ? (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-greenSoft border border-green/20 text-green text-xs font-bold rounded-lg">
-              <CheckCircle size={11} /> Active via Shopify
+              <CheckCircle size={11} /> {t('pixel.active_via_shopify')}
             </span>
           ) : (
             <>
@@ -1806,19 +1828,19 @@ export default function Dashboard({ session, onLogout }) {
                     ${webhookStatus?.registered
                       ? 'bg-greenSoft border-green/20 text-green'
                       : 'bg-blueSoft border-blue/20 text-blue hover:bg-blueSoft/80'}`}>
-                  {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> Installing...</>
-                    : webhookStatus?.registered ? <><CheckCircle size={11} /> Order Tracking Active</>
-                    : <><Zap size={11} /> Set Up Order Tracking</>}
+                  {webhookLoading ? <><RefreshCw size={11} className="animate-spin" /> {t('pixel.installing')}</>
+                    : webhookStatus?.registered ? <><CheckCircle size={11} /> {t('pixel.order_active')}</>
+                    : <><Zap size={11} /> {t('pixel.order_setup')}</>}
                 </button>
               )}
               {pixelStatus?.installed
                 ? <button onClick={handleUninstall} disabled={installing || pixelLoading}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
-                    <Trash2 size={12} /> Remove
+                    <Trash2 size={12} /> {t('pixel.remove')}
                   </button>
                 : <button onClick={handleInstall} disabled={installing || pixelLoading}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
-                    {installing ? <><RefreshCw size={12} className="animate-spin" /> Installing...</> : <><Zap size={12} /> One-Click Install</>}
+                    {installing ? <><RefreshCw size={12} className="animate-spin" /> {t('pixel.installing')}</> : <><Zap size={12} /> {t('pixel.one_click')}</>}
                   </button>
               }
             </>
@@ -1830,11 +1852,11 @@ export default function Dashboard({ session, onLogout }) {
       <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5 w-fit">
         <button onClick={() => setLiveTab('realtime')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'realtime' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-          <Radio size={11} /> Canlı
+          <Radio size={11} /> {t('nav.realtime')}
         </button>
         <button onClick={() => setLiveTab('analytics')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'analytics' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-          <BarChart2 size={11} /> Analiz
+          <BarChart2 size={11} /> {t('nav.analytics')}
         </button>
       </div>
 
@@ -1845,30 +1867,30 @@ export default function Dashboard({ session, onLogout }) {
           {/* SOL — KPIs, Abandoned, Funnel */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label="Events" sub="Page interactions" value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
-                onClick={() => setDrillDown({ title: 'All Events', subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-              <StatCard label="Visitors" sub="Unique sessions" value={uniqueVisitorCount} icon={Users} color="purple"
-                onClick={() => setDrillDown({ title: 'Unique Visitors', subtitle: `${uniqueVisitorCount} visitors · ${visitorProfiles.filter(v => v.isReturning).length} returning`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-              <StatCard label="Members" sub="Logged-in users" value={memberCount} icon={CheckCircle} color="teal"
-                onClick={() => setDrillDown({ title: 'Logged-In Members', subtitle: `${memberCount} members`,
+              <StatCard label={t('stat.events')} sub={t('stat.events_sub')} value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
+                onClick={() => setDrillDown({ title: t('drill.all_events'), subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+              <StatCard label={t('stat.visitors')} sub={t('stat.visitors_sub')} value={uniqueVisitorCount} icon={Users} color="purple"
+                onClick={() => setDrillDown({ title: t('drill.visitors'), subtitle: `${uniqueVisitorCount} ${t('common.visitors')} · ${visitorProfiles.filter(v => v.isReturning).length} ${t('visitors.returning')}`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
+              <StatCard label={t('stat.members')} sub={t('stat.members_sub')} value={memberCount} icon={CheckCircle} color="teal"
+                onClick={() => setDrillDown({ title: t('drill.members'), subtitle: `${memberCount} ${t('stat.members')}`,
                   products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
                   visitors: visitorProfiles.filter(v => v.customer_id) })} />
-              <StatCard label="Add to Cart" sub="Cart events" value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
-                onClick={() => setDrillDown({ title: 'Products Added to Cart', subtitle: `${evStats['add_to_cart'] || 0} cart events`,
+              <StatCard label={t('stat.cart')} sub={t('stat.cart_sub')} value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
+                onClick={() => setDrillDown({ title: t('drill.cart_products'), subtitle: `${evStats['add_to_cart'] || 0} ${t('stat.cart_sub')}`,
                   products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
                   visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-              <StatCard label="Checkout" sub="Started checkout" value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
-                onClick={() => setDrillDown({ title: 'Visitors Who Started Checkout', subtitle: `${evStats['checkout_started'] || 0} checkout events`,
+              <StatCard label={t('stat.checkout')} sub={t('stat.checkout_sub')} value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
+                onClick={() => setDrillDown({ title: t('drill.checkout_visitors'), subtitle: `${evStats['checkout_started'] || 0} ${t('stat.checkout_sub')}`,
                   products: productStats.slice(0, 20),
                   visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-              <StatCard label="Orders" sub="Completed today" value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
-                onClick={() => setDrillDown({ title: 'Completed Orders', subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} orders`,
+              <StatCard label={t('stat.orders')} sub={t('stat.orders_sub')} value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
+                onClick={() => setDrillDown({ title: t('drill.orders'), subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} ${t('stat.orders')}`,
                   products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-              <StatCard label="Today Rev." sub="Revenue tracked" value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
-                onClick={() => setDrillDown({ title: "Revenue", subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
+              <StatCard label={t('stat.revenue')} sub={t('stat.revenue_sub')} value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
+                onClick={() => setDrillDown({ title: t('drill.revenue'), subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
                   products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
-              <StatCard label="Abandoned" sub="Not converted yet" value={abandonedVisitors.length} icon={CreditCard} color="orange"
-                onClick={() => setDrillDown({ title: 'Abandoned Checkouts', subtitle: 'Started checkout, did not complete (15+ min)',
+              <StatCard label={t('stat.abandoned')} sub={t('stat.abandoned_sub')} value={abandonedVisitors.length} icon={CreditCard} color="orange"
+                onClick={() => setDrillDown({ title: t('drill.abandoned'), subtitle: t('drill.abandoned_sub'),
                   products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
                   visitors: abandonedVisitors })} />
             </div>
@@ -1878,7 +1900,7 @@ export default function Dashboard({ session, onLogout }) {
               <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <CreditCard size={15} className="text-amber" />
-                  <span className="text-amber text-sm font-bold">Abandoned Checkouts</span>
+                  <span className="text-amber text-sm font-bold">{t('abandoned.title')}</span>
                   <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full ml-2">
                     {abandonedVisitors.length}
                   </span>
@@ -1896,7 +1918,7 @@ export default function Dashboard({ session, onLogout }) {
                             : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
                           {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
                         </div>
-                        <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs)}</span>
+                        <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs, lang)}</span>
                       </div>
                     );
                   })}
@@ -1912,7 +1934,7 @@ export default function Dashboard({ session, onLogout }) {
           <div className="space-y-4">
             {visitorProfiles.length > 0 && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-                <SectionHead icon={Users} title="Active Visitors" badge={visitorProfiles.length} extra="Click card → see journey" />
+                <SectionHead icon={Users} title={t('visitors.title')} badge={visitorProfiles.length} extra={t('visitors.extra')} />
                 <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
                   {visitorProfiles.slice(0, 18).map(profile => (
                     <VisitorCard key={profile.vid} profile={profile}
@@ -1921,7 +1943,7 @@ export default function Dashboard({ session, onLogout }) {
                   ))}
                 </div>
                 {visitorProfiles.length > 18 && (
-                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 18} more</p>
+                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 18} {t('visitors.more').replace('+{n} ', '')}</p>
                 )}
               </div>
             )}
@@ -1931,7 +1953,7 @@ export default function Dashboard({ session, onLogout }) {
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <div className="flex items-center gap-2">
                   <Activity size={16} className="text-textDim" />
-                  <span className="text-text text-sm font-bold">Live Feed</span>
+                  <span className="text-text text-sm font-bold">{t('feed.title')}</span>
                   {events.length > 0 && (
                     <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length}</span>
                   )}
@@ -1940,7 +1962,7 @@ export default function Dashboard({ session, onLogout }) {
                   <button onClick={() => setPaused(p => !p)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
                       ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
-                    {paused ? '▶ Resume' : '⏸ Pause'}
+                    {paused ? t('feed.resume') : t('feed.pause')}
                   </button>
                   <button onClick={() => setEvents([])}
                     className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
@@ -1956,8 +1978,8 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="overflow-y-auto max-h-[520px] p-3 space-y-2 custom-scrollbar">
                   {events.length === 0
                     ? <div className="py-16 text-center space-y-2">
-                        <p className="text-textMute text-sm font-medium">No events yet</p>
-                        <p className="text-textMute text-xs">Visit your store — activity will appear here in real-time</p>
+                        <p className="text-textMute text-sm font-medium">{t('feed.no_events')}</p>
+                        <p className="text-textMute text-xs">{t('feed.no_events_sub')}</p>
                       </div>
                     : events.map(ev => (
                         <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
@@ -1974,11 +1996,11 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
                   <Radio size={24} className="text-textMute" />
                 </div>
-                <h3 className="text-text font-bold text-base mb-2">How It Works</h3>
+                <h3 className="text-text font-bold text-base mb-2">{t('howto.title')}</h3>
                 <div className="text-textDim text-sm space-y-2 max-w-sm mx-auto text-left">
-                  <p>① Click "One-Click Install" → pixel is installed automatically</p>
-                  <p>② When customers visit your store, activity streams here in real-time</p>
-                  <p>③ Product views, add-to-cart, and checkout events are tracked live</p>
+                  <p>{t('howto.s1')}</p>
+                  <p>{t('howto.s2')}</p>
+                  <p>{t('howto.s3')}</p>
                 </div>
               </div>
             )}
@@ -1998,7 +2020,7 @@ export default function Dashboard({ session, onLogout }) {
               <button onClick={() => setProdOpen(o => !o)}
                 className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
                 <TrendingUp size={13} className="text-purple shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Most Viewed Products</span>
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.products')}</span>
                 {productStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{productStats.length}</span>}
                 {prodOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
               </button>
@@ -2007,7 +2029,7 @@ export default function Dashboard({ session, onLogout }) {
                   ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
                       {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
                     </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No product views yet</p>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_products')}</p>
               )}
             </div>
 
@@ -2016,7 +2038,7 @@ export default function Dashboard({ session, onLogout }) {
               <button onClick={() => setCollOpen(o => !o)}
                 className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
                 <Layers size={13} className="text-teal shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Collections</span>
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.collections')}</span>
                 {collectionStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{collectionStats.length}</span>}
                 {collOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
               </button>
@@ -2035,7 +2057,7 @@ export default function Dashboard({ session, onLogout }) {
                         </div>
                       ))}
                     </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No collection views yet</p>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_collections')}</p>
               )}
             </div>
 
@@ -2044,7 +2066,7 @@ export default function Dashboard({ session, onLogout }) {
               <button onClick={() => setSearchOpen(o => !o)}
                 className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
                 <Search size={13} className="text-textDim shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Live Searches</span>
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.searches')}</span>
                 {searchStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{searchStats.length}</span>}
                 {searchOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
               </button>
@@ -2063,7 +2085,7 @@ export default function Dashboard({ session, onLogout }) {
                         </div>
                       ))}
                     </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">No searches yet</p>
+                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_searches')}</p>
               )}
             </div>
 
@@ -2094,7 +2116,7 @@ export default function Dashboard({ session, onLogout }) {
                 <button onClick={() => setUtmOpen(o => !o)}
                   className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
                   <BarChart2 size={13} className="text-blue shrink-0" />
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">UTM Campaigns</span>
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.utm')}</span>
                   <span className="text-[10px] text-textMute mr-1">{utmStats.length}</span>
                   {utmOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
                 </button>
@@ -2116,15 +2138,15 @@ export default function Dashboard({ session, onLogout }) {
                         <div className="flex items-center gap-4 shrink-0">
                           <div className="text-right">
                             <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
-                            <p className="text-[10px] text-textMute">views</p>
+                            <p className="text-[10px] text-textMute">{t('common.views')}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
-                            <p className="text-[10px] text-textMute">cart</p>
+                            <p className="text-[10px] text-textMute">{t('common.cart')}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
-                            <p className="text-[10px] text-textMute">visitors</p>
+                            <p className="text-[10px] text-textMute">{t('common.visitors')}</p>
                           </div>
                           <ArrowRight size={11} className="text-textMute" />
                         </div>
@@ -2141,7 +2163,7 @@ export default function Dashboard({ session, onLogout }) {
                 <button onClick={() => setPageOpen(o => !o)}
                   className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
                   <Eye size={13} className="text-textDim shrink-0" />
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Page Statistics</span>
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.pages')}</span>
                   <span className="text-[10px] text-textMute mr-1">{pageStats.length}</span>
                   {pageOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
                 </button>
@@ -2157,13 +2179,13 @@ export default function Dashboard({ session, onLogout }) {
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="text-right">
                             <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                            <p className="text-[10px] text-textMute">unique</p>
+                            <p className="text-[10px] text-textMute">{t('common.unique')}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
-                            <p className="text-[10px] text-textMute">views</p>
+                            <p className="text-[10px] text-textMute">{t('common.views')}</p>
                           </div>
-                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(page.lastTs)}</span>
+                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(page.lastTs, lang)}</span>
                         </div>
                       </div>
                     ))}
@@ -2178,7 +2200,7 @@ export default function Dashboard({ session, onLogout }) {
                 <button onClick={() => setNotFoundOpen(o => !o)}
                   className="w-full flex items-center gap-2 px-4 py-3 hover:bg-roseSoft/60 transition-colors">
                   <span className="text-sm font-bold text-rose shrink-0">404</span>
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">Not Found Pages</span>
+                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.not_found')}</span>
                   <span className="text-[10px] bg-roseSoft text-rose px-1.5 py-0.5 rounded-full mr-1">{notFoundStats.length}</span>
                   {notFoundOpen ? <ChevronUp size={13} className="text-rose/60 shrink-0" /> : <ChevronDown size={13} className="text-rose/60 shrink-0" />}
                 </button>
@@ -2191,13 +2213,13 @@ export default function Dashboard({ session, onLogout }) {
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="text-right">
                             <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
-                            <p className="text-[10px] text-textMute">unique</p>
+                            <p className="text-[10px] text-textMute">{t('common.unique')}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
-                            <p className="text-[10px] text-textMute">hits</p>
+                            <p className="text-[10px] text-textMute">{t('common.hits')}</p>
                           </div>
-                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(item.lastTs)}</span>
+                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(item.lastTs, lang)}</span>
                         </div>
                       </div>
                     ))}

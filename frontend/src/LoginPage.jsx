@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Zap, User, Lock, Tag, AlertCircle } from 'lucide-react';
 import logo from './assets/1200 px icon logo.png';
+import { useLang } from './LangContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 
@@ -29,6 +30,7 @@ function Field({ label, icon: Icon, type = 'text', value, onChange, placeholder,
 }
 
 export default function LoginPage({ onLogin }) {
+  const { t } = useLang();
   const [username, setUsername] = useState('');
   const [brand, setBrand] = useState('default');
   const [password, setPassword] = useState('');
@@ -37,7 +39,7 @@ export default function LoginPage({ onLogin }) {
 
   async function handleSubmit() {
     if (!username.trim() || !password.trim()) {
-      setError('Username and password are required');
+      setError(t('login.err.required'));
       return;
     }
     setLoading(true);
@@ -50,12 +52,12 @@ export default function LoginPage({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.detail || data.error || 'Login failed');
+        setError(data.detail || data.error || t('login.err.required'));
         return;
       }
       onLogin({ token: data.token, username: data.username, brand: data.brand, tid: data.tid || '' });
     } catch {
-      setError('Could not connect to server');
+      setError(t('login.err.server'));
     } finally {
       setLoading(false);
     }
@@ -71,7 +73,7 @@ export default function LoginPage({ onLogin }) {
         <div className="text-center mb-8">
           <img src={logo} alt="Shoptimize Live" className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
           <h1 className="text-2xl font-bold text-text">Shoptimize Live</h1>
-          <p className="text-sm text-textMute mt-1">Real-time store activity</p>
+          <p className="text-sm text-textMute mt-1">{t('login.subtitle')}</p>
         </div>
 
         {/* Card */}
@@ -83,17 +85,16 @@ export default function LoginPage({ onLogin }) {
             </div>
           )}
 
-          <Field label="Username" icon={User} value={username} onChange={setUsername}
+          <Field label={t('login.username')} icon={User} value={username} onChange={setUsername}
             placeholder="you@yourstore.com"
-            helpText="Email used during OAuth installation" />
+            helpText={t('login.username_help')} />
 
-          <Field label="Brand" icon={Tag} value={brand} onChange={setBrand}
+          <Field label={t('login.brand')} icon={Tag} value={brand} onChange={setBrand}
             placeholder="default"
-            helpText="Usually 'default'" />
+            helpText={t('login.brand_help')} />
 
-          <Field label="Password" icon={Lock} type="password" value={password}
+          <Field label={t('login.password')} icon={Lock} type="password" value={password}
             onChange={setPassword} onKeyDown={onKey} />
-
 
           <button
             onClick={handleSubmit}
@@ -110,10 +111,10 @@ export default function LoginPage({ onLogin }) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Logging in...
+                {t('login.submitting')}
               </>
             ) : (
-              <><Zap size={15} /> Log In</>
+              <><Zap size={15} /> {t('login.submit')}</>
             )}
           </button>
         </div>
