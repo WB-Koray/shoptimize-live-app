@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Zap, User, Lock, Tag, AlertCircle, ExternalLink, ShoppingBag, MessageCircle } from 'lucide-react';
 import logo from './assets/1200 px icon logo.png';
-import { useLang } from './LangContext';
+import { useLang, LangSwitch } from './LangContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 
@@ -40,7 +40,7 @@ function Divider({ label }) {
 }
 
 export default function LoginPage({ onLogin }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   // Password login
   const [username, setUsername] = useState('');
@@ -114,10 +114,11 @@ export default function LoginPage({ onLogin }) {
     setWaLoading(true);
     setWaStatus('');
     try {
+      const waLang = lang === 'tr' ? 'tr' : 'en_US';
       const res = await fetch(`${API_URL}/api/auth/request-access`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: waPhone.trim() }),
+        body: JSON.stringify({ phone: waPhone.trim(), lang: waLang }),
       });
       if (res.status === 503) { setWaStatus('unavailable'); return; }
       const data = await res.json();
@@ -141,6 +142,11 @@ export default function LoginPage({ onLogin }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-bg">
+      {/* Dil toggle — sağ üst */}
+      <div className="fixed top-4 right-4 z-10">
+        <LangSwitch />
+      </div>
+
       <div className="w-full max-w-md">
 
         {/* Logo */}

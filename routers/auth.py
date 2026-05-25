@@ -399,16 +399,23 @@ def _send_welcome_wa(username: str, brand: str, owner_name: str, owner_phone: st
         logger.warning("[AUTH] WA welcome async başlatılamadı: %s", e)
 
 
+def _phone_lang(phone: str) -> str:
+    """Telefon ülke kodundan dil tahmini: +90 → tr, diğer → en_US."""
+    normalized = phone.lstrip("+")
+    return "tr" if normalized.startswith("90") else "en_US"
+
+
 async def _send_welcome_wa_async_direct(phone: str, name: str, shop_domain: str, dashboard_url: str) -> None:
     try:
         from services.wa_sender import send_wa_template
+        lang = _phone_lang(phone)
         await send_wa_template(
             OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone,
-            name=name or "Değerli üye",
+            name=name or ("Değerli üye" if lang == "tr" else "Dear merchant"),
             product=shop_domain,
             order_number=dashboard_url,
             template_name="shoptimize_kurulum",
-            language="tr",
+            language=lang,
         )
     except Exception as e:
         logger.warning("[AUTH] WA welcome gönderilemedi: %s", e)
@@ -453,6 +460,7 @@ async def shopify_reauth(
 
 class AccessRequest(BaseModel):
     phone: str
+    lang: str = "tr"  # "tr" veya "en_US"
 
 
 @router.post("/api/auth/request-access")
@@ -500,12 +508,17 @@ async def request_access(body: AccessRequest):
         + (f"&tid={tid}" if tid else "")
     )
 
+    # Dil: istekten al, yoksa telefon ülke kodundan tahmin et
+    lang = body.lang if body.lang in ("tr", "en_US", "en") else _phone_lang(phone_e164)
+    if lang == "en":
+        lang = "en_US"
+
     from services.wa_sender import send_wa_template
     result = await send_wa_template(
         OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone_e164,
         name=access_url,  # {{1}} = URL
         template_name="dashboard_erisim",
-        language="tr",
+        language=lang,
     )
 
     if result.get("ok"):
