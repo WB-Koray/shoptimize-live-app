@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap, User, Lock, Tag, AlertCircle, ExternalLink, ShoppingBag, MessageCircle } from 'lucide-react';
+import { Zap, User, Lock, AlertCircle, ExternalLink, ShoppingBag, MessageCircle } from 'lucide-react';
 import logo from './assets/1200 px icon logo.png';
 import { useLang, LangSwitch } from './LangContext';
 
@@ -44,7 +44,11 @@ export default function LoginPage({ onLogin }) {
 
   // Password login
   const [username, setUsername] = useState('');
-  const [brand, setBrand] = useState('default');
+  // Brand: URL'den oku (multi-brand için ?brand=xxx), varsayılan 'default' — formda gizli
+  const [brand, setBrand] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('brand') || 'default';
+  });
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -187,8 +191,6 @@ export default function LoginPage({ onLogin }) {
           {/* Şifre ile giriş */}
           <Field label={t('login.username')} icon={User} value={username} onChange={setUsername}
             placeholder="you@yourstore.com" helpText={t('login.username_help')} />
-          <Field label={t('login.brand')} icon={Tag} value={brand} onChange={setBrand}
-            placeholder="default" helpText={t('login.brand_help')} />
           <Field label={t('login.password')} icon={Lock} type="password" value={password}
             onChange={setPassword} onKeyDown={onKey} />
 
