@@ -42,16 +42,18 @@ def _build_params(template_name: str, name: str = "", product: str = "", order_n
             {"type": "text", "text": order_number or "-"},
         ]
     if template_name == "shoptimize_kurulum":
-        # {{1}} isim, {{2}} mağaza domain, {{3}} dashboard URL
+        # Template: Merhaba {{isim}}, ... Mağaza: {{magaza}} ... {{link}}
+        # Named vars → positional array: [isim, magaza, link]
         return [
-            {"type": "text", "text": name or "Değerli üye"},
-            {"type": "text", "text": product or ""},
-            {"type": "text", "text": order_number or ""},
+            {"type": "text", "text": name or "Değerli üye"},   # {{isim}}
+            {"type": "text", "text": product or ""},            # {{magaza}}
+            {"type": "text", "text": order_number or ""},       # {{link}}
         ]
     if template_name == "dashboard_erisim":
-        # {{1}} = dashboard URL
+        # Template: Shoptimize Live giriş linkiniz aşağıda:\n\n{{link}}\n\n...
+        # Named var → positional array: [link]
         return [
-            {"type": "text", "text": name or ""},
+            {"type": "text", "text": name or ""},              # {{link}}
         ]
     # Bilinmeyen şablonlar için parametresiz gönder
     return []
