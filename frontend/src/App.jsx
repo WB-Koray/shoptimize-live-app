@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
+import AdminPanel from './AdminPanel';
 
 function readSession() {
   try {
@@ -12,9 +13,23 @@ function readSession() {
 
 export default function App() {
   const [session, setSession] = useState(readSession);
+  const [adminToken, setAdminToken] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Admin panel — ?admin_token=XXX
+    const at = params.get('admin_token');
+    if (at) {
+      setAdminToken(at);
+      // Temizle
+      const url = new URL(window.location.href);
+      url.searchParams.delete('admin_token');
+      window.history.replaceState({}, '', url.toString());
+      return;
+    }
+
+    // Auto-login from OAuth redirect
     const autoToken = params.get('auto_token');
     if (!autoToken) return;
 
@@ -41,6 +56,11 @@ export default function App() {
   function handleLogout() {
     localStorage.removeItem('spt_session');
     setSession(null);
+  }
+
+  // Admin panel
+  if (adminToken) {
+    return <AdminPanel adminToken={adminToken} onExit={() => setAdminToken(null)} />;
   }
 
   if (session) {

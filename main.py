@@ -18,6 +18,7 @@ from routers import auth
 from routers import gdpr
 from routers import billing
 from routers import flow
+from routers import admin
 
 
 async def _abandoned_checkout_worker():
@@ -173,6 +174,7 @@ app.include_router(auth.router)
 app.include_router(gdpr.router)
 app.include_router(billing.router)
 app.include_router(flow.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
