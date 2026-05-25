@@ -13,6 +13,8 @@ const translations = {
     'login.submitting':     'Logging in...',
     'login.err.required':   'Username and password are required',
     'login.err.server':     'Could not connect to server',
+    'login.err.billing':    'Subscription required to access dashboard',
+    'login.billing_activate': 'Activate your subscription →',
 
     // Connection status
     'status.live':          'Live',
@@ -236,6 +238,8 @@ const translations = {
     'login.submitting':     'Giriş yapılıyor...',
     'login.err.required':   'Kullanıcı adı ve şifre gereklidir',
     'login.err.server':     'Sunucuya bağlanılamadı',
+    'login.err.billing':    'Dashboard erişimi için abonelik gereklidir',
+    'login.billing_activate': 'Aboneliği aktive et →',
 
     // Bağlantı durumu
     'status.live':          'Canlı',

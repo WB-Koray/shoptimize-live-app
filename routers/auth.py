@@ -29,6 +29,8 @@ REDIRECT_URI = f"{APP_URL}/auth/shopify/callback"
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
 SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders"
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() == "true"
+PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 
 # State token store — in-memory, TTL 10 dakika
 _state_store: dict[str, dict] = {}
@@ -51,6 +53,53 @@ def _verify_state(state: str) -> Optional[dict]:
     if time.time() - data["ts"] > 600:  # 10 dakika TTL
         return None
     return data
+
+
+def _check_billing(username: str, brand: str) -> None:
+    """
+    Billing durumunu doğrula. Sorun varsa HTTPException(402) fırlat.
+    BILLING_ENABLED=false ise her zaman geç (dev/self-hosted mod).
+    """
+    if not BILLING_ENABLED:
+        return
+
+    billing_status = get_setting(username, brand, "shopify", "billing_status", "")
+
+    # Kayıt yoksa → izin ver (doğrudan kurulum / self-hosted)
+    if not billing_status:
+        return
+
+    # Aktif abonelik → izin ver
+    if billing_status == "active":
+        return
+
+    shop = get_setting(username, brand, "shopify", "shop_domain", "")
+    retry_url = f"{APP_URL}/auth/shopify/install?shop={shop}" if shop else APP_URL
+
+    # Reddedilmiş → erişimi kapat
+    if billing_status == "declined":
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "billing_declined",
+                "message": "Abonelik reddedildi. Shoptimize Live'ı kullanmak için ödemeyi onaylamanız gerekiyor.",
+                "retry_url": retry_url,
+            },
+        )
+
+    # Beklemede / iptal / dondurulmuş → deneme süresi içindeyse izin ver
+    if billing_status in ("pending", "cancelled", "frozen"):
+        installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+        if installed_at and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400):
+            return  # Deneme süresi dolmamış
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "trial_expired",
+                "message": f"Deneme süreniz doldu. Shoptimize Live'ı kullanmaya devam etmek için aboneliğinizi aktive edin.",
+                "retry_url": retry_url,
+            },
+        )
 
 
 def _verify_hmac(params: dict, hmac_value: str) -> bool:
@@ -196,8 +245,12 @@ async def shopify_callback(
             wh_token = _secrets.token_hex(16)
             set_connection_settings(username, brand, "shopify", {"webhook_token": wh_token})
 
-        for topic, slug in [("orders/create", "orders-create"), ("checkouts/create", "checkouts-create")]:
-            callback_url = f"{APP_URL}/api/shopify/webhook/{slug}?token={wh_token}&username={username}&brand={brand}"
+        webhook_topics = [
+            ("orders/create",    f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
+            ("checkouts/create", f"{APP_URL}/api/shopify/webhook/checkouts-create?token={wh_token}&username={username}&brand={brand}"),
+            ("app/uninstalled",  f"{APP_URL}/webhooks/app/uninstalled"),
+        ]
+        for topic, callback_url in webhook_topics:
             requests.post(
                 _shopify_url(shop, "webhooks.json"),
                 json={"webhook": {"topic": topic, "address": callback_url, "format": "json"}},
@@ -239,6 +292,7 @@ async def create_dashboard_token(body: TokenRequest):
         raise HTTPException(500, "DASHBOARD_PASSWORD ayarlanmamış")
     if body.password != DASHBOARD_PASSWORD:
         raise HTTPException(401, "Geçersiz şifre")
+    _check_billing(body.username, body.brand)
     from services.auth import create_access_token
     token = create_access_token(body.username, body.brand)
     tid = get_setting(body.username, body.brand, "shopify", "pixel_tracking_id", "")

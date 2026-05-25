@@ -63,7 +63,44 @@ async def customers_redact(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# 3. Mağaza verisi silme
+# 3. Uygulama kaldırıldı
+#    Merchant uygulamayı silince anında Shopify tetikler.
+#    billing_status'u "uninstalled" yap, Redis verisini temizle.
+# ---------------------------------------------------------------------------
+@router.post("/app/uninstalled")
+async def app_uninstalled(request: Request):
+    body = await _read_and_verify(request)
+    logger.info("[GDPR] app/uninstalled: %s", body[:300].decode(errors="replace"))
+
+    try:
+        payload = json.loads(body)
+        shop_domain = payload.get("myshopify_domain", "")
+        if shop_domain:
+            from services.db import get_all_shopify_connections, set_connection_settings
+            from services.redis_store import store
+            for conn in get_all_shopify_connections():
+                settings = conn.get("connection", {}).get("settings", {})
+                if settings.get("shop_domain") == shop_domain:
+                    u = conn["username"]
+                    b = conn["brand"]
+                    # Billing'i iptal et
+                    set_connection_settings(u, b, "shopify", {
+                        "billing_status": "uninstalled",
+                        "admin_api_token": "",  # token artık geçersiz
+                    })
+                    # Redis event ve visitor verilerini temizle
+                    tid = settings.get("pixel_tracking_id", "")
+                    if tid:
+                        await store.delete_tid_events(tid)
+                        logger.info("[GDPR] app/uninstalled: TID=%s temizlendi (shop=%s)", tid, shop_domain)
+    except Exception as e:
+        logger.warning("[GDPR] app/uninstalled işleme hatası (200 dönülüyor): %s", e)
+
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# 4. Mağaza verisi silme
 #    Uygulama kaldırıldıktan 48 saat sonra Shopify tetikler.
 #    Redis'te o mağazanın TID'ine ait event'leri sil.
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap, User, Lock, Tag, AlertCircle } from 'lucide-react';
+import { Zap, User, Lock, Tag, AlertCircle, ExternalLink } from 'lucide-react';
 import logo from './assets/1200 px icon logo.png';
 import { useLang } from './LangContext';
 
@@ -36,6 +36,7 @@ export default function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [billingError, setBillingError] = useState(null); // { message, retry_url }
 
   async function handleSubmit() {
     if (!username.trim() || !password.trim()) {
@@ -44,6 +45,7 @@ export default function LoginPage({ onLogin }) {
     }
     setLoading(true);
     setError('');
+    setBillingError(null);
     try {
       const res = await fetch(`${API_URL}/api/auth/token`, {
         method: 'POST',
@@ -51,6 +53,17 @@ export default function LoginPage({ onLogin }) {
         body: JSON.stringify({ username: username.trim(), brand: brand.trim() || 'default', password }),
       });
       const data = await res.json();
+
+      // Billing gerektiriyor (402)
+      if (res.status === 402) {
+        const detail = data.detail || {};
+        setBillingError({
+          message: detail.message || t('login.err.billing'),
+          retry_url: detail.retry_url || '',
+        });
+        return;
+      }
+
       if (!res.ok || !data.ok) {
         setError(data.detail || data.error || t('login.err.required'));
         return;
@@ -78,10 +91,32 @@ export default function LoginPage({ onLogin }) {
 
         {/* Card */}
         <div className="bg-surface border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+          {/* Genel hata */}
           {error && (
             <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 text-sm text-rose">
               <AlertCircle size={15} className="shrink-0" />
               {error}
+            </div>
+          )}
+
+          {/* Billing hatası */}
+          {billingError && (
+            <div className="bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 space-y-2">
+              <div className="flex items-start gap-2 text-sm text-rose">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{billingError.message}</span>
+              </div>
+              {billingError.retry_url && (
+                <a
+                  href={billingError.retry_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-rose underline underline-offset-2 hover:opacity-80 transition-opacity"
+                >
+                  <ExternalLink size={12} />
+                  {t('login.billing_activate')}
+                </a>
+              )}
             </div>
           )}
 

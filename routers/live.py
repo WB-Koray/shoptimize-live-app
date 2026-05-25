@@ -360,18 +360,25 @@ async def receive_event(request: Request):
     if _is_bot(ua):
         return JSONResponse({"ok": True, "skipped": "bot"})
 
-    vid = str(body.get("vid", ""))[:32]
-    event_type = str(body.get("event_type", ""))[:64]
-    url = str(body.get("url", ""))[:512]
-    if await store.is_duplicate(tid, vid, event_type, url):
-        return JSONResponse({"ok": True, "skipped": "duplicate"})
-
+    # IP adresini erken çek (rate limiting ve event kaydı için)
     raw_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
     if not raw_ip:
         try:
             raw_ip = request.client.host if request.client else ""
         except Exception:
             raw_ip = ""
+
+    # Rate limiting — TID başına 500/dk, IP başına 200/dk
+    if await store.check_rate_limit(f"rl:tid:{tid}", 500, 60):
+        return JSONResponse({"ok": False, "error": "rate_limited"}, status_code=429)
+    if raw_ip and await store.check_rate_limit(f"rl:ip:{raw_ip}", 200, 60):
+        return JSONResponse({"ok": False, "error": "rate_limited"}, status_code=429)
+
+    vid = str(body.get("vid", ""))[:32]
+    event_type = str(body.get("event_type", ""))[:64]
+    url = str(body.get("url", ""))[:512]
+    if await store.is_duplicate(tid, vid, event_type, url):
+        return JSONResponse({"ok": True, "skipped": "duplicate"})
 
     event = {
         "tid": tid,
@@ -380,9 +387,9 @@ async def receive_event(request: Request):
         "url": url,
         "referrer": str(body.get("referrer", ""))[:256],
         "ts": int(body.get("ts", time.time() * 1000)),
-        "ua": str(body.get("ua", ""))[:512],
+        "ua": ua,
         "sw": int(body.get("sw", 0)),
-        "ip": raw_ip[:64],
+        "ip": raw_ip[:64] if raw_ip else "",
         "utm": body.get("utm") if isinstance(body.get("utm"), dict) else {},
         "customer_id": str(body.get("customer_id", ""))[:64],
         "data": body.get("data") if isinstance(body.get("data"), dict) else {},

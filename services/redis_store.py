@@ -51,6 +51,13 @@ class RedisStore:
         if self._redis:
             await self._redis.aclose()
 
+    async def check_rate_limit(self, key: str, limit: int, window_sec: int = 60) -> bool:
+        """Sabit pencere rate limiter. Limit aşıldıysa True döner."""
+        count = await self._redis.incr(key)
+        if count == 1:
+            await self._redis.expire(key, window_sec)
+        return count > limit
+
     async def is_duplicate(self, tid: str, vid: str, event_type: str, url: str, window_sec: int = 10) -> bool:
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
         key = f"dedup:{tid}:{vid}:{event_type}:{url_hash}"
