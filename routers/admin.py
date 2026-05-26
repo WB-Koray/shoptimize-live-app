@@ -10,7 +10,7 @@ import time
 
 from fastapi import APIRouter, HTTPException, Query
 
-from services.db import get_all_shopify_connections
+from services.db import get_all_shopify_connections, set_connection_settings
 from services.redis_store import store
 
 logger = logging.getLogger(__name__)
@@ -105,3 +105,32 @@ async def list_merchants(admin_token: str = Query(...)):
             "uninstalled": sum(1 for m in result if m["billing_status"] == "uninstalled"),
         },
     }
+
+
+@router.post("/set-shopify-token")
+async def set_shopify_token(
+    request_data: dict,
+    admin_token: str = Query(...),
+):
+    """
+    Shopify admin_api_token'ı doğrudan DB'ye yazar.
+    Kullanım: POST /api/admin/set-shopify-token?admin_token=XXX
+    Body: {"username": "...", "brand": "default", "token": "shpat_...", "shop_domain": "xxx.myshopify.com"}
+    """
+    _require_admin(admin_token)
+
+    username   = str(request_data.get("username", "")).strip()
+    brand      = str(request_data.get("brand", "default")).strip() or "default"
+    token      = str(request_data.get("token", "")).strip()
+    shop_domain = str(request_data.get("shop_domain", "")).strip()
+
+    if not username or not token:
+        raise HTTPException(400, "username ve token zorunlu")
+
+    updates: dict = {"admin_api_token": token}
+    if shop_domain:
+        updates["shop_domain"] = shop_domain
+
+    set_connection_settings(username, brand, "shopify", updates)
+    logger.info("[ADMIN] set-shopify-token: username=%s brand=%s shop=%s", username, brand, shop_domain)
+    return {"ok": True, "username": username, "brand": brand, "token_set": True}
