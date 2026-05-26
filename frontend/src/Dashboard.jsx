@@ -762,7 +762,7 @@ function OrderJourneyModal({ orderId, session, onClose }) {
                 </p>
               </div>
             )}
-            {daysToConversion != null && (
+            {daysToConv != null && (
               <div className="text-center">
                 <p className="text-[10px] text-textMute">{t('ojrn.days_conv')}</p>
                 <p className="text-xs font-bold text-green tabular-nums">{daysToConv}d</p>
