@@ -306,6 +306,14 @@ const translations = {
     'flow.optout_sub':      'Customers who reply "stop / opt-out" are added automatically.',
     'flow.add':             'Add',
     'flow.empty_list':      'Empty list',
+    'flow.roi_title':       'WA Revenue Attribution',
+    'flow.roi_subtitle':    'Orders linked to a WhatsApp message in the last {days} days',
+    'flow.roi_orders':      'WA Orders',
+    'flow.roi_revenue':     'WA Revenue',
+    'flow.roi_rate':        'Attribution Rate',
+    'flow.roi_days':        'days',
+    'flow.roi_empty':       'No WA-attributed orders yet',
+    'flow.wa_sent':         'WA Sent',
   },
 
   tr: {
@@ -613,6 +621,14 @@ const translations = {
     'flow.optout_sub':      '"stop / opt-out" yazan müşteriler otomatik eklenir.',
     'flow.add':             'Ekle',
     'flow.empty_list':      'Boş liste',
+    'flow.roi_title':       'WA Ciro Atıfı',
+    'flow.roi_subtitle':    'Son {days} günde WA mesajından gelen siparişler',
+    'flow.roi_orders':      'WA Siparişi',
+    'flow.roi_revenue':     'WA Cirosu',
+    'flow.roi_rate':        'Atıf Oranı',
+    'flow.roi_days':        'gün',
+    'flow.roi_empty':       'Henüz WA atıflı sipariş yok',
+    'flow.wa_sent':         'WA Gönderildi',
   },
 };
 

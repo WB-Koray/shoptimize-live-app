@@ -975,6 +975,8 @@ async def shopify_orders_webhook(
         _items = []
         for _it in (order.get("line_items") or [])[:5]:
             _items.append({"title": _it.get("title",""), "quantity": _it.get("quantity",1), "price": str(_it.get("price","0"))})
+        # WA attribution — was a WA message sent for this checkout?
+        wa_attributed = await store.is_wa_sent(checkout_token)
         await store.save_converted_order(username, brand, {
             "order_id":      str(order.get("id", "")),
             "order_number":  str(order.get("order_number") or order.get("name") or ""),
@@ -986,6 +988,7 @@ async def shopify_orders_webhook(
             "line_items":    _items,
             "channel":       channel,
             "vid":           co_data.get("vid", ""),
+            "wa_attributed": wa_attributed,
             "ts":            int(time.time() * 1000),
         })
 

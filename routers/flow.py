@@ -191,6 +191,18 @@ async def get_converted_orders(
     return {"ok": True, "orders": orders}
 
 
+@router.get("/api/flow/roi")
+async def get_wa_roi(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    days: int = Query(7),
+    current_user: dict = Depends(get_current_user),
+):
+    """WA → Sipariş ROI zinciri: son N günde WA attribution istatistikleri."""
+    stats = await store.get_wa_roi_stats(username, brand, days=min(max(1, days), 90))
+    return {"ok": True, **stats}
+
+
 # ── Opt-out yönetimi ─────────────────────────────────────────────────────────
 
 @router.get("/api/flow/optouts")

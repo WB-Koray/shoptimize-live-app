@@ -1347,6 +1347,10 @@ function FlowPanel({ session }) {
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [journeyOrderId, setJourneyOrderId] = useState(null);
 
+  const [roi, setRoi]           = useState(null);
+  const [roiDays, setRoiDays]   = useState(7);
+  const [roiOpen, setRoiOpen]   = useState(true);
+
   const [optouts, setOptouts]         = useState([]);
   const [optoutsOpen, setOptoutsOpen] = useState(false);
   const [optoutPhone, setOptoutPhone] = useState('');
@@ -1398,6 +1402,14 @@ function FlowPanel({ session }) {
     } catch { /* ignore */ }
   }, [username, brand]);
 
+  const fetchRoi = useCallback(async (days = roiDays) => {
+    try {
+      const r = await fetch(`${base}/api/flow/roi${qp}&days=${days}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setRoi(d);
+    } catch { /* ignore */ }
+  }, [username, brand, roiDays]);
+
   const fetchOptouts = useCallback(async () => {
     try {
       const r = await fetch(`${base}/api/flow/optouts`, { headers: authH });
@@ -1406,7 +1418,7 @@ function FlowPanel({ session }) {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchSettings(); fetchLogs(); fetchOrders(); fetchOptouts(); }, [username, brand]);
+  useEffect(() => { fetchSettings(); fetchLogs(); fetchOrders(); fetchOptouts(); fetchRoi(); }, [username, brand]);
 
   async function handleSave() {
     setSaving(true); setSaved(false); setSaveErr('');
@@ -1539,9 +1551,14 @@ function FlowPanel({ session }) {
             <p className="text-lg font-bold text-emerald-500">{convertedCount}</p>
             <p className="text-textMute text-[10px]">{t('flow.wa_attr')}</p>
           </div>
-          <div className="bg-surface border border-border rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-purple">{sentCount ? `${Math.round(convertedCount / sentCount * 100)}%` : '—'}</p>
-            <p className="text-textMute text-[10px]">{t('flow.wa_rate')}</p>
+          <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-purple/40 transition-colors"
+            onClick={() => { setRoiOpen(o => !o); }}>
+            <p className="text-lg font-bold text-purple">
+              {roi?.wa_revenue != null
+                ? `${roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 0 })} ${roi.currency || 'TRY'}`
+                : '—'}
+            </p>
+            <p className="text-textMute text-[10px]">{t('flow.roi_revenue')} {roiOpen ? '▲' : '▼'}</p>
           </div>
         </div>
       )}
@@ -1808,9 +1825,9 @@ function FlowPanel({ session }) {
                           #{o.order_number}
                         </span>
                       )}
-                      {waAttributedLast4.has(o.phone?.slice(-4)) && (
-                        <span className="text-[10px] bg-greenSoft text-green border border-green/30 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <MessageCircle size={8} />WA ✓
+                      {o.wa_attributed && (
+                        <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          <MessageCircle size={8} /> WA ✓
                         </span>
                       )}
                       {o.channel && o.channel !== 'Direct' && (
@@ -1856,6 +1873,91 @@ function FlowPanel({ session }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* WA ROI Panel */}
+      {roiOpen && (
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <TrendingUp size={13} className="text-purple" />
+            <div className="flex-1 min-w-0">
+              <span className="text-text font-semibold text-sm">{t('flow.roi_title')}</span>
+              <p className="text-textMute text-[10px] mt-0.5">
+                {t('flow.roi_subtitle').replace('{days}', roiDays)}
+              </p>
+            </div>
+            {/* Days selector */}
+            <div className="flex items-center gap-1 mr-1">
+              {[7, 14, 30].map(d => (
+                <button key={d}
+                  onClick={() => { setRoiDays(d); fetchRoi(d); }}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors ${roiDays === d ? 'bg-purple text-bg' : 'bg-surfaceAlt text-textMute hover:text-text border border-border'}`}>
+                  {d}{t('flow.roi_days')}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => fetchRoi(roiDays)}
+              className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+              <RefreshCw size={11} />
+            </button>
+          </div>
+
+          {(!roi || roi.wa_attributed_count === 0) ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
+              <MessageCircle size={18} className="text-textMute/30" />
+              <p className="text-textMute text-xs">{t('flow.roi_empty')}</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {/* ROI Stats Row */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                  <p className="text-base font-bold text-purple">{roi.wa_attributed_count}</p>
+                  <p className="text-textMute text-[10px]">{t('flow.roi_orders')}</p>
+                </div>
+                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                  <p className="text-base font-bold text-green">
+                    {roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {roi.currency}
+                  </p>
+                  <p className="text-textMute text-[10px]">{t('flow.roi_revenue')}</p>
+                </div>
+                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                  <p className="text-base font-bold text-blue">
+                    {roi.total_orders > 0 ? `${Math.round(roi.wa_attributed_count / roi.total_orders * 100)}%` : '—'}
+                  </p>
+                  <p className="text-textMute text-[10px]">{t('flow.roi_rate')}</p>
+                </div>
+              </div>
+
+              {/* WA attributed orders list */}
+              {roi.wa_orders?.length > 0 && (
+                <div className="space-y-1.5">
+                  {roi.wa_orders.map((o, i) => (
+                    <div key={o.order_id || i} className="flex items-center gap-2 px-3 py-2 bg-surfaceAlt rounded-xl border border-border">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full shrink-0">
+                          #{o.order_number}
+                        </span>
+                        <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                          <MessageCircle size={8} /> WA ✓
+                        </span>
+                        {o.customer_name && (
+                          <span className="text-xs text-text truncate">{o.customer_name}</span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-bold text-text tabular-nums">
+                          {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency}
+                        </p>
+                        <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

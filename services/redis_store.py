@@ -323,6 +323,26 @@ class RedisStore:
                 pass
         return result
 
+    async def get_wa_roi_stats(self, username: str, brand: str, days: int = 7) -> dict:
+        """WA attribution ROI istatistiklerini döner: son N günde WA'dan gelen siparişler ve ciro."""
+        import time as _time
+        all_orders = await self.get_converted_orders(username, brand, limit=200)
+        cutoff_ms = (_time.time() - days * 86400) * 1000
+        recent_orders = [o for o in all_orders if o.get("ts", 0) >= cutoff_ms]
+        wa_orders = [o for o in recent_orders if o.get("wa_attributed")]
+        total_wa_revenue = sum(float(o.get("total_price", 0) or 0) for o in wa_orders)
+        total_revenue = sum(float(o.get("total_price", 0) or 0) for o in recent_orders)
+        currency = wa_orders[0]["currency"] if wa_orders else (recent_orders[0]["currency"] if recent_orders else "TRY")
+        return {
+            "days": days,
+            "total_orders": len(recent_orders),
+            "wa_attributed_count": len(wa_orders),
+            "total_revenue": round(total_revenue, 2),
+            "wa_revenue": round(total_wa_revenue, 2),
+            "currency": currency,
+            "wa_orders": wa_orders[:10],
+        }
+
     # ── GDPR / cleanup ──────────────────────────────────────────────────────────
 
     async def delete_tid_events(self, tid: str) -> None:
