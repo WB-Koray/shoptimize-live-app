@@ -58,6 +58,24 @@ const SRC_COLORS = {
   'Other':    'text-textDim',
 };
 
+// Bilinen Türk fiyat karşılaştırma / marketplace kaynakları
+const KNOWN_REFERRER_COLORS = {
+  'akakce.com':       'text-amber',
+  'n11.com':          'text-amber',
+  'hepsiburada.com':  'text-amber',
+  'trendyol.com':     'text-amber',
+  'gittigidiyor.com': 'text-amber',
+  'cimri.com':        'text-amber',
+  'incehesap.com':    'text-amber',
+  'fiyatbul.com':     'text-amber',
+  'idefix.com':       'text-amber',
+  'pazarama.com':     'text-amber',
+};
+
+function srcColor(source) {
+  return SRC_COLORS[source] || KNOWN_REFERRER_COLORS[source] || 'text-purple';
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtTime(ts) {
@@ -89,7 +107,7 @@ function parseDevice(ua = '', sw = 0) {
 function parseReferrer(ref = '') {
   if (!ref) return 'Direct';
   try {
-    const h = new URL(ref).hostname.toLowerCase();
+    const h = new URL(ref).hostname.toLowerCase().replace(/^www\./, '');
     if (/google\.|bing\.|yahoo\.|yandex\./.test(h)) return 'Search';
     if (/facebook\.com|fb\.com/.test(h)) return 'Facebook';
     if (/instagram\.com/.test(h)) return 'Instagram';
@@ -97,7 +115,9 @@ function parseReferrer(ref = '') {
     if (/twitter\.com|t\.co|x\.com/.test(h)) return 'Twitter/X';
     if (/youtube\.com/.test(h)) return 'YouTube';
     if (/pinterest\.com/.test(h)) return 'Pinterest';
-    return 'Other';
+    // Bilinen sosyal/arama dışı kaynaklarda gerçek domain adını döndür
+    // (akakce.com, n11.com, hepsiburada.com, vs.)
+    return h;
   } catch { return 'Other'; }
 }
 
@@ -335,7 +355,7 @@ function TrafficTable({ traffic, onSourceClick }) {
         {traffic.map(({ source, count }) => (
           <div key={source} onClick={() => onSourceClick?.(source)}
             className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
-            <span className={`text-xs font-bold w-24 shrink-0 ${SRC_COLORS[source] || 'text-textDim'}`}>{source}</span>
+            <span className={`text-xs font-bold w-24 shrink-0 truncate ${srcColor(source)}`} title={source}>{source}</span>
             <div className="flex-1 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
                 style={{ width: `${(count / max) * 100}%` }} />
@@ -2137,12 +2157,19 @@ export default function Dashboard({ session, onLogout }) {
                   <div className="divide-y divide-border/60 border-t border-border/60">
                     {utmStats.map(camp => (
                       <div key={camp.campaign}
-                        onClick={() => setDrillDown({
-                          title: `Campaign: ${camp.campaign}`,
-                          subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${camp.vids.size} visitors · ${camp.views} views`,
-                          products: camp.products,
-                          visitors: visitorProfiles.filter(v => camp.vids.has(v.vid)),
-                        })}
+                        onClick={() => {
+                          // Set.has() yerine UTM campaign adıyla direkt eşleştir — daha güvenilir
+                          const campVisitors = visitorProfiles.filter(
+                            v => (v.utm?.utm_campaign === camp.campaign) ||
+                                 Array.from(camp.vids).includes(v.vid)
+                          );
+                          setDrillDown({
+                            title: `Campaign: ${camp.campaign}`,
+                            subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${campVisitors.length} visitors · ${camp.views} views`,
+                            products: camp.products,
+                            visitors: campVisitors,
+                          });
+                        }}
                         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-text font-semibold truncate">{camp.campaign}</p>
