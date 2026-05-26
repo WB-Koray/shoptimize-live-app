@@ -7,8 +7,17 @@ function readSession() {
   try {
     return JSON.parse(localStorage.getItem('spt_session') || 'null');
   } catch {
+    // localStorage erişilemez (iframe, 3rd-party cookie engeli)
     return null;
   }
+}
+
+function saveSession(data) {
+  try { localStorage.setItem('spt_session', JSON.stringify(data)); } catch { /* ignored */ }
+}
+
+function clearSession() {
+  try { localStorage.removeItem('spt_session'); } catch { /* ignored */ }
 }
 
 export default function App() {
@@ -39,7 +48,7 @@ export default function App() {
       brand: params.get('b') || 'default',
       tid: params.get('tid') || '',
     };
-    localStorage.setItem('spt_session', JSON.stringify(newSession));
+    saveSession(newSession);
     setSession(newSession);
 
     // URL'den token parametrelerini temizle
@@ -49,12 +58,12 @@ export default function App() {
   }, []);
 
   function handleLogin(data) {
-    localStorage.setItem('spt_session', JSON.stringify(data));
+    saveSession(data);
     setSession(data);
   }
 
   function handleLogout() {
-    localStorage.removeItem('spt_session');
+    clearSession();
     setSession(null);
   }
 

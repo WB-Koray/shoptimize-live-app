@@ -661,7 +661,9 @@ query OrderJourney($id: ID!) {
     id
     name
     createdAt
+    sourceName
     totalPriceSet { shopMoney { amount currencyCode } }
+    channelInformation { channelDefinition { channelName } }
     customerJourneySummary {
       customerOrderIndex
       daysToConversion

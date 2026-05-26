@@ -710,14 +710,17 @@ function OrderJourneyModal({ orderId, session, onClose }) {
 
   if (!orderId) return null;
 
-  const journey   = data?.customerJourneySummary;
+  const journey    = data?.customerJourneySummary;
   // Shopify returns either `nodes` (new) or `edges[].node` (old) depending on API version
-  const moments   = journey?.moments?.nodes
+  const moments    = journey?.moments?.nodes
     || (journey?.moments?.edges || []).map(e => e.node).filter(Boolean)
     || [];
-  const firstVisit = journey?.firstVisit;
-  const lastVisit  = journey?.lastVisit;
-  const daysToConv = journey?.daysToConversion;
+  const firstVisit  = journey?.firstVisit;
+  const lastVisit   = journey?.lastVisit;
+  const daysToConv  = journey?.daysToConversion;
+  // Order source info (shown even when no moments)
+  const sourceName  = data?.sourceName || '';
+  const channelName = data?.channelInformation?.channelDefinition?.channelName || '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -788,19 +791,30 @@ function OrderJourneyModal({ orderId, session, onClose }) {
             </div>
           )}
           {!loading && !err && moments.length === 0 && (
-            <div className="py-12 text-center space-y-2 px-4">
-              <Globe size={20} className="text-textMute mx-auto" />
-              <p className="text-textMute text-sm">{t('ojrn.no_data')}</p>
-              {journey && !journey.ready && (
-                <p className="text-textMute text-[11px]">
-                  Journey data is still being processed by Shopify (ready: false)
-                </p>
+            <div className="py-8 text-center space-y-3 px-4">
+              <Globe size={22} className="text-textMute mx-auto" />
+              <p className="text-text font-semibold text-sm">{t('ojrn.no_data')}</p>
+              <p className="text-textMute text-[11px] leading-relaxed max-w-xs mx-auto">
+                {journey && !journey.ready
+                  ? 'Shopify bu sipariş için yolculuk verisini henüz işlemedi.'
+                  : 'Bu sipariş için yolculuk geçmişi kaydedilmemiş.'}
+              </p>
+              {/* Order source — even when no journey moments */}
+              {(sourceName || channelName) && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surfaceAlt border border-border text-[11px] text-textDim">
+                  <Globe size={10} />
+                  <span>{channelName || sourceName}</span>
+                  {sourceName && channelName && sourceName !== channelName && (
+                    <span className="text-textMute">· {sourceName}</span>
+                  )}
+                </div>
               )}
-              {!journey && data && (
-                <p className="text-textMute text-[11px]">
-                  CustomerJourneySummary not available for this order
-                </p>
-              )}
+              <button
+                onClick={onClose}
+                className="mt-2 flex items-center gap-2 mx-auto px-5 py-2 rounded-xl bg-surface border border-border text-text text-xs font-semibold hover:border-green/50 transition-colors"
+              >
+                <X size={12} /> {t('ojrn.close') || 'Kapat'}
+              </button>
             </div>
           )}
           {!loading && !err && moments.length > 0 && (

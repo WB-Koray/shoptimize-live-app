@@ -189,6 +189,7 @@ const translations = {
     'ojrn.no_data':           'No journey data available',
     'ojrn.direct':            'Direct',
     'ojrn.order_btn':         'Journey',
+    'ojrn.close':             'Close',
 
     // RFM Widget
     'rfm.title':            'Customer Segments (RFM)',
@@ -486,6 +487,7 @@ const translations = {
     'ojrn.no_data':           'Yolculuk verisi bulunamadı',
     'ojrn.direct':            'Direkt',
     'ojrn.order_btn':         'Yolculuk',
+    'ojrn.close':             'Kapat',
 
     // RFM Widget
     'rfm.title':            'Müşteri Segmentleri (RFM)',
