@@ -735,6 +735,162 @@ async def get_order_journey(
 
 
 # ---------------------------------------------------------------------------
+# RFM Segmentasyon endpoint'i
+# ---------------------------------------------------------------------------
+
+_RFM_ORDERS_GQL = """
+query RFMOrders($cursor: String, $query: String!) {
+  orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      createdAt
+      totalPriceSet { shopMoney { amount currencyCode } }
+      customer {
+        id
+        displayName
+        email
+      }
+    }
+  }
+}
+"""
+
+
+@router.get("/api/shopify/customers/rfm")
+async def get_rfm_segments(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    days: int = Query(90),
+    current_user: dict = Depends(get_current_user),
+):
+    """Son N günün siparişlerinden müşterileri RFM ile segmentler."""
+    import bisect, math
+    from datetime import datetime, timezone, timedelta
+
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    if not domain or not token:
+        return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı"}, status_code=400)
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+    q_filter = f"created_at:>{since}"
+
+    # Sipariş topla (maks 2 sayfa = 500 sipariş)
+    all_nodes = []
+    cursor = None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            for _ in range(2):
+                payload = {"query": _RFM_ORDERS_GQL, "variables": {"cursor": cursor, "query": q_filter}}
+                r = await client.post(gql_url, headers=headers, json=payload)
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                orders_data = ((data.get("data") or {}).get("orders") or {})
+                all_nodes.extend(orders_data.get("nodes") or [])
+                pi = orders_data.get("pageInfo") or {}
+                if not pi.get("hasNextPage"):
+                    break
+                cursor = pi.get("endCursor")
+    except Exception as exc:
+        logger.exception("[RFM] Shopify bağlantı hatası")
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    # Müşteri bazında gruplama
+    now_dt = datetime.now(timezone.utc)
+    customers: dict[str, dict] = {}
+    currency = "TRY"
+    for node in all_nodes:
+        cust = node.get("customer") or {}
+        cid = cust.get("id", "")
+        if not cid:
+            continue
+        amt = float((node.get("totalPriceSet") or {}).get("shopMoney", {}).get("amount") or 0)
+        currency = (node.get("totalPriceSet") or {}).get("shopMoney", {}).get("currencyCode", currency)
+        try:
+            order_dt = datetime.fromisoformat(node["createdAt"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        r_days = (now_dt - order_dt).days
+        if cid not in customers:
+            customers[cid] = {
+                "id": cid,
+                "name": cust.get("displayName", ""),
+                "email": cust.get("email", ""),
+                "r_days": r_days,
+                "frequency": 0,
+                "monetary": 0.0,
+            }
+        c = customers[cid]
+        c["frequency"] += 1
+        c["monetary"] += amt
+        if r_days < c["r_days"]:
+            c["r_days"] = r_days
+
+    if not customers:
+        return {"ok": True, "segments": {}, "customers": [], "currency": currency, "order_count": 0}
+
+    clist = list(customers.values())
+
+    # Quintile sınırları
+    def quintiles(vals):
+        s = sorted(vals)
+        n = len(s)
+        return [s[max(0, int(n * p / 5) - 1)] for p in range(1, 5)]
+
+    r_q = quintiles([c["r_days"] for c in clist])
+    f_q = quintiles([c["frequency"] for c in clist])
+    m_q = quintiles([c["monetary"] for c in clist])
+
+    def score(val, quint, invert=False):
+        sc = bisect.bisect_right(quint, val) + 1  # 1-5
+        return 6 - sc if invert else sc
+
+    def segment(r, f):
+        if r >= 4 and f >= 4: return "champions"
+        if r >= 3 and f >= 3: return "loyal"
+        if r >= 4 and f < 3:  return "promising"
+        if r == 1 and f >= 2: return "lost"
+        if r <= 2 and f >= 3: return "at_risk"
+        if r >= 4 and f == 1: return "new"
+        return "needs_attention"
+
+    for c in clist:
+        r = score(c["r_days"], r_q, invert=True)  # lower days = higher R
+        f = score(c["frequency"], f_q)
+        m = score(c["monetary"], m_q)
+        c["r_score"] = r
+        c["f_score"] = f
+        c["m_score"] = m
+        c["rfm_score"] = r * 100 + f * 10 + m
+        c["segment"] = segment(r, f)
+        c["monetary"] = round(c["monetary"], 2)
+
+    # Segment sayımları
+    seg_counts: dict[str, int] = {}
+    for c in clist:
+        seg_counts[c["segment"]] = seg_counts.get(c["segment"], 0) + 1
+
+    # Her segmentten en fazla 10 müşteri (monetary'e göre sıralı)
+    seg_customers: dict[str, list] = {}
+    for seg in set(c["segment"] for c in clist):
+        top = sorted([c for c in clist if c["segment"] == seg], key=lambda x: -x["monetary"])[:10]
+        seg_customers[seg] = top
+
+    return {
+        "ok": True,
+        "segments": seg_counts,
+        "seg_customers": seg_customers,
+        "total_customers": len(clist),
+        "order_count": len(all_nodes),
+        "currency": currency,
+        "days": days,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Webhook endpoint'leri
 # ---------------------------------------------------------------------------
 

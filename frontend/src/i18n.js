@@ -190,6 +190,33 @@ const translations = {
     'ojrn.direct':            'Direct',
     'ojrn.order_btn':         'Journey',
 
+    // RFM Widget
+    'rfm.title':            'Customer Segments (RFM)',
+    'rfm.customers':        'customers',
+    'rfm.orders':           'orders',
+    'rfm.load':             'Analyze',
+    'rfm.refresh':          'Refresh',
+    'rfm.loading':          'Loading…',
+    'rfm.cta':              'Analyze customer value segments',
+    'rfm.cta_sub':          'Groups customers by Recency, Frequency & Monetary value',
+    'rfm.top10':            'Top 10',
+    'rfm.anonymous':        'Anonymous',
+    'rfm.seg.champions':       'Champions',
+    'rfm.seg.loyal':           'Loyal',
+    'rfm.seg.promising':       'Promising',
+    'rfm.seg.new':             'New',
+    'rfm.seg.needs_attention': 'Needs Attention',
+    'rfm.seg.at_risk':         'At-Risk',
+    'rfm.seg.lost':            'Lost',
+
+    // Abandonment Intelligence Panel
+    'abnd.title':    'Abandonment Intelligence',
+    'abnd.at_risk':  'at-risk',
+    'abnd.high':     'High',
+    'abnd.medium':   'Mid',
+    'abnd.low':      'Low',
+    'abnd.sent':     'Sent',
+
     // Journey modal
     'journey.event':  'event',
     'journey.first':  'First:',
@@ -459,6 +486,33 @@ const translations = {
     'ojrn.no_data':           'Yolculuk verisi bulunamadı',
     'ojrn.direct':            'Direkt',
     'ojrn.order_btn':         'Yolculuk',
+
+    // RFM Widget
+    'rfm.title':            'Müşteri Segmentleri (RFM)',
+    'rfm.customers':        'müşteri',
+    'rfm.orders':           'sipariş',
+    'rfm.load':             'Analiz Et',
+    'rfm.refresh':          'Yenile',
+    'rfm.loading':          'Yükleniyor…',
+    'rfm.cta':              'Müşteri değer segmentlerini analiz et',
+    'rfm.cta_sub':          'Müşterileri Yenilik, Sıklık ve Parasal değere göre gruplar',
+    'rfm.top10':            'İlk 10',
+    'rfm.anonymous':        'Anonim',
+    'rfm.seg.champions':       'Şampiyonlar',
+    'rfm.seg.loyal':           'Sadık',
+    'rfm.seg.promising':       'Umut Verici',
+    'rfm.seg.new':             'Yeni',
+    'rfm.seg.needs_attention': 'İlgi Gerektirir',
+    'rfm.seg.at_risk':         'Risk Altında',
+    'rfm.seg.lost':            'Kayıp',
+
+    // Abandonment Intelligence Panel
+    'abnd.title':    'Terk Zekası',
+    'abnd.at_risk':  'risk altında',
+    'abnd.high':     'Yüksek',
+    'abnd.medium':   'Orta',
+    'abnd.low':      'Düşük',
+    'abnd.sent':     'Gönderildi',
 
     // Yolculuk modalı
     'journey.event':  'etkinlik',

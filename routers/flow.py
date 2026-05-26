@@ -109,6 +109,52 @@ async def send_test_message(
     return JSONResponse(result)
 
 
+@router.post("/api/flow/quick-trigger")
+async def quick_trigger_wa(
+    request_data: dict,
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Belirli bir müşteriye anında WA sepet hatırlatması gönderir (Abandonment Intelligence)."""
+    settings = await store.get_flow_settings(username, brand)
+    to_phone = str(request_data.get("phone", "")).strip()
+    name = str(request_data.get("name", "")).strip()
+    product = str(request_data.get("product", "")).strip()
+
+    if not to_phone:
+        return JSONResponse({"ok": False, "error": "Telefon numarası gerekli"}, status_code=400)
+    if not settings.get("wa_token") or not settings.get("phone_number_id"):
+        return JSONResponse({"ok": False, "error": "WA ayarlanmamış"}, status_code=400)
+
+    digits = "".join(c for c in to_phone if c.isdigit())
+    if digits.startswith("0"):
+        to_phone = f"+9{digits}"
+    elif not to_phone.startswith("+"):
+        to_phone = f"+{digits}"
+
+    result = await send_wa_template(
+        settings["wa_token"],
+        settings["phone_number_id"],
+        to_phone,
+        name=name or "Değerli müşterimiz",
+        product=product or "ürünler",
+        template_name="sepet_hatirlatma",
+    )
+    if result.get("ok"):
+        await store.append_flow_log(username, brand, {
+            "phone": to_phone[-4:],
+            "name": name,
+            "product": product,
+            "step": 0,
+            "step_label": "Quick Send (Abandonment)",
+            "ok": True,
+            "manual": True,
+            "ts": int(__import__("time").time() * 1000),
+        })
+    return JSONResponse(result)
+
+
 @router.get("/api/flow/logs")
 async def get_flow_logs(
     username: str = Query(""),

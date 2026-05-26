@@ -831,6 +831,301 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
   );
 }
 
+// ── RFMWidget ─────────────────────────────────────────────────────────────────
+// Shopify siparişlerinden müşteri segmentasyonu (Champions / Loyal / At-Risk / Lost)
+
+const RFM_SEGMENTS = {
+  champions:       { label: 'Champions',       emoji: '🏆', cls: 'bg-greenSoft text-green border-green/20'      },
+  loyal:           { label: 'Loyal',           emoji: '💎', cls: 'bg-blueSoft text-blue border-blue/20'         },
+  promising:       { label: 'Promising',       emoji: '🌱', cls: 'bg-tealSoft text-teal border-teal/20'         },
+  new:             { label: 'New',             emoji: '✨', cls: 'bg-purpleSoft text-purple border-purple/20'   },
+  needs_attention: { label: 'Needs Attention', emoji: '⏰', cls: 'bg-amberSoft text-amber border-amber/20'      },
+  at_risk:         { label: 'At-Risk',         emoji: '⚠️', cls: 'bg-amberSoft text-amber border-amber/30'      },
+  lost:            { label: 'Lost',            emoji: '😴', cls: 'bg-surfaceAlt text-textDim border-border'     },
+};
+
+function RFMWidget({ session }) {
+  const { t, lang } = useLang();
+  const { token, username, brand } = session;
+  const [rfmData, setRfmData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(null); // expanded segment key
+  const [days, setDays] = useState(90);
+
+  async function loadRFM() {
+    setLoading(true);
+    try {
+      const r = await fetch(
+        `${API_URL}/api/shopify/customers/rfm?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}&days=${days}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const d = await r.json();
+      if (d.ok) setRfmData(d);
+    } catch {}
+    setLoading(false);
+  }
+
+  const segOrder = ['champions', 'loyal', 'promising', 'new', 'needs_attention', 'at_risk', 'lost'];
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 p-4 border-b border-border">
+        <Users size={15} className="text-purple" />
+        <span className="text-text text-sm font-bold">{t('rfm.title')}</span>
+        {rfmData && (
+          <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-1">
+            {rfmData.total_customers} {t('rfm.customers')} · {rfmData.order_count} {t('rfm.orders')} · {rfmData.days}d
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <select value={days} onChange={e => setDays(Number(e.target.value))}
+            className="bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text focus:outline-none">
+            <option value={30}>30d</option>
+            <option value={60}>60d</option>
+            <option value={90}>90d</option>
+            <option value={180}>180d</option>
+          </select>
+          <button onClick={loadRFM} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purpleSoft border border-purple/20 text-purple hover:bg-purple/10 transition-colors disabled:opacity-50">
+            {loading ? <RefreshCw size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            {loading ? t('rfm.loading') : (rfmData ? t('rfm.refresh') : t('rfm.load'))}
+          </button>
+        </div>
+      </div>
+
+      {!rfmData && !loading && (
+        <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
+          <Users size={20} className="text-textMute/40" />
+          <p className="text-textMute text-sm">{t('rfm.cta')}</p>
+          <p className="text-textMute text-[11px]">{t('rfm.cta_sub')}</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-10">
+          <RefreshCw size={18} className="text-textMute animate-spin" />
+        </div>
+      )}
+
+      {rfmData && !loading && (
+        <div className="p-4 space-y-3">
+          {/* Segment pills */}
+          <div className="flex flex-wrap gap-2">
+            {segOrder.filter(s => rfmData.segments[s]).map(s => {
+              const meta = RFM_SEGMENTS[s];
+              return (
+                <button key={s} onClick={() => setExpanded(expanded === s ? null : s)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all
+                    ${meta.cls} ${expanded === s ? 'ring-2 ring-offset-1 ring-current' : ''}`}>
+                  <span>{meta.emoji}</span>
+                  <span>{t('rfm.seg.' + s) || meta.label}</span>
+                  <span className="bg-white/20 px-1 rounded-md">{rfmData.segments[s]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Distribution bar */}
+          <div className="h-2.5 rounded-full overflow-hidden flex gap-0.5">
+            {segOrder.filter(s => rfmData.segments[s]).map(s => {
+              const pct = (rfmData.segments[s] / rfmData.total_customers) * 100;
+              const barCls = {
+                champions: 'bg-green', loyal: 'bg-blue', promising: 'bg-teal',
+                new: 'bg-purple', needs_attention: 'bg-amber', at_risk: 'bg-amber/60', lost: 'bg-border',
+              }[s];
+              return <div key={s} className={`${barCls} rounded-sm`} style={{ width: `${pct}%` }} title={`${s}: ${rfmData.segments[s]}`} />;
+            })}
+          </div>
+
+          {/* Expanded segment customers */}
+          {expanded && rfmData.seg_customers[expanded]?.length > 0 && (
+            <div className="bg-surfaceAlt/40 border border-border rounded-xl overflow-hidden">
+              <div className="px-3 py-2 border-b border-border/60 flex items-center gap-2">
+                <span className="text-sm">{RFM_SEGMENTS[expanded].emoji}</span>
+                <span className="text-xs font-bold text-text">{t('rfm.seg.' + expanded) || RFM_SEGMENTS[expanded].label}</span>
+                <span className="text-[10px] text-textMute ml-auto">{t('rfm.top10')}</span>
+              </div>
+              <div className="divide-y divide-border/40">
+                {rfmData.seg_customers[expanded].map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-3 px-3 py-2 hover:bg-surfaceAlt/60 transition-colors">
+                    <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-text truncate">{c.name || c.email || t('rfm.anonymous')}</p>
+                      {c.email && c.name && <p className="text-[10px] text-textMute truncate">{c.email}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-bold text-green tabular-nums">
+                        {c.monetary.toLocaleString('tr-TR', { minimumFractionDigits: 0 })} {rfmData.currency}
+                      </p>
+                      <p className="text-[10px] text-textMute">{c.frequency}× · {c.r_days}d</p>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[c.r_score, c.f_score, c.m_score].map((sc, j) => (
+                        <span key={j} className={`text-[9px] font-bold w-4 h-4 rounded flex items-center justify-center
+                          ${sc >= 4 ? 'bg-greenSoft text-green' : sc === 3 ? 'bg-amberSoft text-amber' : 'bg-surfaceAlt text-textMute'}`}>
+                          {sc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AbandonmentIntelligencePanel ──────────────────────────────────────────────
+// Risk skorlu gerçek zamanlı terk tespit paneli — WA hızlı gönderim destekli
+
+function calcAbandonmentRisk(profile, now = Date.now()) {
+  const minsInactive = (now - profile.lastTs) / 60000;
+  let risk = 0;
+
+  // Zaman bazlı — ne kadar uzun süredir hareketsiz?
+  if (minsInactive > 30)      risk += 40;
+  else if (minsInactive > 15) risk += 28;
+  else if (minsInactive > 5)  risk += 12;
+  else                         risk += 3;
+
+  // Aşama — checkout > cart
+  if (profile.stage === 'checkout') risk += 30;
+  else if (profile.stage === 'cart') risk += 15;
+
+  // Geri dönen ziyaretçi → daha az risk
+  if (profile.isReturning) risk -= 10;
+  // Üye → biraz daha az risk
+  if (profile.customer_id) risk -= 8;
+  // Mobil → hafif yüksek risk
+  if (profile.device === 'mobile') risk += 5;
+  // Yüksek intent → daha acil (paradoks: yüksek intent = sepette/checkout = daha değerli)
+  if ((profile.intentScore || 0) >= 70) risk += 5;
+
+  return Math.min(Math.max(Math.round(risk), 0), 100);
+}
+
+function AbandonmentIntelligencePanel({ atRiskVisitors, customerNames, session, onVisitorClick }) {
+  const { t, lang } = useLang();
+  const { token, username, brand } = session;
+  const [sending, setSending] = useState({}); // vid → 'sending' | 'sent' | 'error'
+  const [open, setOpen]       = useState(true);
+
+  if (!atRiskVisitors.length) return null;
+
+  async function quickSend(visitor) {
+    const cn = customerNames[visitor.customer_id];
+    const phone = cn?.phone || '';
+    if (!phone) return;
+    setSending(s => ({ ...s, [visitor.vid]: 'sending' }));
+    try {
+      const r = await fetch(
+        `${API_URL}/api/flow/quick-trigger?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            phone,
+            name: cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : '',
+            product: visitor.lastProduct || '',
+          }),
+        }
+      );
+      const d = await r.json();
+      setSending(s => ({ ...s, [visitor.vid]: d.ok ? 'sent' : 'error' }));
+    } catch {
+      setSending(s => ({ ...s, [visitor.vid]: 'error' }));
+    }
+  }
+
+  const riskBadge = risk =>
+    risk >= 70 ? { cls: 'bg-roseSoft text-rose border-rose/20', label: t('abnd.high') }
+    : risk >= 40 ? { cls: 'bg-amberSoft text-amber border-amber/20', label: t('abnd.medium') }
+    : { cls: 'bg-surfaceAlt text-textDim border-border', label: t('abnd.low') };
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+        <div className="relative">
+          <CreditCard size={15} className="text-amber" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber animate-ping" />
+        </div>
+        <span className="text-text text-sm font-bold flex-1">{t('abnd.title')}</span>
+        <span className="text-[10px] bg-amberSoft text-amber border border-amber/20 px-2 py-0.5 rounded-full">
+          {atRiskVisitors.length} {t('abnd.at_risk')}
+        </span>
+        <button onClick={() => setOpen(o => !o)} className="p-1 text-textMute hover:text-text transition-colors">
+          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="divide-y divide-border/50 max-h-[400px] overflow-y-auto custom-scrollbar">
+          {atRiskVisitors.map(profile => {
+            const risk = profile.riskScore;
+            const badge = riskBadge(risk);
+            const cn = customerNames[profile.customer_id];
+            const fullName = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
+            const hasPhone = !!cn?.phone;
+            const sendState = sending[profile.vid];
+            const DevIcon = profile.device === 'mobile' ? Smartphone : profile.device === 'tablet' ? Tablet : Monitor;
+            return (
+              <div key={profile.vid}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-surfaceAlt/30 transition-colors cursor-pointer"
+                onClick={() => onVisitorClick(profile)}>
+                <div className="shrink-0">
+                  <DevIcon size={13} className="text-textMute" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {fullName
+                    ? <p className="text-xs font-bold text-green truncate">{fullName}</p>
+                    : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>
+                  }
+                  {profile.lastProduct && (
+                    <p className="text-[10px] text-text/60 truncate max-w-[180px]">{profile.lastProduct}</p>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                      profile.stage === 'checkout' ? 'bg-amberSoft text-amber border-amber/20' : 'bg-surfaceAlt text-textDim border-border'
+                    }`}>{t('stage.' + profile.stage)}</span>
+                    <span className="text-[10px] text-textMute">{timeAgo(profile.lastTs, lang)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${badge.cls}`}>
+                    {risk}% {badge.label}
+                  </span>
+                  {hasPhone && sendState !== 'sent' && (
+                    <button
+                      onClick={e => { e.stopPropagation(); quickSend(profile); }}
+                      disabled={sendState === 'sending'}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-greenSoft border border-green/20 text-green hover:bg-green/10 transition-colors disabled:opacity-50">
+                      {sendState === 'sending'
+                        ? <RefreshCw size={9} className="animate-spin" />
+                        : <MessageCircle size={9} />}
+                      WA
+                    </button>
+                  )}
+                  {sendState === 'sent' && (
+                    <span className="text-[10px] text-green flex items-center gap-0.5">
+                      <CheckCircle size={10} /> {t('abnd.sent')}
+                    </span>
+                  )}
+                  {sendState === 'error' && (
+                    <span className="text-[10px] text-rose">✗</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 // ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
@@ -1911,9 +2206,19 @@ export default function Dashboard({ session, onLogout }) {
 
   const memberCount = useMemo(() => visitorProfiles.filter(p => p.customer_id).length, [visitorProfiles]);
 
+  // Abandonment Intelligence: cart/checkout ziyaretçileri risk skoruyla birlikte
+  const atRiskVisitors = useMemo(() => {
+    const now = Date.now();
+    return visitorProfiles
+      .filter(p => ['cart', 'checkout'].includes(p.stage) && (now - p.lastTs) > 3 * 60 * 1000)
+      .map(p => ({ ...p, riskScore: calcAbandonmentRisk(p, now) }))
+      .sort((a, b) => b.riskScore - a.riskScore);
+  }, [visitorProfiles]);
+
+  // Eski "abandonedVisitors" (checkout + >15 dk) — StatCard ve eski referanslar için
   const abandonedVisitors = useMemo(() =>
-    visitorProfiles.filter(p => p.stage === 'checkout' && (Date.now() - p.lastTs) > 15 * 60 * 1000)
-  , [visitorProfiles]);
+    atRiskVisitors.filter(p => p.stage === 'checkout' && (Date.now() - p.lastTs) > 15 * 60 * 1000)
+  , [atRiskVisitors]);
 
   const funnelStats = useMemo(() => {
     let product = 0, cart = 0, checkout = 0, converted = 0;
@@ -2216,36 +2521,13 @@ export default function Dashboard({ session, onLogout }) {
                   visitors: abandonedVisitors })} />
             </div>
 
-            {/* Abandoned checkout alert */}
-            {abandonedVisitors.length > 0 && (
-              <div className="bg-amberSoft/50 border border-amber/20 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <CreditCard size={15} className="text-amber" />
-                  <span className="text-amber text-sm font-bold">{t('abandoned.title')}</span>
-                  <span className="text-[10px] bg-amberSoft text-amber px-2 py-0.5 rounded-full ml-2">
-                    {abandonedVisitors.length}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {abandonedVisitors.slice(0, 4).map(profile => {
-                    const cn = customerNames[profile.customer_id];
-                    const name = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
-                    return (
-                      <div key={profile.vid} onClick={() => setSelectedVisitor(profile)}
-                        className="flex items-center gap-3 bg-surfaceSoft border border-amber/20 rounded-lg p-3 cursor-pointer hover:border-amber/40 transition-colors">
-                        <div className="p-1.5 rounded-lg bg-amberSoft shrink-0"><CreditCard size={13} className="text-amber" /></div>
-                        <div className="flex-1 min-w-0">
-                          {name ? <p className="text-xs font-bold text-green truncate">{name}</p>
-                            : <p className="text-xs font-mono text-textDim">{shortVid(profile.vid)}</p>}
-                          {profile.lastProduct && <p className="text-[10px] text-text/60 truncate">{profile.lastProduct}</p>}
-                        </div>
-                        <span className="text-[10px] text-amber shrink-0">{timeAgo(profile.lastTs, lang)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Abandonment Intelligence Panel */}
+            <AbandonmentIntelligencePanel
+              atRiskVisitors={atRiskVisitors}
+              customerNames={customerNames}
+              session={session}
+              onVisitorClick={setSelectedVisitor}
+            />
 
             {/* Conversion funnel */}
             {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
@@ -2425,11 +2707,14 @@ export default function Dashboard({ session, onLogout }) {
             )}
           </div>
 
-          {/* SAĞ — Funnel, UTM, Pages, 404s */}
+          {/* SAĞ — Funnel, UTM, Pages, 404s, RFM */}
           <div className="space-y-3">
 
             {/* Funnel */}
             {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
+
+            {/* RFM Müşteri Segmentasyonu */}
+            <RFMWidget session={session} />
 
             {/* UTM campaigns accordion */}
             {utmStats.length > 0 && (
