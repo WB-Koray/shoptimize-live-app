@@ -10,7 +10,8 @@ import time
 
 from fastapi import APIRouter, HTTPException, Query
 
-from services.db import get_all_shopify_connections, set_connection_settings
+import json
+from services.db import get_all_shopify_connections, set_connection_settings, _get_conn
 from services.redis_store import store
 
 logger = logging.getLogger(__name__)
@@ -134,3 +135,83 @@ async def set_shopify_token(
     set_connection_settings(username, brand, "shopify", updates)
     logger.info("[ADMIN] set-shopify-token: username=%s brand=%s shop=%s", username, brand, shop_domain)
     return {"ok": True, "username": username, "brand": brand, "token_set": True}
+
+
+@router.get("/shopify-records")
+async def list_shopify_records(admin_token: str = Query(...)):
+    """
+    Tüm Shopify integration_connections kayıtlarını gösterir.
+    Token'ın son 6 karakterini gösterir (güvenli).
+    """
+    _require_admin(admin_token)
+    import psycopg2.extras
+    rows = []
+    try:
+        with _get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT username, brand, payload_json FROM integration_connections WHERE integration_id = 'shopify' ORDER BY username"
+                )
+                for row in cur.fetchall():
+                    data = row["payload_json"] or {}
+                    if isinstance(data, str):
+                        data = json.loads(data)
+                    token = data.get("admin_api_token", "")
+                    rows.append({
+                        "username": row["username"],
+                        "brand": row["brand"],
+                        "shop_domain": data.get("shop_domain", ""),
+                        "has_token": bool(token),
+                        "token_tail": ("..." + token[-6:]) if token else "",
+                        "keys": list(data.keys()),
+                    })
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    return {"ok": True, "records": rows}
+
+
+@router.post("/copy-shopify-token")
+async def copy_shopify_token(
+    request_data: dict,
+    admin_token: str = Query(...),
+):
+    """
+    Bir kullanıcının admin_api_token'ını başka bir kullanıcıya kopyalar.
+    Body: {"from_username": "59fc15-cd", "from_brand": "default",
+           "to_username": "koray@...", "to_brand": "default"}
+    """
+    _require_admin(admin_token)
+    import psycopg2.extras
+
+    from_user  = str(request_data.get("from_username", "")).strip()
+    from_brand = str(request_data.get("from_brand", "default")).strip() or "default"
+    to_user    = str(request_data.get("to_username", "")).strip()
+    to_brand   = str(request_data.get("to_brand", "default")).strip() or "default"
+
+    if not from_user or not to_user:
+        raise HTTPException(400, "from_username ve to_username zorunlu")
+
+    # Kaynak kaydı oku
+    src_token = ""
+    try:
+        with _get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT payload_json FROM integration_connections WHERE username=%s AND brand=%s AND integration_id='shopify' LIMIT 1",
+                    (from_user, from_brand),
+                )
+                row = cur.fetchone()
+                if row and row["payload_json"]:
+                    data = row["payload_json"]
+                    if isinstance(data, str):
+                        data = json.loads(data)
+                    src_token = data.get("admin_api_token", "")
+    except Exception as e:
+        raise HTTPException(500, f"Kaynak okuma hatası: {e}")
+
+    if not src_token:
+        raise HTTPException(404, f"'{from_user}' kaydında admin_api_token yok")
+
+    set_connection_settings(to_user, to_brand, "shopify", {"admin_api_token": src_token})
+    logger.info("[ADMIN] copy-shopify-token: %s→%s token_tail=%s", from_user, to_user, src_token[-6:])
+    return {"ok": True, "from": from_user, "to": to_user, "token_tail": "..." + src_token[-6:]}
