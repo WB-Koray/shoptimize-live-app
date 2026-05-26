@@ -702,7 +702,7 @@ function OrderJourneyModal({ orderId, session, onClose }) {
       .then(r => r.json())
       .then(d => {
         if (d.ok) setData(d.order);
-        else setErr(d.detail || 'Error');
+        else setErr(d.error || d.detail || 'Error');
       })
       .catch(() => setErr('Network error'))
       .finally(() => setLoading(false));
@@ -711,7 +711,10 @@ function OrderJourneyModal({ orderId, session, onClose }) {
   if (!orderId) return null;
 
   const journey   = data?.customerJourneySummary;
-  const moments   = journey?.moments?.nodes || [];
+  // Shopify returns either `nodes` (new) or `edges[].node` (old) depending on API version
+  const moments   = journey?.moments?.nodes
+    || (journey?.moments?.edges || []).map(e => e.node).filter(Boolean)
+    || [];
   const firstVisit = journey?.firstVisit;
   const lastVisit  = journey?.lastVisit;
   const daysToConv = journey?.daysToConversion;
@@ -785,9 +788,19 @@ function OrderJourneyModal({ orderId, session, onClose }) {
             </div>
           )}
           {!loading && !err && moments.length === 0 && (
-            <div className="py-12 text-center space-y-2">
+            <div className="py-12 text-center space-y-2 px-4">
               <Globe size={20} className="text-textMute mx-auto" />
               <p className="text-textMute text-sm">{t('ojrn.no_data')}</p>
+              {journey && !journey.ready && (
+                <p className="text-textMute text-[11px]">
+                  Journey data is still being processed by Shopify (ready: false)
+                </p>
+              )}
+              {!journey && data && (
+                <p className="text-textMute text-[11px]">
+                  CustomerJourneySummary not available for this order
+                </p>
+              )}
             </div>
           )}
           {!loading && !err && moments.length > 0 && (

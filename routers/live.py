@@ -662,27 +662,29 @@ query OrderJourney($id: ID!) {
     name
     createdAt
     totalPriceSet { shopMoney { amount currencyCode } }
-    customer { firstName lastName email numberOfOrders amountSpent { amount currencyCode } }
     customerJourneySummary {
       customerOrderIndex
       daysToConversion
       ready
-      momentsCount { count }
       firstVisit {
-        source sourceType referrerUrl occurredAt landingPage
+        source
+        referrerUrl
+        occurredAt
         utmParameters { source medium campaign content term }
       }
       lastVisit {
-        source sourceType referrerUrl occurredAt landingPage
+        source
+        referrerUrl
+        occurredAt
         utmParameters { source medium campaign content term }
       }
       moments(first: 20) {
-        edges {
-          node {
-            ... on CustomerVisit {
-              source sourceType referrerUrl occurredAt landingPage
-              utmParameters { source medium campaign content term }
-            }
+        nodes {
+          ... on CustomerVisit {
+            source
+            referrerUrl
+            occurredAt
+            utmParameters { source medium campaign content term }
           }
         }
       }
@@ -725,11 +727,20 @@ async def get_order_journey(
 
     errors = data.get("errors")
     if errors:
-        return JSONResponse({"ok": False, "error": str(errors)}, status_code=502)
+        first_msg = errors[0].get("message", str(errors)) if isinstance(errors, list) else str(errors)
+        logger.warning("[JOURNEY] GQL hata: %s", first_msg)
+        return JSONResponse({"ok": False, "error": first_msg}, status_code=502)
 
     order_data = (data.get("data") or {}).get("order")
     if not order_data:
-        return JSONResponse({"ok": False, "error": "Sipariş bulunamadı"}, status_code=404)
+        return JSONResponse({"ok": False, "error": "Sipariş bulunamadı (GID: " + gid + ")"}, status_code=404)
+
+    # customerJourneySummary null gelirse boş dict ile güvenli dön
+    if order_data.get("customerJourneySummary") is None:
+        order_data["customerJourneySummary"] = {
+            "ready": False, "daysToConversion": None, "customerOrderIndex": None,
+            "firstVisit": None, "lastVisit": None, "moments": {"nodes": []},
+        }
 
     return {"ok": True, "order": order_data}
 
