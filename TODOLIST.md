@@ -73,15 +73,15 @@ Shopify'ın sağladığı ama henüz kullanmadığımız veriler.
 | 1 | **Purchase Intent Score** (canlı 0–100 badge) | Orta | 🔥🔥🔥 | ✅ Yapıldı |
 | 2 | **Checkout Drop-off Haritası** (ConversionFunnelWidget) | Kolay | 🔥🔥🔥 | ✅ Yapıldı |
 | 3 | **CustomerJourney → Sipariş Filmi** (OrderJourneyModal) | Orta | 🔥🔥🔥 | ✅ Yapıldı |
-| 4 | **Scroll depth + Attention time pixel** | Orta | 🔥🔥 | ⏳ Bekliyor |
+| 4 | **Scroll depth + Attention time pixel** | Orta | 🔥🔥 | ✅ Yapıldı |
 | 5 | **Stok-Talep Alarm** (StockDemandWidget) | Kolay | 🔥🔥🔥 | ✅ Yapıldı |
-| 6 | **WA → Sipariş ROI zinciri** | Orta | 🔥🔥🔥 | ⏳ Bekliyor |
+| 6 | **WA → Sipariş ROI zinciri** | Orta | 🔥🔥🔥 | ✅ Yapıldı |
 | 7 | **RFM Segmentasyon** (Müşteri Segmentleri widget) | Orta | 🔥🔥 | ✅ Yapıldı |
 | 8 | **"Almost Buyer" Radar** (Abandonment Intelligence) | Zor | 🔥🔥🔥🔥 | ✅ Yapıldı |
 | 9 | **Cross-store Benchmarking** (SaaS avantajı) | Zor | 🔥🔥🔥🔥 | ⏳ İleride |
 | 10 | **Görünmez Sepet Dedektörü** (HiddenCartPanel) | Kolay | 🔥🔥 | ✅ Yapıldı |
 
-**İlerleme: 7/10** ✅
+**İlerleme: 9/10** ✅
 
 ---
 
@@ -93,8 +93,8 @@ Shopify'ın sağladığı ama henüz kullanmadığımız veriler.
 |---|-------|-------|
 | 4.1 | **Billing enforcement** — login'de 402 dönüşü | ✅ Yapıldı |
 | 4.2 | **Admin paneli** — tüm merchant'lar, billing durumu | ✅ Yapıldı |
-| 4.3 | **Trial bitiş kontrolü** — süre dolduysa erişim kapat | ⏳ Bekliyor |
-| 4.4 | **Rate limiting** — `/api/live/event` koruması | ⏳ Bekliyor |
+| 4.3 | **Trial bitiş kontrolü** — süre dolduysa erişim kapat | ✅ Yapıldı |
+| 4.4 | **Rate limiting** — `/api/live/event` koruması | ✅ Yapıldı |
 | 4.5 | **App/Uninstalled webhook** — veri temizliği | ⏳ Bekliyor |
 | 4.6 | **Shopify App Store hazırlığı** — scopes, listing, review | ⏳ Bekliyor |
 | 4.7 | **Test credentials** — reviewer için test hesabı | ⏳ Bekliyor |
@@ -128,7 +128,7 @@ Shopify'ın sağladığı ama henüz kullanmadığımız veriler.
 | Katman | Toplam | Tamamlanan | Kalan |
 |--------|--------|-----------|-------|
 | Katman 1 (Shopify API) | 12 madde | 5 | 7 |
-| Katman 2 (Pixel) | 10 madde | 0 | 10 |
-| Katman 3 (Analytics) | 10 madde | 7 | 3 |
-| Katman 4 (Altyapı) | 9 madde | 5 | 4 |
-| **Toplam** | **41 madde** | **17** | **24** |
+| Katman 2 (Pixel) | 10 madde | 2 | 8 |
+| Katman 3 (Analytics) | 10 madde | 9 | 1 |
+| Katman 4 (Altyapı) | 9 madde | 7 | 2 |
+| **Toplam** | **41 madde** | **23** | **18** |

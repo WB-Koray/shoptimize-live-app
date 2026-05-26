@@ -13,11 +13,12 @@ import time
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.db import get_setting, set_connection_settings, lookup_username_by_shop
+from services.auth import get_current_user as get_current_user_dep
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -349,6 +350,29 @@ async def create_dashboard_token(body: TokenRequest):
     token = create_access_token(body.username, body.brand)
     tid = get_setting(body.username, body.brand, "shopify", "pixel_tracking_id", "")
     return {"ok": True, "token": token, "username": body.username, "brand": body.brand, "tid": tid}
+
+
+@router.get("/api/auth/status")
+async def auth_status(current_user: dict = Depends(get_current_user_dep)):
+    """
+    JWT geçerliliği + billing durumunu döner.
+    get_current_user_dep içinde billing 402 fırlatır; bu endpoint sadece başarılı durumu döner.
+    """
+    username = current_user.get("username", "")
+    brand    = current_user.get("brand", "default")
+    billing_status  = get_setting(username, brand, "shopify", "billing_status",  "")
+    installed_at_ts = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+    trial_remaining = None
+    if billing_status in ("pending", "cancelled", "frozen") and installed_at_ts:
+        remaining_sec = (installed_at_ts + PLAN_TRIAL_DAYS * 86400) - time.time()
+        trial_remaining = max(0, int(remaining_sec / 86400))
+    return {
+        "ok": True,
+        "username": username,
+        "brand": brand,
+        "billing_status": billing_status or "none",
+        "trial_remaining_days": trial_remaining,
+    }
 
 
 @router.get("/install/success")

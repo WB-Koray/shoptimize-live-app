@@ -279,6 +279,29 @@ function VisitorCard({ profile, customerName, onClick }) {
       {profile.lastProduct && (
         <p className="text-[10px] text-text/70 truncate" title={profile.lastProduct}>{profile.lastProduct}</p>
       )}
+      {/* Scroll depth + Attention time badges */}
+      {(profile.maxScrollDepth || profile.attentionSeconds) && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {profile.maxScrollDepth && (
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full border tabular-nums
+              ${profile.maxScrollDepth >= 75 ? 'bg-greenSoft text-green border-green/20'
+                : profile.maxScrollDepth >= 50 ? 'bg-amberSoft text-amber border-amber/20'
+                : 'bg-surfaceAlt text-textDim border-border'}`}>
+              ↕ {profile.maxScrollDepth}%
+            </span>
+          )}
+          {profile.attentionSeconds && profile.attentionSeconds >= 5 && (
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full border tabular-nums
+              ${profile.attentionSeconds >= 60 ? 'bg-greenSoft text-green border-green/20'
+                : profile.attentionSeconds >= 20 ? 'bg-amberSoft text-amber border-amber/20'
+                : 'bg-surfaceAlt text-textDim border-border'}`}>
+              ⏱ {profile.attentionSeconds >= 60
+                ? `${Math.round(profile.attentionSeconds / 60)}dk`
+                : `${profile.attentionSeconds}s`}
+            </span>
+          )}
+        </div>
+      )}
       {profile.utm?.utm_campaign && (
         <p className="text-[10px] text-blue truncate">{profile.utm.utm_source || 'utm'} / {profile.utm.utm_campaign}</p>
       )}
@@ -2171,6 +2194,19 @@ export default function Dashboard({ session, onLogout }) {
     setShowOnboarding(false);
   }
 
+  // Billing status
+  const [billingError, setBillingError] = useState(null); // null | { error, message, retry_url }
+  const [trialDays, setTrialDays]       = useState(null); // kalan deneme günü
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/auth/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        if (r.status === 402) return r.json().then(d => { setBillingError(d.detail || d); });
+        return r.json().then(d => { if (d.trial_remaining_days != null) setTrialDays(d.trial_remaining_days); });
+      })
+      .catch(() => {});
+  }, [token]);
+
   const [activeView, setActiveView] = useState('live');
   const [liveTab, setLiveTab]           = useState('realtime');
   const [prodOpen, setProdOpen]         = useState(true);
@@ -2423,6 +2459,14 @@ export default function Dashboard({ session, onLogout }) {
       else if ((ev.event_type === 'cart_viewed' || ev.event_type === 'add_to_cart') && !['checkout','converted'].includes(p.stage)) p.stage = 'cart';
       else if (ev.event_type === 'product_viewed' && p.stage === 'browsing') p.stage = 'product';
       if (ev.event_type === 'product_viewed' && ev.data?.product_title) p.lastProduct = ev.data.product_title;
+      // Scroll depth — en yüksek değeri tut
+      if (ev.event_type === 'scroll_depth' && ev.data?.depth) {
+        if (!p.maxScrollDepth || ev.data.depth > p.maxScrollDepth) p.maxScrollDepth = ev.data.depth;
+      }
+      // Attention time — en son ürün sayfasındaki süre
+      if (ev.event_type === 'attention_time' && ev.data?.seconds) {
+        if (!p.attentionSeconds || ev.data.seconds > p.attentionSeconds) p.attentionSeconds = ev.data.seconds;
+      }
     }
     // Cross-reference with WA converted orders — handles case where checkout_completed
     // event was never pushed (guest checkout / server restart lost in-memory session dict)
@@ -2653,10 +2697,47 @@ export default function Dashboard({ session, onLogout }) {
     : 'bg-surfaceSoft border-border text-textMute';
 
   // ── Render ───────────────────────────────────────────────────────────────────
+
+  // Billing expired — tam ekran overlay
+  if (billingError) {
+    const retryUrl = billingError.retry_url || '';
+    const isExpired = billingError.error === 'trial_expired';
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+        <div className="bg-surface border border-border rounded-2xl p-8 max-w-md w-full text-center space-y-5">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto">
+            <AlertCircle size={22} className="text-amber-500" />
+          </div>
+          <div>
+            <h2 className="text-text font-bold text-lg">{isExpired ? 'Deneme Süreniz Doldu' : 'Abonelik Gerekli'}</h2>
+            <p className="text-textMute text-sm mt-2">{billingError.message || 'Shoptimize Live\'ı kullanmak için aboneliğinizi aktive edin.'}</p>
+          </div>
+          {retryUrl && (
+            <a href={retryUrl}
+              className="block w-full py-2.5 rounded-xl bg-green text-bg font-semibold text-sm hover:bg-green/90 transition-colors">
+              Aboneliği Aktive Et
+            </a>
+          )}
+          <button onClick={onLogout} className="text-textMute text-xs hover:text-text transition-colors">
+            Çıkış Yap
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-bg p-4">
     {/* Onboarding modal — ilk girişte göster */}
     {showOnboarding && <OnboardingModal token={token} onClose={closeOnboarding} />}
+
+    {/* Trial banner — son 2 günde uyarı göster */}
+    {trialDays != null && trialDays <= 2 && (
+      <div className="mb-3 flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 text-xs font-medium">
+        <AlertCircle size={13} className="shrink-0" />
+        <span>Deneme sürenizin bitmesine <strong>{trialDays}</strong> gün kaldı. Devam etmek için aboneliğinizi aktive edin.</span>
+      </div>
+    )}
 
     <div className="w-full space-y-4">
 

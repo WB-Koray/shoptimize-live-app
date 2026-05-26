@@ -15,6 +15,9 @@ from fastapi import HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "wb-dashboard-auth-secret")
+BILLING_ENABLED   = os.getenv("BILLING_ENABLED", "true").lower() == "true"
+PLAN_TRIAL_DAYS   = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+APP_URL           = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
 
 
 def _secret() -> str:
@@ -58,6 +61,49 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+def _check_billing_inline(username: str, brand: str) -> None:
+    """
+    Her authenticate edilmiş isteğe billing kontrolü uygular.
+    DB erişilemezse sessizce geçer (hata fırlatmaz).
+    BILLING_ENABLED=false ise tamamen atlar.
+    """
+    if not BILLING_ENABLED or not username:
+        return
+    try:
+        from services.db import get_setting
+        billing_status = get_setting(username, brand, "shopify", "billing_status", "")
+        # Kayıt yoksa (self-hosted / doğrudan kurulum) → izin ver
+        if not billing_status or billing_status == "active":
+            return
+        shop = get_setting(username, brand, "shopify", "shop_domain", "")
+        retry_url = f"{APP_URL}/auth/shopify/install?shop={shop}" if shop else APP_URL
+        if billing_status == "declined":
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "billing_declined",
+                    "message": "Abonelik reddedildi. Shoptimize Live'ı kullanmak için ödemeyi onaylamanız gerekiyor.",
+                    "retry_url": retry_url,
+                },
+            )
+        if billing_status in ("pending", "cancelled", "frozen"):
+            installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+            if installed_at and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400):
+                return  # Deneme süresi dolmamış
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "trial_expired",
+                    "message": f"Deneme süreniz doldu ({PLAN_TRIAL_DAYS} gün). Aboneliğinizi aktive edin.",
+                    "retry_url": retry_url,
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # DB erişilemez → bloke etme
+
+
 async def get_current_user(request: Request) -> dict:
     """
     FastAPI dependency — Authorization header veya ?token= query param'dan JWT okur.
@@ -78,5 +124,11 @@ async def get_current_user(request: Request) -> dict:
     payload = decode_access_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Geçersiz veya süresi dolmuş token")
+
+    # Trial / billing durumu kontrolü — süresi dolmuşsa 402 fırlat
+    _check_billing_inline(
+        payload.get("username", ""),
+        payload.get("brand", "default"),
+    )
 
     return payload

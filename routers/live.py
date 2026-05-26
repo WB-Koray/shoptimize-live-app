@@ -318,6 +318,67 @@ window._spt_loaded = true;
     try { send('add_to_cart', { product_title: e.detail && e.detail.product && e.detail.product.title }); } catch(er) {}
   });
 
+  // ── Scroll depth tracking (ürün sayfalarında) ─────────────────────────────
+  (function () {
+    var isProduct = location.pathname.indexOf('/products/') !== -1;
+    if (!isProduct) return;
+    var marks = { 25: false, 50: false, 75: false, 100: false };
+    var timer = null;
+    function checkScroll() {
+      var scrolled = window.scrollY + window.innerHeight;
+      var total = Math.max(document.documentElement.scrollHeight, 1);
+      var pct = Math.round(scrolled / total * 100);
+      [25, 50, 75, 100].forEach(function(mark) {
+        if (!marks[mark] && pct >= mark) {
+          marks[mark] = true;
+          send('scroll_depth', { depth: mark, page_type: 'product' });
+        }
+      });
+    }
+    window.addEventListener('scroll', function() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(checkScroll, 150);
+    }, { passive: true });
+    // İlk yüklemede kontrol (sayfa kısa olabilir)
+    setTimeout(checkScroll, 500);
+  })();
+
+  // ── Attention time (sayfada geçirilen süre) ───────────────────────────────
+  (function () {
+    var pageType = location.pathname.indexOf('/products/') !== -1 ? 'product'
+                 : location.pathname.match(/^\\/cart/) ? 'cart'
+                 : location.pathname.indexOf('/collections/') !== -1 ? 'collection'
+                 : location.pathname.indexOf('/checkout') !== -1 ? 'checkout'
+                 : 'page';
+    var startTs = Date.now();
+    var accumulated = 0;
+    var sent = false;
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        accumulated += Date.now() - startTs;
+      } else {
+        startTs = Date.now();
+      }
+    });
+
+    function sendAttention() {
+      if (sent) return;
+      sent = true;
+      var total = accumulated + (document.hidden ? 0 : Date.now() - startTs);
+      if (total >= 3000) { // en az 3 saniye
+        send('attention_time', {
+          seconds: Math.round(total / 1000),
+          page_type: pageType
+        });
+      }
+    }
+
+    window.addEventListener('beforeunload', sendAttention);
+    // Pagehide — iOS Safari için (beforeunload her zaman tetiklenmez)
+    window.addEventListener('pagehide', sendAttention);
+  })();
+
   console.info('[SPT] Shoptimize pixel aktif. TID:', TID.slice(-8));
 })();
 } /* end _spt_loaded guard */
