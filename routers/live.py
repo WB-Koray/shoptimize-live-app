@@ -780,8 +780,25 @@ async def get_rfm_segments(
 
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    logger.info("[RFM] domain=%r token_set=%s user=%s brand=%s", domain or "(empty)", bool(token), username[:20], brand)
     if not domain or not token:
-        return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı"}, status_code=400)
+        # Diagnoz: raw payload'u logla
+        try:
+            from services.db import _get_conn as _dbc
+            import psycopg2.extras as _pex
+            with _dbc() as _c:
+                with _c.cursor(cursor_factory=_pex.RealDictCursor) as _cur:
+                    _cur.execute("SELECT payload_json FROM integration_connections WHERE username=%s AND brand=%s AND integration_id='shopify' LIMIT 1", (username, brand))
+                    row = _cur.fetchone()
+                    if row:
+                        raw = row["payload_json"]
+                        keys = list(raw.keys()) if isinstance(raw, dict) else (list(json.loads(raw).keys()) if isinstance(raw, str) else [])
+                        logger.warning("[RFM] DB row exists, top-level keys: %s", keys)
+                    else:
+                        logger.warning("[RFM] DB row NOT FOUND for user=%s brand=%s", username, brand)
+        except Exception as _de:
+            logger.warning("[RFM] DB diagnoz hatası: %s", _de)
+        return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı — admin API token gerekli"}, status_code=400)
 
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
