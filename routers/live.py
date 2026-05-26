@@ -792,8 +792,13 @@ async def get_rfm_segments(
                     row = _cur.fetchone()
                     if row:
                         raw = row["payload_json"]
-                        keys = list(raw.keys()) if isinstance(raw, dict) else (list(json.loads(raw).keys()) if isinstance(raw, str) else [])
-                        logger.warning("[RFM] DB row exists, top-level keys: %s", keys)
+                        if isinstance(raw, str):
+                            raw = json.loads(raw)
+                        keys = list(raw.keys()) if isinstance(raw, dict) else []
+                        domain_val = raw.get("shop_domain", "(key missing)") if isinstance(raw, dict) else "N/A"
+                        token_val = raw.get("admin_api_token", "(key missing)") if isinstance(raw, dict) else "N/A"
+                        logger.warning("[RFM] DB row keys: %s | shop_domain=%r | token=%s",
+                            keys, domain_val, "SET" if token_val and token_val != "(key missing)" else repr(token_val))
                     else:
                         logger.warning("[RFM] DB row NOT FOUND for user=%s brand=%s", username, brand)
         except Exception as _de:
