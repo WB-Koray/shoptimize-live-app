@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from services.db import get_setting, set_connection_settings
+from services.db import get_setting, set_connection_settings, lookup_username_by_shop
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -429,6 +429,7 @@ async def _send_welcome_wa_async_direct(phone: str, name: str, shop_domain: str,
 async def shopify_reauth(
     shop: str = Query(...),
     brand: str = Query("default"),
+    username: str = Query(""),
 ):
     """Mevcut merchant yeniden giriş için Shopify OAuth başlatır (pixel/billing yok)."""
     shop = shop.strip().lower()
@@ -441,7 +442,16 @@ async def shopify_reauth(
     if not SHOPIFY_CLIENT_ID:
         raise HTTPException(500, "Shopify app yapılandırılmamış")
 
-    username = _shop_to_username(shop)
+    # username öncelik sırası: 1) explicit param  2) DB lookup  3) shop'tan türet
+    if not username:
+        found = lookup_username_by_shop(shop)
+        if found:
+            username, brand = found
+            logger.info("[Reauth] DB lookup: shop=%s → username=%s brand=%s", shop, username, brand)
+        else:
+            username = _shop_to_username(shop)
+            logger.warning("[Reauth] DB lookup başarısız, türetildi: shop=%s → username=%s", shop, username)
+
     state = _create_state(username, brand, reauth=True)
 
     auth_url = (

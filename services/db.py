@@ -91,6 +91,34 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
         logger.error("[DB] set_connection_settings hatası: %s", e)
 
 
+def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
+    """
+    shop_domain'e göre (username, brand) döner.
+    Örn: '59fc15-cd.myshopify.com' → ('koray@korayyildiz.com.tr', 'default')
+    Bulunamazsa None döner.
+    """
+    try:
+        with _get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT username, brand, payload_json FROM integration_connections
+                    WHERE integration_id = 'shopify'
+                    """,
+                )
+                rows = cur.fetchall()
+                for row in rows:
+                    data = row["payload_json"] or {}
+                    if isinstance(data, str):
+                        data = json.loads(data)
+                    stored = (data.get("settings") or {}).get("shop_domain") or data.get("shop_domain", "")
+                    if stored and stored.lower() == shop_domain.lower():
+                        return (row["username"], row["brand"])
+    except Exception as e:
+        logger.error("[DB] lookup_username_by_shop hatası: %s", e)
+    return None
+
+
 def get_all_shopify_connections():
     """
     Tüm Shopify bağlantılarını döner — TID warmup için.
