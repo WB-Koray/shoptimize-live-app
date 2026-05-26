@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
-  ShoppingBag, Ban, UserX, Plus, Minus,
+  ShoppingBag, Ban, UserX, Plus, Minus, Flame,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -1004,6 +1004,121 @@ function RFMWidget({ session }) {
     </div>
   );
 }
+
+// ── StockDemandWidget — #5 Stok-Talep Alarm ──────────────────────────────────
+// Aynı anda 2+ ziyaretçinin baktığı ürünleri gösterir
+
+function StockDemandWidget({ hotProducts }) {
+  const { t } = useLang();
+  if (!hotProducts.length) return null;
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+        <div className="flex items-center gap-2">
+          <Flame size={14} className="text-amber-400" />
+          <p className="text-sm font-bold text-text">{t('stock.title')}</p>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold tabular-nums">
+            {hotProducts.length}
+          </span>
+        </div>
+        <span className="text-[10px] text-textMute">{t('stock.subtitle')}</span>
+      </div>
+      <div className="divide-y divide-border/40">
+        {hotProducts.map(p => {
+          const heat = p.viewers >= 5 ? 'text-rose' : p.viewers >= 3 ? 'text-amber-400' : 'text-textDim';
+          return (
+            <div key={p.title} className="flex items-center gap-3 px-4 py-2.5">
+              <div className={`flex items-center gap-1 shrink-0 font-bold text-xs tabular-nums ${heat}`}>
+                <Flame size={11} />
+                <span>{p.viewers}</span>
+              </div>
+              <p className="flex-1 text-xs text-text truncate" title={p.title}>{p.title}</p>
+              {p.cartAdders > 0 && (
+                <div className="flex items-center gap-1 shrink-0 text-[10px] font-bold text-green">
+                  <ShoppingCart size={10} />
+                  <span>{p.cartAdders}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
+// ── HiddenCartPanel — #10 Görünmez Sepet Dedektörü ───────────────────────────
+// Sepete ürün ekleyip browsing'e dönen ziyaretçileri tespit eder
+
+function HiddenCartPanel({ visitors, customerNames }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(true);
+
+  if (!visitors.length) return null;
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 border-b border-border/60 hover:bg-surfaceAlt/30 transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <ShoppingBag size={14} className="text-blue" />
+          <p className="text-sm font-bold text-text">{t('hcart.title')}</p>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue/15 text-blue font-bold tabular-nums">
+            {visitors.length}
+          </span>
+        </div>
+        {open ? <ChevronUp size={13} className="text-textMute" /> : <ChevronDown size={13} className="text-textMute" />}
+      </button>
+
+      {open && (
+        <div className="divide-y divide-border/40">
+          {visitors.slice(0, 8).map(p => {
+            const minsAgo = Math.round((Date.now() - p.lastCartTs) / 60000);
+            const name = customerNames?.[p.customer_id] || '';
+            return (
+              <div key={p.vid} className="px-4 py-2.5 space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue shrink-0" />
+                  <p className="text-xs font-semibold text-text flex-1 truncate">
+                    {name || p.vid.slice(-6)}
+                  </p>
+                  <span className="text-[10px] text-textMute tabular-nums shrink-0">
+                    {minsAgo}d {t('common.ago') || 'önce'}
+                  </span>
+                </div>
+                {p.cartProducts.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pl-3.5">
+                    {p.cartProducts.slice(0, 2).map((prod, i) => (
+                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-blueSoft text-blue truncate max-w-[160px]">
+                        {prod}
+                      </span>
+                    ))}
+                    {p.cartProducts.length > 2 && (
+                      <span className="text-[10px] text-textMute">+{p.cartProducts.length - 2}</span>
+                    )}
+                  </div>
+                )}
+                <p className="text-[10px] text-textMute pl-3.5">
+                  {t('stage.' + p.stage)} {t('hcart.now_browsing') || '· şu an geziniyor'}
+                </p>
+              </div>
+            );
+          })}
+          {visitors.length > 8 && (
+            <p className="px-4 py-2 text-center text-[10px] text-textMute">
+              +{visitors.length - 8} {t('hcart.more') || 'daha'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ── AbandonmentIntelligencePanel ──────────────────────────────────────────────
 // Risk skorlu gerçek zamanlı terk tespit paneli — WA hızlı gönderim destekli
@@ -2247,6 +2362,43 @@ export default function Dashboard({ session, onLogout }) {
     atRiskVisitors.filter(p => p.stage === 'checkout' && (Date.now() - p.lastTs) > 15 * 60 * 1000)
   , [atRiskVisitors]);
 
+  // #5 Stok-Talep Alarm: son 30 dk içinde aynı ürüne 2+ eş zamanlı bakan aktif ziyaretçiler
+  const hotProducts = useMemo(() => {
+    const now = Date.now();
+    const counts = {};
+    visitorProfiles
+      .filter(p => now - p.lastTs < 30 * 60 * 1000 && p.stage !== 'converted' && p.lastProduct)
+      .forEach(p => {
+        if (!counts[p.lastProduct]) counts[p.lastProduct] = { viewers: 0, cartAdders: 0 };
+        counts[p.lastProduct].viewers++;
+        if (['cart', 'checkout'].includes(p.stage)) counts[p.lastProduct].cartAdders++;
+      });
+    return Object.entries(counts)
+      .filter(([, v]) => v.viewers >= 2)
+      .map(([title, v]) => ({ title, ...v }))
+      .sort((a, b) => b.viewers - a.viewers || b.cartAdders - a.cartAdders)
+      .slice(0, 8);
+  }, [visitorProfiles]);
+
+  // #10 Görünmez Sepet Dedektörü: add_to_cart eventi var ama şu an browsing/product stage'inde
+  const hiddenCartVisitors = useMemo(() => {
+    const now = Date.now();
+    return visitorProfiles
+      .filter(p => {
+        const hasCartEvent = p.events.some(e => e.event_type === 'add_to_cart');
+        const notInCart    = !['cart', 'checkout', 'converted'].includes(p.stage);
+        const recentlyActive = now - p.lastTs < 2 * 60 * 60 * 1000;
+        return hasCartEvent && notInCart && recentlyActive;
+      })
+      .map(p => {
+        const cartEvs = p.events.filter(e => e.event_type === 'add_to_cart');
+        const cartProducts = [...new Set(cartEvs.map(e => e.data?.product_title || e.data?.product_id || '').filter(Boolean))];
+        const lastCartTs   = Math.max(...cartEvs.map(e => e.ts));
+        return { ...p, cartProducts, lastCartTs };
+      })
+      .sort((a, b) => b.lastCartTs - a.lastCartTs);
+  }, [visitorProfiles]);
+
   const funnelStats = useMemo(() => {
     let product = 0, cart = 0, checkout = 0, converted = 0;
     for (const p of visitorProfiles) {
@@ -2555,6 +2707,12 @@ export default function Dashboard({ session, onLogout }) {
               session={session}
               onVisitorClick={setSelectedVisitor}
             />
+
+            {/* #10 Görünmez Sepet Dedektörü */}
+            <HiddenCartPanel visitors={hiddenCartVisitors} customerNames={customerNames} />
+
+            {/* #5 Stok-Talep Alarm */}
+            <StockDemandWidget hotProducts={hotProducts} />
 
             {/* Conversion funnel */}
             {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}

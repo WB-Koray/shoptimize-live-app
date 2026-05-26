@@ -218,6 +218,15 @@ const translations = {
     'abnd.low':      'Low',
     'abnd.sent':     'Sent',
 
+    // #5 Stock Demand Alert
+    'stock.title':   'Hot Products',
+    'stock.subtitle':'2+ simultaneous viewers',
+
+    // #10 Hidden Cart Detector
+    'hcart.title':        'Hidden Cart',
+    'hcart.now_browsing': '· now browsing',
+    'hcart.more':         'more',
+
     // Journey modal
     'journey.event':  'event',
     'journey.first':  'First:',
@@ -515,6 +524,15 @@ const translations = {
     'abnd.medium':   'Orta',
     'abnd.low':      'Düşük',
     'abnd.sent':     'Gönderildi',
+
+    // #5 Stok-Talep Alarm
+    'stock.title':   'Popüler Ürünler',
+    'stock.subtitle':'Eş zamanlı 2+ ziyaretçi',
+
+    // #10 Görünmez Sepet Dedektörü
+    'hcart.title':        'Görünmez Sepet',
+    'hcart.now_browsing': '· şu an geziniyor',
+    'hcart.more':         'daha',
 
     // Yolculuk modalı
     'journey.event':  'etkinlik',
