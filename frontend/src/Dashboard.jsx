@@ -104,6 +104,46 @@ function parseDevice(ua = '', sw = 0) {
   if (sw > 0 && sw < 1024) return 'tablet';
   return 'desktop';
 }
+// ── Purchase Intent Score ────────────────────────────────────────────────────
+// Mevcut event verilerinden 0-99 arası satın alma niyet skoru hesaplar.
+// 100 = tamamlanmış sipariş (stage: converted)
+function calcIntentScore(profile) {
+  if (profile.stage === 'converted') return 100;
+  const evts = profile.events || [];
+  let score = 0;
+
+  // Sahne bazlı taban skor (en baskın sinyal)
+  score += { browsing: 5, product: 20, cart: 52, checkout: 80 }[profile.stage] || 5;
+
+  // Geri dönen ziyaretçi → çok daha yüksek niyet
+  if (profile.isReturning) score += 12;
+
+  // Benzersiz ürün görüntüleme sayısı (ilgi derinliği)
+  const uniqueProds = new Set(
+    evts.filter(e => e.event_type === 'product_viewed' && (e.data?.product_id || e.data?.product_handle))
+        .map(e => e.data?.product_id || e.data?.product_handle)
+  ).size;
+  score += Math.min(uniqueProds * 3, 12);
+
+  // Oturum süresi (bağlılık)
+  const dur = (profile.lastTs - profile.firstTs) / 1000;
+  if (dur > 60)  score += 3;
+  if (dur > 300) score += 4;
+  if (dur > 900) score += 3;
+
+  // Sepete ekleme eylemleri
+  const cartAdds = evts.filter(e => e.event_type === 'add_to_cart').length;
+  score += Math.min(cartAdds * 4, 12);
+
+  // Giriş yapmış üye
+  if (profile.customer_id) score += 7;
+
+  // Olay yoğunluğu
+  score += Math.min(Math.floor(evts.length / 4), 8);
+
+  return Math.min(Math.round(score), 99);
+}
+
 function parseReferrer(ref = '') {
   if (!ref) return 'Direct';
   try {
@@ -216,7 +256,19 @@ function VisitorCard({ profile, customerName, onClick }) {
             <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20">{t('visitors.returning')}</span>
           )}
         </div>
-        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
+        <div className="flex items-center gap-1">
+          {profile.intentScore != null && (
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full tabular-nums border
+              ${profile.intentScore >= 70
+                ? 'bg-greenSoft text-green border-green/20'
+                : profile.intentScore >= 40
+                ? 'bg-amberSoft text-amber border-amber/20'
+                : 'bg-surfaceAlt text-textDim border-border'}`}>
+              {profile.intentScore === 100 ? '🛍' : profile.intentScore}
+            </span>
+          )}
+          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
+        </div>
       </div>
       {fullName
         ? <p className="text-[10px] text-green font-semibold truncate">{fullName}</p>
@@ -298,40 +350,75 @@ function EventRow({ ev, isNew }) {
   );
 }
 
-// ── FunnelWidget ──────────────────────────────────────────────────────────────
+// ── ConversionFunnelWidget ────────────────────────────────────────────────────
+// Adım adım dönüşüm hunisi — kayıp noktaları ve dönüşüm oranıyla
 
-function FunnelWidget({ stats }) {
+function ConversionFunnelWidget({ stats }) {
   const { t } = useLang();
   const total = stats.total || 1;
+
   const steps = [
-    { key: 'all_visitors',    count: stats.total,     color: 'bg-blue',   pct: 100 },
-    { key: 'viewed_product',  count: stats.product,   color: 'bg-purple', pct: (stats.product / total) * 100 },
-    { key: 'added_to_cart',   count: stats.cart,      color: 'bg-amber',  pct: (stats.cart / total) * 100 },
-    { key: 'started_checkout',count: stats.checkout,  color: 'bg-amber',  pct: (stats.checkout / total) * 100 },
-    { key: 'purchased',       count: stats.converted, color: 'bg-green',  pct: (stats.converted / total) * 100 },
+    { key: 'all_visitors',     count: stats.total,     bar: 'bg-blue',   text: 'text-blue' },
+    { key: 'viewed_product',   count: stats.product,   bar: 'bg-purple', text: 'text-purple' },
+    { key: 'added_to_cart',    count: stats.cart,      bar: 'bg-amber',  text: 'text-amber' },
+    { key: 'started_checkout', count: stats.checkout,  bar: 'bg-orange', text: 'text-orange' },
+    { key: 'purchased',        count: stats.converted, bar: 'bg-green',  text: 'text-green' },
   ];
+
+  const convRate = total > 0 ? ((stats.converted / total) * 100).toFixed(1) : '0.0';
+  const convNum  = parseFloat(convRate);
+
   return (
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-2 p-4 border-b border-border">
-        <TrendingUp size={15} className="text-blue" />
-        <span className="text-text text-sm font-bold">{t('funnel.title')}</span>
+      <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={15} className="text-blue" />
+          <span className="text-text text-sm font-bold">{t('funnel.title')}</span>
+        </div>
+        <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+          convNum >= 3 ? 'bg-greenSoft text-green' :
+          convNum >= 1 ? 'bg-amberSoft text-amber' : 'bg-roseSoft text-rose'
+        }`}>
+          {t('funnel.conv_rate')}: {convRate}%
+        </div>
       </div>
-      <div className="p-4 space-y-3">
-        {steps.map((step, i) => (
-          <div key={step.key} className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-textDim">{t('funnel.' + step.key)}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-text font-bold tabular-nums">{step.count}</span>
-                {i > 0 && <span className="text-[10px] text-textMute">({step.pct.toFixed(1)}%)</span>}
+      <div className="p-4 space-y-1.5">
+        {steps.map((step, i) => {
+          const pct = total > 0 ? (step.count / total) * 100 : 0;
+          const prevCount = i > 0 ? steps[i - 1].count : step.count;
+          const dropOff  = i > 0 ? Math.max(0, prevCount - step.count) : 0;
+          const dropPct  = i > 0 && prevCount > 0 ? ((dropOff / prevCount) * 100).toFixed(0) : null;
+
+          return (
+            <div key={step.key}>
+              {/* Drop-off arrow between steps */}
+              {i > 0 && dropOff > 0 && (
+                <div className="flex items-center gap-1.5 py-0.5 pl-1">
+                  <span className="text-[9px] text-rose/60">▼</span>
+                  <span className="text-[9px] text-rose/70 font-medium">
+                    {dropOff} {t('funnel.dropped')} ({dropPct}%)
+                  </span>
+                </div>
+              )}
+              {/* Step row */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-semibold ${step.text}`}>{t('funnel.' + step.key)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-text tabular-nums">{step.count}</span>
+                      <span className="text-[10px] text-textMute tabular-nums">({pct.toFixed(0)}%)</span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-surfaceAlt rounded-full overflow-hidden">
+                    <div className={`h-full ${step.bar} rounded-full transition-all duration-700 opacity-80`}
+                      style={{ width: `${Math.min(100, pct)}%` }} />
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="h-2 bg-surfaceAlt rounded-full overflow-hidden">
-              <div className={`h-full ${step.color} rounded-full transition-all duration-700`}
-                style={{ width: `${Math.min(100, step.pct)}%` }} />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -548,6 +635,187 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
   );
 }
 
+// ── OrderJourneyModal ─────────────────────────────────────────────────────────
+// Shopify CustomerJourneySummary ile oluşturulan sipariş yolculuğu modalı
+
+function VisitStep({ visit, index, isLast }) {
+  const { t } = useLang();
+  if (!visit) return null;
+  const src = visit.source || '';
+  const med = visit.referrerUrl || '';
+  const ch  = visit.utmParameters?.source || src || t('ojrn.direct');
+  const ts  = visit.occurredAt ? new Date(visit.occurredAt).toLocaleString('tr-TR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  }) : '';
+
+  const chColor = /google|bing|yahoo/i.test(ch) ? 'text-blue'
+    : /facebook|instagram/i.test(ch) ? 'text-rose'
+    : /tiktok/i.test(ch) ? 'text-textDim'
+    : ch === t('ojrn.direct') || ch === 'direct' ? 'text-green'
+    : 'text-purple';
+
+  return (
+    <div className="flex gap-2.5">
+      <div className="flex flex-col items-center shrink-0 pt-1">
+        <div className="w-2 h-2 rounded-full bg-blue shrink-0" />
+        {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+      </div>
+      <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : ''}`}>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-textMute w-4 font-mono">{index + 1}</span>
+            <span className={`text-[11px] font-semibold ${chColor}`}>{ch}</span>
+            {visit.utmParameters?.campaign && (
+              <span className="text-[10px] bg-blueSoft text-blue px-1 py-0.5 rounded">
+                {visit.utmParameters.campaign}
+              </span>
+            )}
+          </div>
+          {med && (
+            <p className="text-[10px] text-textMute truncate ml-5 mt-0.5 max-w-[200px]" title={med}>
+              {med.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}
+            </p>
+          )}
+        </div>
+        {ts && <span className="text-[10px] text-textMute whitespace-nowrap shrink-0">{ts}</span>}
+      </div>
+    </div>
+  );
+}
+
+function OrderJourneyModal({ orderId, session, onClose }) {
+  const { t } = useLang();
+  const [loading, setLoading] = useState(true);
+  const [data, setData]       = useState(null);
+  const [err, setErr]         = useState('');
+
+  useEffect(() => {
+    if (!orderId) return;
+    setLoading(true);
+    setErr('');
+    setData(null);
+    const { token, username, brand } = session;
+    fetch(
+      `${API_URL}/api/shopify/order-journey?order_id=${encodeURIComponent(orderId)}&username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) setData(d.order);
+        else setErr(d.detail || 'Error');
+      })
+      .catch(() => setErr('Network error'))
+      .finally(() => setLoading(false));
+  }, [orderId, session]);
+
+  if (!orderId) return null;
+
+  const journey   = data?.customerJourneySummary;
+  const moments   = journey?.moments?.nodes || [];
+  const firstVisit = journey?.firstVisit;
+  const lastVisit  = journey?.lastVisit;
+  const daysToConv = journey?.daysToConversion;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-blueSoft">
+              <TrendingUp size={14} className="text-blue" />
+            </div>
+            <div>
+              <p className="text-text font-bold text-sm">{t('ojrn.title')}</p>
+              {data?.name && <p className="text-textMute text-[10px]">Order {data.name}</p>}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-surfaceAlt rounded-lg text-textDim hover:text-text transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Stats row */}
+        {journey && (
+          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-border/60 bg-surfaceAlt/30">
+            {firstVisit?.occurredAt && (
+              <div className="text-center">
+                <p className="text-[10px] text-textMute">{t('ojrn.first_visit')}</p>
+                <p className="text-xs font-bold text-text tabular-nums">
+                  {new Date(firstVisit.occurredAt).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })}
+                </p>
+              </div>
+            )}
+            {lastVisit?.occurredAt && (
+              <div className="text-center">
+                <p className="text-[10px] text-textMute">{t('ojrn.last_visit')}</p>
+                <p className="text-xs font-bold text-text tabular-nums">
+                  {new Date(lastVisit.occurredAt).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })}
+                </p>
+              </div>
+            )}
+            {daysToConversion != null && (
+              <div className="text-center">
+                <p className="text-[10px] text-textMute">{t('ojrn.days_conv')}</p>
+                <p className="text-xs font-bold text-green tabular-nums">{daysToConv}d</p>
+              </div>
+            )}
+            {moments.length > 0 && (
+              <div className="text-center">
+                <p className="text-[10px] text-textMute">{t('ojrn.touchpoints')}</p>
+                <p className="text-xs font-bold text-blue tabular-nums">{moments.length}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-0 custom-scrollbar">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <RefreshCw size={18} className="text-textMute animate-spin" />
+              <p className="text-textMute text-sm">{t('ojrn.loading')}</p>
+            </div>
+          )}
+          {!loading && err && (
+            <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 text-sm text-rose">
+              <AlertCircle size={13} className="shrink-0" /> {err}
+            </div>
+          )}
+          {!loading && !err && moments.length === 0 && (
+            <div className="py-12 text-center space-y-2">
+              <Globe size={20} className="text-textMute mx-auto" />
+              <p className="text-textMute text-sm">{t('ojrn.no_data')}</p>
+            </div>
+          )}
+          {!loading && !err && moments.length > 0 && (
+            <div className="space-y-0">
+              {/* First visit if not in moments */}
+              {firstVisit && !moments.find(m => m.occurredAt === firstVisit.occurredAt) && (
+                <VisitStep visit={firstVisit} index={-1} isLast={false} />
+              )}
+              {moments.map((m, i) => (
+                <VisitStep key={i} visit={m} index={i} isLast={i === moments.length - 1 && !lastVisit} />
+              ))}
+              {/* Purchase endpoint */}
+              <div className="flex gap-2.5 pt-1">
+                <div className="flex flex-col items-center shrink-0 pt-1">
+                  <div className="w-2.5 h-2.5 rounded-full bg-green shrink-0" />
+                </div>
+                <span className="text-[11px] text-green font-bold flex items-center gap-1 pb-0.5">
+                  <CheckCircle size={11} /> {data?.name || 'Order'} — {data?.totalPriceSet?.shopMoney ? `${parseFloat(data.totalPriceSet.shopMoney.amount).toLocaleString('tr-TR')} ${data.totalPriceSet.shopMoney.currencyCode}` : ''}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Section header helper ─────────────────────────────────────────────────────
 
 function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, extra }) {
@@ -640,6 +908,7 @@ function FlowPanel({ session }) {
 
   const [orders, setOrders]         = useState([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
+  const [journeyOrderId, setJourneyOrderId] = useState(null);
 
   const [optouts, setOptouts]         = useState([]);
   const [optoutsOpen, setOptoutsOpen] = useState(false);
@@ -1125,6 +1394,13 @@ function FlowPanel({ session }) {
                       {o.customer_name && <p className="text-xs font-semibold text-text truncate">{o.customer_name}</p>}
                       {o.phone && <p className="text-[10px] text-textMute font-mono">***{o.phone.slice(-4)}</p>}
                     </div>
+                    {o.order_id && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setJourneyOrderId(o.order_id); }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blueSoft border border-blue/20 text-blue hover:bg-blue/10 transition-colors shrink-0">
+                        <TrendingUp size={9} /> {t('ojrn.order_btn')}
+                      </button>
+                    )}
                   </div>
                   {o.line_items?.length > 0 && (
                     <div className="space-y-0.5">
@@ -1326,6 +1602,15 @@ function FlowPanel({ session }) {
 
         </div>{/* /sağ */}
       </div>{/* /grid */}
+
+      {/* Order Journey Modal */}
+      {journeyOrderId && (
+        <OrderJourneyModal
+          orderId={journeyOrderId}
+          session={session}
+          onClose={() => setJourneyOrderId(null)}
+        />
+      )}
 
     </div>
   );
@@ -1617,7 +1902,10 @@ export default function Dashboard({ session, onLogout }) {
     const nowTR = Date.now() + 3 * 3_600_000;
     const todayStartMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
     return Object.values(map)
-      .map(p => ({ ...p, isReturning: p.firstTs < todayStartMs && p.lastTs >= todayStartMs }))
+      .map(p => {
+        const isReturning = p.firstTs < todayStartMs && p.lastTs >= todayStartMs;
+        return { ...p, isReturning, intentScore: calcIntentScore({ ...p, isReturning }) };
+      })
       .sort((a, b) => b.lastTs - a.lastTs);
   }, [events, convertedOrders]);
 
@@ -1960,7 +2248,7 @@ export default function Dashboard({ session, onLogout }) {
             )}
 
             {/* Conversion funnel */}
-            {visitorProfiles.length > 0 && <FunnelWidget stats={funnelStats} />}
+            {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
           </div>
 
           {/* SAĞ — Visitors + Live Feed */}
@@ -2141,7 +2429,7 @@ export default function Dashboard({ session, onLogout }) {
           <div className="space-y-3">
 
             {/* Funnel */}
-            {visitorProfiles.length > 0 && <FunnelWidget stats={funnelStats} />}
+            {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
 
             {/* UTM campaigns accordion */}
             {utmStats.length > 0 && (

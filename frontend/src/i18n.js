@@ -168,6 +168,27 @@ const translations = {
     'funnel.added_to_cart':   'Added to Cart',
     'funnel.started_checkout':'Started Checkout',
     'funnel.purchased':       'Purchased',
+    'funnel.conv_rate':       'Conv. Rate',
+    'funnel.dropped':         'dropped',
+
+    // Intent score
+    'intent.score':           'Intent',
+    'intent.high':            'High intent',
+    'intent.medium':          'Medium intent',
+    'intent.low':             'Low intent',
+
+    // Order Journey modal (Shopify CustomerJourneySummary)
+    'ojrn.title':             'Order Journey',
+    'ojrn.first_visit':       'First Visit',
+    'ojrn.last_visit':        'Last Visit',
+    'ojrn.days_conv':         'Days to Convert',
+    'ojrn.touchpoints':       'Touchpoints',
+    'ojrn.channel':           'Channel',
+    'ojrn.source':            'Source',
+    'ojrn.loading':           'Loading journey…',
+    'ojrn.no_data':           'No journey data available',
+    'ojrn.direct':            'Direct',
+    'ojrn.order_btn':         'Journey',
 
     // Journey modal
     'journey.event':  'event',
@@ -417,6 +438,27 @@ const translations = {
     'funnel.added_to_cart':   'Sepete Ekledi',
     'funnel.started_checkout':'Ödeme Başlattı',
     'funnel.purchased':       'Satın Aldı',
+    'funnel.conv_rate':       'Dönüşüm',
+    'funnel.dropped':         'düştü',
+
+    // Niyet skoru
+    'intent.score':           'Niyet',
+    'intent.high':            'Yüksek niyet',
+    'intent.medium':          'Orta niyet',
+    'intent.low':             'Düşük niyet',
+
+    // Sipariş yolculuğu modalı (Shopify CustomerJourneySummary)
+    'ojrn.title':             'Sipariş Yolculuğu',
+    'ojrn.first_visit':       'İlk Ziyaret',
+    'ojrn.last_visit':        'Son Ziyaret',
+    'ojrn.days_conv':         'Dönüşüm Günü',
+    'ojrn.touchpoints':       'Temas Noktaları',
+    'ojrn.channel':           'Kanal',
+    'ojrn.source':            'Kaynak',
+    'ojrn.loading':           'Yolculuk yükleniyor…',
+    'ojrn.no_data':           'Yolculuk verisi bulunamadı',
+    'ojrn.direct':            'Direkt',
+    'ojrn.order_btn':         'Yolculuk',
 
     // Yolculuk modalı
     'journey.event':  'etkinlik',

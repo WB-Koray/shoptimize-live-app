@@ -11,6 +11,7 @@ import secrets
 import time
 from typing import Optional
 
+import httpx
 import requests
 from fastapi import APIRouter, Depends, Query, Request
 from services.auth import get_current_user
@@ -648,6 +649,89 @@ async def get_shopify_customer(
             "total_spent": c.get("total_spent", "0.00"),
         }}
     return JSONResponse({"ok": False, "error": f"shopify_status_{r.status_code}"}, status_code=502)
+
+
+# ---------------------------------------------------------------------------
+# Sipariş Yolculuğu (CustomerJourneySummary via Shopify GraphQL)
+# ---------------------------------------------------------------------------
+
+_ORDER_JOURNEY_GQL = """
+query OrderJourney($id: ID!) {
+  order(id: $id) {
+    id
+    name
+    createdAt
+    totalPriceSet { shopMoney { amount currencyCode } }
+    customer { firstName lastName email numberOfOrders amountSpent { amount currencyCode } }
+    customerJourneySummary {
+      customerOrderIndex
+      daysToConversion
+      ready
+      momentsCount { count }
+      firstVisit {
+        source sourceType referrerUrl occurredAt landingPage
+        utmParameters { source medium campaign content term }
+      }
+      lastVisit {
+        source sourceType referrerUrl occurredAt landingPage
+        utmParameters { source medium campaign content term }
+      }
+      moments(first: 20) {
+        edges {
+          node {
+            ... on CustomerVisit {
+              source sourceType referrerUrl occurredAt landingPage
+              utmParameters { source medium campaign content term }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+@router.get("/api/shopify/order-journey")
+async def get_order_journey(
+    order_id: str = Query(...),
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Shopify GraphQL CustomerJourneySummary — siparişin tam yolculuğunu döner."""
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    if not domain or not token:
+        return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı"}, status_code=400)
+
+    # Numeric ID → GID
+    oid = str(order_id).strip()
+    gid = oid if oid.startswith("gid://") else f"gid://shopify/Order/{oid}"
+
+    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(gql_url, headers=headers,
+                                  json={"query": _ORDER_JOURNEY_GQL, "variables": {"id": gid}})
+        data = r.json()
+    except Exception as exc:
+        logger.exception("[JOURNEY] Shopify GraphQL bağlantı hatası")
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    if r.status_code != 200:
+        return JSONResponse({"ok": False, "error": f"Shopify {r.status_code}: {r.text[:200]}"}, status_code=502)
+
+    errors = data.get("errors")
+    if errors:
+        return JSONResponse({"ok": False, "error": str(errors)}, status_code=502)
+
+    order_data = (data.get("data") or {}).get("order")
+    if not order_data:
+        return JSONResponse({"ok": False, "error": "Sipariş bulunamadı"}, status_code=404)
+
+    return {"ok": True, "order": order_data}
 
 
 # ---------------------------------------------------------------------------
