@@ -114,6 +114,8 @@ async def send_wa_template(
         },
     }
 
+    logger.debug("[WA] Gönderiliyor → url=%s tpl=%s lang=%s to=%s phone_id=%s",
+                 url, template_name, language, to[-4:], phone_number_id[-6:] if phone_number_id else "?")
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, headers=headers, json=payload)
@@ -125,8 +127,9 @@ async def send_wa_template(
         err_obj = data.get("error", {})
         error = err_obj.get("message", r.text[:300])
         err_code = err_obj.get("code", r.status_code)
-        logger.warning("[WA] Gönderim hatası %s (#%s): %s | payload_template=%s lang=%s",
-                       to, err_code, error, template_name, language)
+        err_sub = err_obj.get("error_subcode", "")
+        logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | url=%s tpl=%s lang=%s",
+                       to, err_code, err_sub, error, url, template_name, language)
         return {"ok": False, "error": error, "code": err_code}
     except Exception as e:
         logger.error("[WA] İstek hatası: %s", e)
