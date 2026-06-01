@@ -303,6 +303,19 @@ class RedisStore:
     async def clear_flow_logs(self, username: str, brand: str) -> None:
         await self._redis.delete(f"flow_logs:{username}:{brand}")
 
+    async def delete_flow_data(self, username: str, brand: str) -> None:
+        """
+        GDPR / app/uninstalled: merchant'a ait WA flow verisini sil.
+        - flow_logs:{username}:{brand}   — gönderim geçmişi
+        - wa_orders:{username}:{brand}   — WA atıflı siparişler
+        Not: wa_step:* ve wa_phone_active:* key'leri token/telefon bazlıdır ve
+        kısa TTL ile zaten sona erer; merchant bazlı tarama yapılamaz.
+        """
+        pipe = self._redis.pipeline()
+        pipe.delete(f"flow_logs:{username}:{brand}")
+        pipe.delete(f"wa_orders:{username}:{brand}")
+        await pipe.execute()
+
     # ── WA dönüşüm sipariş detayları ────────────────────────────────────────────
 
     async def save_converted_order(self, username: str, brand: str, order_data: dict) -> None:

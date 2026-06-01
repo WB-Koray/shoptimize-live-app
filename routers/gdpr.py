@@ -83,16 +83,19 @@ async def app_uninstalled(request: Request):
                 if settings.get("shop_domain") == shop_domain:
                     u = conn["username"]
                     b = conn["brand"]
-                    # Billing'i iptal et
+                    # 1. Billing'i iptal et + Shopify token'ı geçersiz kıl
                     set_connection_settings(u, b, "shopify", {
                         "billing_status": "uninstalled",
-                        "admin_api_token": "",  # token artık geçersiz
+                        "admin_api_token": "",
                     })
-                    # Redis event ve visitor verilerini temizle
+                    # 2. Redis live event + visitor verilerini temizle
                     tid = settings.get("pixel_tracking_id", "")
                     if tid:
                         await store.delete_tid_events(tid)
                         logger.info("[GDPR] app/uninstalled: TID=%s temizlendi (shop=%s)", tid, shop_domain)
+                    # 3. WA flow log, order cache, active token verilerini temizle
+                    await store.delete_flow_data(u, b)
+                    logger.info("[GDPR] app/uninstalled: flow data temizlendi (user=%s brand=%s)", u, b)
     except Exception as e:
         logger.warning("[GDPR] app/uninstalled işleme hatası (200 dönülüyor): %s", e)
 
@@ -106,6 +109,10 @@ async def app_uninstalled(request: Request):
 # ---------------------------------------------------------------------------
 @router.post("/shop/redact")
 async def shop_redact(request: Request):
+    """
+    app/uninstalled'dan 48 saat sonra Shopify tetikler.
+    Tüm kalan mağaza verisi kalıcı olarak silinmeli.
+    """
     body = await _read_and_verify(request)
     logger.info("[GDPR] shop/redact: %s", body[:300].decode(errors="replace"))
 
@@ -118,10 +125,16 @@ async def shop_redact(request: Request):
             for conn in get_all_shopify_connections():
                 settings = conn.get("connection", {}).get("settings", {})
                 if settings.get("shop_domain") == shop_domain:
+                    u = conn["username"]
+                    b = conn["brand"]
+                    # 1. Live event + visitor verileri
                     tid = settings.get("pixel_tracking_id", "")
                     if tid:
                         await store.delete_tid_events(tid)
                         logger.info("[GDPR] shop/redact: TID=%s silindi (shop=%s)", tid, shop_domain)
+                    # 2. WA flow verileri (app/uninstalled'da temizlenmemiş olabilir)
+                    await store.delete_flow_data(u, b)
+                    logger.info("[GDPR] shop/redact: flow data silindi (user=%s brand=%s)", u, b)
     except Exception as e:
         logger.warning("[GDPR] shop/redact işleme hatası (200 dönülüyor): %s", e)
 

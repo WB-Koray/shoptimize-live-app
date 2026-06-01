@@ -294,10 +294,12 @@ async def shopify_callback(
             wh_token = _secrets.token_hex(16)
             set_connection_settings(username, brand, "shopify", {"webhook_token": wh_token})
 
+        checkout_url = f"{APP_URL}/api/shopify/webhook/checkouts-create?token={wh_token}&username={username}&brand={brand}"
         webhook_topics = [
-            ("orders/create",    f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
-            ("checkouts/create", f"{APP_URL}/api/shopify/webhook/checkouts-create?token={wh_token}&username={username}&brand={brand}"),
-            ("app/uninstalled",  f"{APP_URL}/webhooks/app/uninstalled"),
+            ("orders/create",     f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
+            ("checkouts/create",  checkout_url),
+            ("checkouts/update",  checkout_url),  # müşteri email/telefon bilgisi bu event'te gelir
+            ("app/uninstalled",   f"{APP_URL}/webhooks/app/uninstalled"),
         ]
         for topic, callback_url in webhook_topics:
             requests.post(
