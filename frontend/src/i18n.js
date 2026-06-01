@@ -51,6 +51,8 @@ const translations = {
     'nav.logout':     'Logout',
     'nav.realtime':   'Live',
     'nav.analytics':  'Analytics',
+    'nav.anonymize':  'Hide',
+    'nav.anonymized': 'Hidden',
 
     // Pixel panel
     'pixel.installed':            'Storefront Pixel Installed',
@@ -314,6 +316,9 @@ const translations = {
     'flow.roi_days':        'days',
     'flow.roi_empty':       'No WA-attributed orders yet',
     'flow.wa_sent':         'WA Sent',
+    'flow.tab_dashboard':   'Dashboard',
+    'flow.tab_settings':    'Settings',
+    'flow.tab_optout':      'Opt-out',
   },
 
   tr: {
@@ -366,6 +371,8 @@ const translations = {
     'nav.logout':     'Çıkış',
     'nav.realtime':   'Canlı',
     'nav.analytics':  'Analiz',
+    'nav.anonymize':  'Gizle',
+    'nav.anonymized': 'Gizli',
 
     // Pixel paneli
     'pixel.installed':            'Storefront Pixel Kurulu',
@@ -629,6 +636,9 @@ const translations = {
     'flow.roi_days':        'gün',
     'flow.roi_empty':       'Henüz WA atıflı sipariş yok',
     'flow.wa_sent':         'WA Gönderildi',
+    'flow.tab_dashboard':   'Dashboard',
+    'flow.tab_settings':    'Ayarlar',
+    'flow.tab_optout':      'Opt-out',
   },
 };
 

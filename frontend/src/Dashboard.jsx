@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
-  ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff,
+  ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -1413,6 +1413,7 @@ function FlowPanel({ session, anonymized = false }) {
   const [connOpen, setConnOpen]   = useState(true);
   const [seqOpen, setSeqOpen]     = useState(true);
   const [testOpen, setTestOpen]   = useState(false);
+  const [waTab, setWaTab]         = useState('dashboard');
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -1604,126 +1605,491 @@ function FlowPanel({ session, anonymized = false }) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
+    <div className="space-y-4">
 
-      {/* Header */}
+      {/* ── Header & Tab Bar ── */}
       <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-greenSoft border border-green/20">
+        <div className="p-2.5 rounded-xl bg-greenSoft border border-green/20 shrink-0">
           <MessageCircle size={16} className="text-green" />
         </div>
-        <div className="flex-1">
+        <div className="shrink-0">
           <h2 className="text-text font-bold text-sm">{t('flow.title')}</h2>
           <p className="text-textMute text-xs">{t('flow.subtitle')}</p>
         </div>
+        {/* Tab navigation */}
+        <div className="flex-1 flex justify-center">
+          <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-xl p-1">
+            {[
+              { id: 'dashboard', label: t('flow.tab_dashboard'), icon: BarChart2 },
+              { id: 'settings',  label: t('flow.tab_settings'),  icon: Settings  },
+              { id: 'optout',    label: t('flow.tab_optout'),    icon: Ban       },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setWaTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                  ${waTab === tab.id
+                    ? 'bg-surface border border-border text-text shadow-sm'
+                    : 'text-textMute hover:text-text'}`}>
+                <tab.icon size={11} />
+                {tab.label}
+                {tab.id === 'optout' && optouts.length > 0 && (
+                  <span className="bg-rose/20 text-rose px-1.5 py-px rounded-full text-[9px] font-bold">{optouts.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Enable/Disable toggle */}
         <button onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
-          className="flex items-center gap-1.5 text-sm font-medium transition-colors">
+          className="flex items-center gap-1.5 text-sm font-medium transition-colors shrink-0">
           {settings.enabled
             ? <><ToggleRight size={26} className="text-green" /><span className="text-green text-xs">{t('flow.active')}</span></>
             : <><ToggleLeft  size={26} className="text-textMute" /><span className="text-textMute text-xs">{t('flow.inactive')}</span></>}
         </button>
       </div>
 
-      {/* Özet istatistikler */}
-      {logs.length > 0 && (
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-surface border border-border rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-green">{sentCount}</p>
-            <p className="text-textMute text-[10px]">{t('flow.sent')}</p>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-blue/40 transition-colors"
-            onClick={() => { setOrdersOpen(o => !o); if (!ordersOpen) fetchOrders(); }}>
-            <p className="text-lg font-bold text-blue">{orders.length || '—'}</p>
-            <p className="text-textMute text-[10px]">{t('flow.tracked')} {ordersOpen ? '▲' : '▼'}</p>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-emerald-500">{convertedCount}</p>
-            <p className="text-textMute text-[10px]">{t('flow.wa_attr')}</p>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-purple/40 transition-colors"
-            onClick={() => { setRoiOpen(o => !o); }}>
-            <p className="text-lg font-bold text-purple">
-              {roi?.wa_revenue != null
-                ? `${roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 0 })} ${roi.currency || 'TRY'}`
-                : '—'}
-            </p>
-            <p className="text-textMute text-[10px]">{t('flow.roi_revenue')} {roiOpen ? '▲' : '▼'}</p>
-          </div>
-        </div>
-      )}
+      {/* ── DASHBOARD TAB ── */}
+      {waTab === 'dashboard' && <>
 
-      {/* ── 2 Kolon Grid ── */}
-      <div className="grid grid-cols-[2fr_3fr] gap-4 items-start">
-
-        {/* SOL — Ayarlar */}
-        <div className="space-y-4">
-
-      {/* Bağlantı ayarları */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-        <button onClick={() => setConnOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-          <Key size={13} className="text-textDim shrink-0" />
-          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.connection')}</span>
-          {maskedToken && <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">{t('flow.connected')}</span>}
-          {connOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-        </button>
-        {connOpen && (
-          <div className="px-4 pb-4 space-y-3 border-t border-border/60">
-            <div className="space-y-1.5 pt-3">
-              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.wa_token')}</label>
-              <div className="relative">
-                <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-                <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
-                  placeholder={maskedToken || 'EAAxxxxxxx…'}
-                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
-              </div>
+        {/* Özet istatistikler */}
+        {logs.length > 0 && (
+          <div className="grid grid-cols-4 gap-2">
+            <div className="bg-surface border border-border rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-green">{sentCount}</p>
+              <p className="text-textMute text-[10px]">{t('flow.sent')}</p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.phone_id')}</label>
-              <div className="relative">
-                <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-                <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
-                  placeholder="123456789012345"
-                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
-              </div>
+            <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-blue/40 transition-colors"
+              onClick={() => { setOrdersOpen(o => !o); if (!ordersOpen) fetchOrders(); }}>
+              <p className="text-lg font-bold text-blue">{orders.length || '—'}</p>
+              <p className="text-textMute text-[10px]">{t('flow.tracked')} {ordersOpen ? '▲' : '▼'}</p>
+            </div>
+            <div className="bg-surface border border-border rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-emerald-500">{convertedCount}</p>
+              <p className="text-textMute text-[10px]">{t('flow.wa_attr')}</p>
+            </div>
+            <div className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer hover:border-purple/40 transition-colors"
+              onClick={() => setRoiOpen(o => !o)}>
+              <p className="text-lg font-bold text-purple">
+                {roi?.wa_revenue != null
+                  ? `${roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 0 })} ${roi.currency || 'TRY'}`
+                  : '—'}
+              </p>
+              <p className="text-textMute text-[10px]">{t('flow.roi_revenue')} {roiOpen ? '▲' : '▼'}</p>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Sequence */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-        <button onClick={() => setSeqOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-          <MessageSquare size={13} className="text-textDim shrink-0" />
-          <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.cart_seq')}</span>
-          <span className="text-[10px] text-textMute mr-1">{settings.sequence.filter(s => s.enabled).length}/{settings.sequence.length} {t('flow.active')}</span>
-          {seqOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-        </button>
-        {seqOpen && (
-        <div className="px-4 pb-4 space-y-3 border-t border-border/60">
-        {settings.sequence.map((step, idx) => (
-          <div key={idx} className={`rounded-xl border p-3 space-y-2 ${step.enabled ? 'border-green/30 bg-greenSoft/20' : 'border-border bg-surfaceAlt/30'}`}>
-            <div className="flex items-center gap-2">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${step.enabled ? 'bg-greenSoft text-green' : 'bg-surfaceAlt text-textMute'}`}>
-                {idx + 1}
+        {/* WA ROI Panel */}
+        {roiOpen && (
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+              <TrendingUp size={13} className="text-purple" />
+              <div className="flex-1 min-w-0">
+                <span className="text-text font-semibold text-sm">{t('flow.roi_title')}</span>
+                <p className="text-textMute text-[10px] mt-0.5">
+                  {t('flow.roi_subtitle').replace('{days}', roiDays)}
+                </p>
               </div>
-              <input value={step.label} onChange={e => updateStep(idx, { label: e.target.value })}
-                className="flex-1 bg-transparent text-sm font-medium text-text focus:outline-none" />
-              <button onClick={() => updateStep(idx, { enabled: !step.enabled })}>
-                {step.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
+              <div className="flex items-center gap-1 mr-1">
+                {[7, 14, 30].map(d => (
+                  <button key={d}
+                    onClick={() => { setRoiDays(d); fetchRoi(d); }}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors ${roiDays === d ? 'bg-purple text-bg' : 'bg-surfaceAlt text-textMute hover:text-text border border-border'}`}>
+                    {d}{t('flow.roi_days')}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => fetchRoi(roiDays)}
+                className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+                <RefreshCw size={11} />
               </button>
             </div>
-            {step.enabled && (
-              <div className="grid grid-cols-3 gap-2 pl-7">
-                <div>
-                  <p className="text-[10px] text-textMute mb-1">{t('flow.delay')}</p>
-                  <div className="flex items-center gap-1.5">
-                    <input type="number" min={5} max={43200} value={step.delay_minutes}
-                      onChange={e => updateStep(idx, { delay_minutes: parseInt(e.target.value) || 15 })}
-                      className="w-16 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
-                    <span className="text-textMute text-[10px]">dk · {fmtDelay(step.delay_minutes, lang)}</span>
+            {(!roi || roi.wa_attributed_count === 0) ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <MessageCircle size={18} className="text-textMute/30" />
+                <p className="text-textMute text-xs">{t('flow.roi_empty')}</p>
+              </div>
+            ) : (
+              <div className="p-4 space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                    <p className="text-base font-bold text-purple">{roi.wa_attributed_count}</p>
+                    <p className="text-textMute text-[10px]">{t('flow.roi_orders')}</p>
+                  </div>
+                  <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                    <p className="text-base font-bold text-green">
+                      {roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {roi.currency}
+                    </p>
+                    <p className="text-textMute text-[10px]">{t('flow.roi_revenue')}</p>
+                  </div>
+                  <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
+                    <p className="text-base font-bold text-blue">
+                      {roi.total_orders > 0 ? `${Math.round(roi.wa_attributed_count / roi.total_orders * 100)}%` : '—'}
+                    </p>
+                    <p className="text-textMute text-[10px]">{t('flow.roi_rate')}</p>
                   </div>
                 </div>
+                {roi.wa_orders?.length > 0 && (
+                  <div className="space-y-1.5">
+                    {roi.wa_orders.map((o, i) => (
+                      <div key={o.order_id || i} className="flex items-center gap-2 px-3 py-2 bg-surfaceAlt rounded-xl border border-border">
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full shrink-0">
+                            #{o.order_number}
+                          </span>
+                          <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                            <MessageCircle size={8} /> WA ✓
+                          </span>
+                          {o.customer_name && (
+                            <span className="text-xs text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</span>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold text-text tabular-nums">
+                            {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency}
+                          </p>
+                          <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Gönderim Geçmişi */}
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <FileText size={13} className="text-textDim" />
+            <span className="text-text font-semibold text-sm flex-1">{t('flow.history')}</span>
+            <span className="text-textMute text-xs">{logs.length} {t('flow.records')}</span>
+            <button onClick={fetchLogs} disabled={logsLoading}
+              className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors disabled:opacity-50">
+              <RefreshCw size={11} className={logsLoading ? 'animate-spin' : ''} />
+            </button>
+            <button onClick={handleClearLogs} disabled={logs.length === 0}
+              className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-rose transition-colors disabled:opacity-50">
+              <Trash2 size={11} />
+            </button>
+            <button onClick={() => setLogsOpen(o => !o)}
+              className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors">
+              {logsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
+          </div>
+          {logsOpen && (
+            <div className="overflow-y-auto max-h-[600px] p-3 space-y-2 custom-scrollbar">
+              {customerGroups.length === 0 ? (
+                <div className="py-10 text-center">
+                  <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
+                  <p className="text-textMute text-sm">{t('flow.no_sends')}</p>
+                </div>
+              ) : customerGroups.map(group => {
+                const isOpen = expandedCustomers.has(group.key);
+                return (
+                  <div key={group.key} className={`rounded-xl border overflow-hidden transition-colors
+                    ${group.converted ? 'border-green/30' : group.cooldownCount > 0 ? 'border-amber/20' : 'border-border'}`}>
+                    {/* Müşteri özet satırı */}
+                    <div onClick={() => toggleCustomer(group.key)}
+                      className="flex items-center gap-2.5 p-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
+                      <div className="shrink-0">
+                        {group.converted
+                          ? <ShoppingBag size={13} className="text-green" />
+                          : group.sentCount > 0
+                            ? <CheckCircle size={13} className="text-green" />
+                            : <Clock size={13} className="text-amber" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-text font-semibold text-xs">{anonymized ? maskName(group.name) : group.name}</span>
+                          <span className="text-textMute text-[10px] font-mono">{anonymized ? maskPhone(group.phone) : group.phone}</span>
+                          {group.converted && (
+                            <span className="text-[10px] bg-greenSoft text-green border border-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                              <ShoppingBag size={8} />{t('flow.ordered')}
+                            </span>
+                          )}
+                        </div>
+                        {group.product && (
+                          <p className="text-[10px] text-textMute truncate max-w-[220px] mt-0.5">{group.product}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">
+                          {group.sentCount} {t('flow.sent')}
+                          {group.cycles.length > 1 && ` · ${group.cycles.length} döngü`}
+                          {group.cooldownCount > 0 && ` · ${group.cooldownCount} atlandı`}
+                        </span>
+                        <span className="text-textMute text-[10px]">
+                          {new Date(group.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {isOpen ? <ChevronUp size={11} className="text-textMute" /> : <ChevronDown size={11} className="text-textMute" />}
+                      </div>
+                    </div>
+
+                    {/* Açılan journey timeline — döngü bazlı */}
+                    {isOpen && (
+                      <div className="border-t border-border/60 px-4 pt-2.5 pb-3 bg-surfaceAlt/20 space-y-3">
+                        {group.cycles.map((cycle, cycleIdx) => {
+                          const cycleStart = new Date(cycle.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit' });
+                          const cycleEnd   = new Date(cycle.lastTs).toLocaleString('tr-TR',  { day: '2-digit', month: '2-digit' });
+                          const sameDay    = cycleStart === cycleEnd;
+                          return (
+                            <div key={cycle.token || cycleIdx}>
+                              {/* Döngü başlık bandı */}
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <div className="h-px flex-1 bg-border/60" />
+                                <span className="text-[10px] text-textMute font-medium shrink-0 flex items-center gap-1">
+                                  <span className="bg-surfaceAlt border border-border px-1.5 py-0.5 rounded-full text-textDim">
+                                    #{cycleIdx + 1}
+                                  </span>
+                                  {cycle.product && (
+                                    <span className="max-w-[160px] truncate text-text">{cycle.product}</span>
+                                  )}
+                                  <span className="text-textMute">
+                                    {sameDay ? cycleStart : `${cycleStart} → ${cycleEnd}`}
+                                  </span>
+                                  {cycle.converted && (
+                                    <span className="bg-greenSoft text-green border border-green/20 px-1 py-0.5 rounded flex items-center gap-0.5">
+                                      <ShoppingBag size={8} />{t('flow.ordered')}
+                                    </span>
+                                  )}
+                                </span>
+                                <div className="h-px flex-1 bg-border/60" />
+                              </div>
+
+                              {/* Adımlar */}
+                              <div className="space-y-0">
+                                {cycle.entries.map((entry, i) => {
+                                  const isCooldown = entry.status === 'cooldown_skip';
+                                  const isLast     = i === cycle.entries.length - 1;
+                                  return (
+                                    <div key={i} className="flex gap-2.5">
+                                      <div className="flex flex-col items-center shrink-0 pt-1">
+                                        <div className={`w-2 h-2 rounded-full shrink-0
+                                          ${isCooldown ? 'bg-amber' : entry.ok ? 'bg-green' : 'bg-rose'}`} />
+                                        {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+                                      </div>
+                                      <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : 'pb-0.5'}`}>
+                                        <div className="min-w-0">
+                                          {isCooldown ? (
+                                            <span className="text-[11px] text-amber flex items-center gap-1">
+                                              <Clock size={10} />{t('flow.cooldown_skip')}
+                                            </span>
+                                          ) : (
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className={`text-[11px] font-medium ${entry.ok ? 'text-text' : 'text-rose'}`}>
+                                                {entry.ok ? '✓' : '✗'} {entry.step_label || `Step ${(entry.step ?? 0) + 1}`}
+                                              </span>
+                                              {entry.converted && (
+                                                <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
+                                                  <ShoppingBag size={8} />{t('flow.post_order_lbl')}
+                                                </span>
+                                              )}
+                                              {entry.error && (
+                                                <span className="text-[10px] text-rose">{entry.error}</span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
+                                          {new Date(entry.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Sipariş verildi satırı (genel) */}
+                        {group.converted && (
+                          <div className="flex gap-2.5 pt-0.5">
+                            <div className="flex flex-col items-center shrink-0 pt-1">
+                              <div className="w-2 h-2 rounded-full bg-green shrink-0" />
+                            </div>
+                            <span className="text-[11px] text-green font-semibold flex items-center gap-1 pb-0.5">
+                              <ShoppingBag size={11} />{t('flow.order_placed')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* WA Tracked Orders */}
+        {ordersOpen && (
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+              <ShoppingBag size={13} className="text-blue" />
+              <div className="flex-1 min-w-0">
+                <span className="text-text font-semibold text-sm">{t('flow.wa_orders')}</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-textMute text-[10px]">{orders.length} {t('flow.total')}</span>
+                  {convertedCount > 0 && (
+                    <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
+                      {convertedCount} {t('flow.wa_attributed')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+                <RefreshCw size={11} />
+              </button>
+            </div>
+            {orders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <ShoppingBag size={18} className="text-textMute/40" />
+                <p className="text-textMute text-xs">{t('flow.no_orders')}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
+                {orders.map((o, i) => (
+                  <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {o.order_number && (
+                          <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
+                            #{o.order_number}
+                          </span>
+                        )}
+                        {o.wa_attributed && (
+                          <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                            <MessageCircle size={8} /> WA ✓
+                          </span>
+                        )}
+                        {o.channel && o.channel !== 'Direct' && (
+                          <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
+                            {o.channel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-text">
+                          {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
+                        </p>
+                        <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        {o.customer_name && <p className="text-xs font-semibold text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</p>}
+                        {o.phone && <p className="text-[10px] text-textMute font-mono">{anonymized ? '***••••' : `***${o.phone.slice(-4)}`}</p>}
+                      </div>
+                      {o.order_id && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setJourneyOrderId(o.order_id); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blueSoft border border-blue/20 text-blue hover:bg-blue/10 transition-colors shrink-0">
+                          <TrendingUp size={9} /> {t('ojrn.order_btn')}
+                        </button>
+                      )}
+                    </div>
+                    {o.line_items?.length > 0 && (
+                      <div className="space-y-0.5">
+                        {o.line_items.slice(0, 3).map((item, j) => (
+                          <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
+                            <span className="truncate flex-1">{item.quantity}× {item.title}</span>
+                            <span className="shrink-0 ml-2 tabular-nums">
+                              {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                            </span>
+                          </div>
+                        ))}
+                        {o.line_items.length > 3 && (
+                          <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} {t('flow.more_items').replace('+{n} ', '')}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </>}
+
+      {/* ── SETTINGS TAB ── */}
+      {waTab === 'settings' && (
+        <div className="max-w-2xl mx-auto space-y-4">
+
+          {/* Bağlantı ayarları */}
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <button onClick={() => setConnOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+              <Key size={13} className="text-textDim shrink-0" />
+              <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.connection')}</span>
+              {maskedToken && <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">{t('flow.connected')}</span>}
+              {connOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+            </button>
+            {connOpen && (
+              <div className="px-4 pb-4 space-y-3 border-t border-border/60">
+                <div className="space-y-1.5 pt-3">
+                  <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.wa_token')}</label>
+                  <div className="relative">
+                    <Key size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                    {anonymized
+                      ? <div className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-textMute tracking-widest">• • • • • • • •</div>
+                      : <input type="password" value={settings.wa_token} onChange={e => setSettings(s => ({ ...s, wa_token: e.target.value }))}
+                          placeholder={maskedToken || 'EAAxxxxxxx…'}
+                          className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+                    }
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.phone_id')}</label>
+                  <div className="relative">
+                    <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                    {anonymized
+                      ? <div className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-textMute tracking-widest">• • • • • •</div>
+                      : <input value={settings.phone_number_id} onChange={e => setSettings(s => ({ ...s, phone_number_id: e.target.value }))}
+                          placeholder="123456789012345"
+                          className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sequence */}
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <button onClick={() => setSeqOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+              <MessageSquare size={13} className="text-textDim shrink-0" />
+              <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">{t('flow.cart_seq')}</span>
+              <span className="text-[10px] text-textMute mr-1">{settings.sequence.filter(s => s.enabled).length}/{settings.sequence.length} {t('flow.active')}</span>
+              {seqOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
+            </button>
+            {seqOpen && (
+            <div className="px-4 pb-4 space-y-3 border-t border-border/60">
+            {settings.sequence.map((step, idx) => (
+              <div key={idx} className={`rounded-xl border p-3 space-y-2 ${step.enabled ? 'border-green/30 bg-greenSoft/20' : 'border-border bg-surfaceAlt/30'}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${step.enabled ? 'bg-greenSoft text-green' : 'bg-surfaceAlt text-textMute'}`}>
+                    {idx + 1}
+                  </div>
+                  <input value={step.label} onChange={e => updateStep(idx, { label: e.target.value })}
+                    className="flex-1 bg-transparent text-sm font-medium text-text focus:outline-none" />
+                  <button onClick={() => updateStep(idx, { enabled: !step.enabled })}>
+                    {step.enabled ? <ToggleRight size={22} className="text-green" /> : <ToggleLeft size={22} className="text-textMute" />}
+                  </button>
+                </div>
+                {step.enabled && (
+                  <div className="grid grid-cols-3 gap-2 pl-7">
+                    <div>
+                      <p className="text-[10px] text-textMute mb-1">{t('flow.delay')}</p>
+                      <div className="flex items-center gap-1.5">
+                        <input type="number" min={5} max={43200} value={step.delay_minutes}
+                          onChange={e => updateStep(idx, { delay_minutes: parseInt(e.target.value) || 15 })}
+                          className="w-16 bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text text-center focus:outline-none focus:border-green/60" />
+                        <span className="text-textMute text-[10px]">dk · {fmtDelay(step.delay_minutes, lang)}</span>
+                      </div>
+                    </div>
                 <div>
                   <p className="text-[10px] text-textMute mb-1">{t('flow.template')}</p>
                   <input value={step.template} onChange={e => updateStep(idx, { template: e.target.value })}
@@ -1872,396 +2238,58 @@ function FlowPanel({ session, anonymized = false }) {
         )}
       </div>
 
-        </div>{/* /sol */}
-
-        {/* SAĞ — Veriler */}
-        <div className="space-y-4">
-
-      {/* WA Tracked Orders */}
-      {ordersOpen && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <ShoppingBag size={13} className="text-blue" />
-            <div className="flex-1 min-w-0">
-              <span className="text-text font-semibold text-sm">{t('flow.wa_orders')}</span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-textMute text-[10px]">{orders.length} {t('flow.total')}</span>
-                {convertedCount > 0 && (
-                  <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
-                    {convertedCount} {t('flow.wa_attributed')}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
-              <RefreshCw size={11} />
-            </button>
-          </div>
-          {orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2">
-              <ShoppingBag size={18} className="text-textMute/40" />
-              <p className="text-textMute text-xs">{t('flow.no_orders')}</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
-              {orders.map((o, i) => (
-                <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {o.order_number && (
-                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
-                          #{o.order_number}
-                        </span>
-                      )}
-                      {o.wa_attributed && (
-                        <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <MessageCircle size={8} /> WA ✓
-                        </span>
-                      )}
-                      {o.channel && o.channel !== 'Direct' && (
-                        <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
-                          {o.channel}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-text">
-                        {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
-                      </p>
-                      <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</p>}
-                      {o.phone && <p className="text-[10px] text-textMute font-mono">{anonymized ? '***••••' : `***${o.phone.slice(-4)}`}</p>}
-                    </div>
-                    {o.order_id && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setJourneyOrderId(o.order_id); }}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blueSoft border border-blue/20 text-blue hover:bg-blue/10 transition-colors shrink-0">
-                        <TrendingUp size={9} /> {t('ojrn.order_btn')}
-                      </button>
-                    )}
-                  </div>
-                  {o.line_items?.length > 0 && (
-                    <div className="space-y-0.5">
-                      {o.line_items.slice(0, 3).map((item, j) => (
-                        <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
-                          <span className="truncate flex-1">{item.quantity}× {item.title}</span>
-                          <span className="shrink-0 ml-2 tabular-nums">
-                            {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-                          </span>
-                        </div>
-                      ))}
-                      {o.line_items.length > 3 && (
-                        <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} {t('flow.more_items').replace('+{n} ', '')}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
-      {/* WA ROI Panel */}
-      {roiOpen && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <TrendingUp size={13} className="text-purple" />
-            <div className="flex-1 min-w-0">
-              <span className="text-text font-semibold text-sm">{t('flow.roi_title')}</span>
-              <p className="text-textMute text-[10px] mt-0.5">
-                {t('flow.roi_subtitle').replace('{days}', roiDays)}
-              </p>
-            </div>
-            {/* Days selector */}
-            <div className="flex items-center gap-1 mr-1">
-              {[7, 14, 30].map(d => (
-                <button key={d}
-                  onClick={() => { setRoiDays(d); fetchRoi(d); }}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors ${roiDays === d ? 'bg-purple text-bg' : 'bg-surfaceAlt text-textMute hover:text-text border border-border'}`}>
-                  {d}{t('flow.roi_days')}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => fetchRoi(roiDays)}
-              className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
-              <RefreshCw size={11} />
-            </button>
-          </div>
-
-          {(!roi || roi.wa_attributed_count === 0) ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <MessageCircle size={18} className="text-textMute/30" />
-              <p className="text-textMute text-xs">{t('flow.roi_empty')}</p>
-            </div>
-          ) : (
-            <div className="p-4 space-y-4">
-              {/* ROI Stats Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
-                  <p className="text-base font-bold text-purple">{roi.wa_attributed_count}</p>
-                  <p className="text-textMute text-[10px]">{t('flow.roi_orders')}</p>
-                </div>
-                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
-                  <p className="text-base font-bold text-green">
-                    {roi.wa_revenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {roi.currency}
-                  </p>
-                  <p className="text-textMute text-[10px]">{t('flow.roi_revenue')}</p>
-                </div>
-                <div className="bg-surfaceAlt rounded-xl p-3 text-center border border-border">
-                  <p className="text-base font-bold text-blue">
-                    {roi.total_orders > 0 ? `${Math.round(roi.wa_attributed_count / roi.total_orders * 100)}%` : '—'}
-                  </p>
-                  <p className="text-textMute text-[10px]">{t('flow.roi_rate')}</p>
-                </div>
+      {/* ── OPT-OUT TAB ── */}
+      {waTab === 'optout' && (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
+              <div className="p-2 rounded-xl bg-roseSoft border border-rose/20 shrink-0">
+                <Ban size={14} className="text-rose" />
               </div>
-
-              {/* WA attributed orders list */}
-              {roi.wa_orders?.length > 0 && (
-                <div className="space-y-1.5">
-                  {roi.wa_orders.map((o, i) => (
-                    <div key={o.order_id || i} className="flex items-center gap-2 px-3 py-2 bg-surfaceAlt rounded-xl border border-border">
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full shrink-0">
-                          #{o.order_number}
-                        </span>
-                        <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
-                          <MessageCircle size={8} /> WA ✓
-                        </span>
-                        {o.customer_name && (
-                          <span className="text-xs text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</span>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-bold text-text tabular-nums">
-                          {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency}
-                        </p>
-                        <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Gönderim Geçmişi */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-          <FileText size={13} className="text-textDim" />
-          <span className="text-text font-semibold text-sm flex-1">{t('flow.history')}</span>
-          <span className="text-textMute text-xs">{logs.length} {t('flow.records')}</span>
-          <button onClick={fetchLogs} disabled={logsLoading}
-            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors disabled:opacity-50">
-            <RefreshCw size={11} className={logsLoading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={handleClearLogs} disabled={logs.length === 0}
-            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-rose transition-colors disabled:opacity-50">
-            <Trash2 size={11} />
-          </button>
-          <button onClick={() => setLogsOpen(o => !o)}
-            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors">
-            {logsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-          </button>
-        </div>
-        {logsOpen && (
-          <div className="overflow-y-auto max-h-80 p-3 space-y-2 custom-scrollbar">
-            {customerGroups.length === 0 ? (
-              <div className="py-10 text-center">
-                <MessageCircle size={18} className="text-textMute mx-auto mb-2" />
-                <p className="text-textMute text-sm">{t('flow.no_sends')}</p>
+              <div className="flex-1">
+                <p className="text-text font-semibold text-sm">
+                  Opt-out {optouts.length > 0 && <span className="text-textMute font-normal text-xs ml-1">({optouts.length})</span>}
+                </p>
+                <p className="text-textMute text-[10px] mt-0.5">{t('flow.optout_sub')}</p>
               </div>
-            ) : customerGroups.map(group => {
-              const isOpen = expandedCustomers.has(group.key);
-              return (
-                <div key={group.key} className={`rounded-xl border overflow-hidden transition-colors
-                  ${group.converted ? 'border-green/30' : group.cooldownCount > 0 ? 'border-amber/20' : 'border-border'}`}>
-                  {/* Müşteri özet satırı */}
-                  <div onClick={() => toggleCustomer(group.key)}
-                    className="flex items-center gap-2.5 p-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
-                    <div className="shrink-0">
-                      {group.converted
-                        ? <ShoppingBag size={13} className="text-green" />
-                        : group.sentCount > 0
-                          ? <CheckCircle size={13} className="text-green" />
-                          : <Clock size={13} className="text-amber" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-text font-semibold text-xs">{anonymized ? maskName(group.name) : group.name}</span>
-                        <span className="text-textMute text-[10px] font-mono">{anonymized ? maskPhone(group.phone) : group.phone}</span>
-                        {group.converted && (
-                          <span className="text-[10px] bg-greenSoft text-green border border-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                            <ShoppingBag size={8} />{t('flow.ordered')}
-                          </span>
-                        )}
-                      </div>
-                      {group.product && (
-                        <p className="text-[10px] text-textMute truncate max-w-[220px] mt-0.5">{group.product}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">
-                        {group.sentCount} {t('flow.sent')}
-                        {group.cycles.length > 1 && ` · ${group.cycles.length} döngü`}
-                        {group.cooldownCount > 0 && ` · ${group.cooldownCount} atlandı`}
-                      </span>
-                      <span className="text-textMute text-[10px]">
-                        {new Date(group.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      {isOpen ? <ChevronUp size={11} className="text-textMute" /> : <ChevronDown size={11} className="text-textMute" />}
-                    </div>
-                  </div>
-
-                  {/* Açılan journey timeline — döngü bazlı */}
-                  {isOpen && (
-                    <div className="border-t border-border/60 px-4 pt-2.5 pb-3 bg-surfaceAlt/20 space-y-3">
-                      {group.cycles.map((cycle, cycleIdx) => {
-                        const cycleStart = new Date(cycle.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit' });
-                        const cycleEnd   = new Date(cycle.lastTs).toLocaleString('tr-TR',  { day: '2-digit', month: '2-digit' });
-                        const sameDay    = cycleStart === cycleEnd;
-                        return (
-                          <div key={cycle.token || cycleIdx}>
-                            {/* Döngü başlık bandı */}
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <div className="h-px flex-1 bg-border/60" />
-                              <span className="text-[10px] text-textMute font-medium shrink-0 flex items-center gap-1">
-                                <span className="bg-surfaceAlt border border-border px-1.5 py-0.5 rounded-full text-textDim">
-                                  #{cycleIdx + 1}
-                                </span>
-                                {cycle.product && (
-                                  <span className="max-w-[160px] truncate text-text">{cycle.product}</span>
-                                )}
-                                <span className="text-textMute">
-                                  {sameDay ? cycleStart : `${cycleStart} → ${cycleEnd}`}
-                                </span>
-                                {cycle.converted && (
-                                  <span className="bg-greenSoft text-green border border-green/20 px-1 py-0.5 rounded flex items-center gap-0.5">
-                                    <ShoppingBag size={8} />{t('flow.ordered')}
-                                  </span>
-                                )}
-                              </span>
-                              <div className="h-px flex-1 bg-border/60" />
-                            </div>
-
-                            {/* Adımlar */}
-                            <div className="space-y-0">
-                              {cycle.entries.map((entry, i) => {
-                                const isCooldown = entry.status === 'cooldown_skip';
-                                const isLast     = i === cycle.entries.length - 1;
-                                return (
-                                  <div key={i} className="flex gap-2.5">
-                                    <div className="flex flex-col items-center shrink-0 pt-1">
-                                      <div className={`w-2 h-2 rounded-full shrink-0
-                                        ${isCooldown ? 'bg-amber' : entry.ok ? 'bg-green' : 'bg-rose'}`} />
-                                      {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
-                                    </div>
-                                    <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : 'pb-0.5'}`}>
-                                      <div className="min-w-0">
-                                        {isCooldown ? (
-                                          <span className="text-[11px] text-amber flex items-center gap-1">
-                                            <Clock size={10} />{t('flow.cooldown_skip')}
-                                          </span>
-                                        ) : (
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className={`text-[11px] font-medium ${entry.ok ? 'text-text' : 'text-rose'}`}>
-                                              {entry.ok ? '✓' : '✗'} {entry.step_label || `Step ${(entry.step ?? 0) + 1}`}
-                                            </span>
-                                            {entry.converted && (
-                                              <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
-                                                <ShoppingBag size={8} />{t('flow.post_order_lbl')}
-                                              </span>
-                                            )}
-                                            {entry.error && (
-                                              <span className="text-[10px] text-rose">{entry.error}</span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
-                                        {new Date(entry.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {/* Sipariş verildi satırı (genel) */}
-                      {group.converted && (
-                        <div className="flex gap-2.5 pt-0.5">
-                          <div className="flex flex-col items-center shrink-0 pt-1">
-                            <div className="w-2 h-2 rounded-full bg-green shrink-0" />
-                          </div>
-                          <span className="text-[11px] text-green font-semibold flex items-center gap-1 pb-0.5">
-                            <ShoppingBag size={11} />{t('flow.order_placed')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Opt-out listesi */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-          <Ban size={13} className="text-textDim" />
-          <span className="text-text font-semibold text-sm flex-1">
-            Opt-out {optouts.length > 0 && <span className="text-textMute font-normal text-xs ml-1">({optouts.length})</span>}
-          </span>
-          <button onClick={() => { setOptoutsOpen(o => !o); if (!optoutsOpen) fetchOptouts(); }}
-            className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textDim hover:text-text transition-colors">
-            {optoutsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-          </button>
-        </div>
-        {optoutsOpen && (
-          <div className="p-3 space-y-2">
-            <p className="text-[10px] text-textMute">{t('flow.optout_sub')}</p>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <UserX size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
-                <input type="tel" value={optoutPhone} onChange={e => setOptoutPhone(e.target.value)}
-                  placeholder="+905551234567" onKeyDown={e => e.key === 'Enter' && handleAddOptout()}
-                  className="w-full bg-surfaceAlt border border-border rounded-xl pl-8 pr-4 py-2 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-rose/40 transition-colors" />
-              </div>
-              <button onClick={handleAddOptout} disabled={!optoutPhone.trim()}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs bg-roseSoft border border-rose/20 text-rose hover:bg-rose/20 transition-colors disabled:opacity-40 shrink-0">
-                <Plus size={12} /> {t('flow.add')}
+              <button onClick={fetchOptouts} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+                <RefreshCw size={11} />
               </button>
             </div>
-            {optouts.length === 0
-              ? <p className="text-textMute text-xs text-center py-3">{t('flow.empty_list')}</p>
-              : <div className="space-y-1 max-h-36 overflow-y-auto custom-scrollbar">
-                  {optouts.map(phone => (
-                    <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
-                      <span className="text-xs text-rose flex-1 font-mono">{phone}</span>
-                      <button onClick={() => handleRemoveOptout(phone)} disabled={removingOptout === phone}
-                        className="text-textMute hover:text-rose transition-colors disabled:opacity-40">
-                        {removingOptout === phone ? <RefreshCw size={11} className="animate-spin" /> : <Minus size={12} />}
-                      </button>
-                    </div>
-                  ))}
+            <div className="p-4 space-y-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <UserX size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                  <input type="tel" value={optoutPhone} onChange={e => setOptoutPhone(e.target.value)}
+                    placeholder="+905551234567" onKeyDown={e => e.key === 'Enter' && handleAddOptout()}
+                    className="w-full bg-surfaceAlt border border-border rounded-xl pl-8 pr-4 py-2 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-rose/40 transition-colors" />
                 </div>
-            }
+                <button onClick={handleAddOptout} disabled={!optoutPhone.trim()}
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs bg-roseSoft border border-rose/20 text-rose hover:bg-rose/20 transition-colors disabled:opacity-40 shrink-0">
+                  <Plus size={12} /> {t('flow.add')}
+                </button>
+              </div>
+              {optouts.length === 0
+                ? <p className="text-textMute text-xs text-center py-3">{t('flow.empty_list')}</p>
+                : <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar">
+                    {optouts.map(phone => (
+                      <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
+                        <span className="text-xs text-rose flex-1 font-mono">{anonymized ? maskPhone(phone) : phone}</span>
+                        <button onClick={() => handleRemoveOptout(phone)} disabled={removingOptout === phone}
+                          className="text-textMute hover:text-rose transition-colors disabled:opacity-40">
+                          {removingOptout === phone ? <RefreshCw size={11} className="animate-spin" /> : <Minus size={12} />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+              }
+            </div>
           </div>
-        )}
-      </div>
-
-        </div>{/* /sağ */}
-      </div>{/* /grid */}
+        </div>
+      )}
 
       {/* Order Journey Modal */}
       {journeyOrderId && (
@@ -2873,13 +2901,13 @@ export default function Dashboard({ session, onLogout }) {
           <LangSwitch />
           <ThemeSwitch />
           <button onClick={() => setAnonymized(a => !a)}
-            title={anonymized ? 'Gerçek veriyi göster' : 'Veriyi anonimleştir (KVKK)'}
+            title={anonymized ? t('nav.anonymized') : t('nav.anonymize')}
             className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-bold rounded-full transition-colors
               ${anonymized
                 ? 'bg-amber/10 border-amber/40 text-amber hover:bg-amber/20'
                 : 'bg-surfaceAlt border-border text-textDim hover:text-text'}`}>
             {anonymized ? <EyeOff size={12} /> : <Eye size={12} />}
-            {anonymized ? 'Gizli' : 'Gizle'}
+            {anonymized ? t('nav.anonymized') : t('nav.anonymize')}
           </button>
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
