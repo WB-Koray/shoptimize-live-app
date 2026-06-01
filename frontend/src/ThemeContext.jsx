@@ -4,7 +4,12 @@ import { getTheme, applyThemeToCSSVars } from './theme';
 const ThemeCtx = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [vibe, setVibe] = useState(() => localStorage.getItem('spt_vibe') || 'warm');
+  const [vibe, setVibe] = useState(() => {
+    const saved = localStorage.getItem('spt_vibe');
+    // 'warm' eski default'tu — slate'e geç (kullanıcı isterse tekrar değiştirebilir)
+    if (!saved || saved === 'warm') return 'slate';
+    return saved;
+  });
   const [mode, setMode] = useState(() => localStorage.getItem('spt_mode') || 'dark');
   const theme = getTheme(vibe, mode);
 
@@ -45,6 +50,7 @@ export function ThemeSwitch() {
   const active = { ...base, background: 'var(--c-text)', color: 'var(--c-bg)' };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <button style={vibe === 'slate'     ? active : base} onClick={() => setVibe('slate')}>SLATE</button>
       <button style={vibe === 'warm'      ? active : base} onClick={() => setVibe('warm')}>WARM</button>
       <button style={vibe === 'brutalist' ? active : base} onClick={() => setVibe('brutalist')}>BRUTAL</button>
       <span style={{ width: 1, height: 14, background: 'var(--c-border)', margin: '0 2px' }} />
