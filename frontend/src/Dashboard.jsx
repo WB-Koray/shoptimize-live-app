@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
-  ShoppingBag, Ban, UserX, Plus, Minus, Flame,
+  ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -14,6 +14,27 @@ import OnboardingModal from './OnboardingModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 const MAX_EVENTS = 2000;
+
+// ── Anonymization helpers ─────────────────────────────────────────────────────
+function maskName(name) {
+  if (!name) return name;
+  return name.split(' ').map(w => w.length > 0 ? w[0] + '***' : w).join(' ');
+}
+function maskPhone(phone) {
+  if (!phone) return phone;
+  if (phone.startsWith('***')) return '***••••';        // flow log kısaltması
+  if (phone.startsWith('+')) return phone.slice(0, 4) + '*** ***' + phone.slice(-2);
+  return phone.slice(0, 2) + '***';
+}
+function maskCity(city) {
+  if (!city) return city;
+  return city[0] + '***';
+}
+function maskEmail(email) {
+  if (!email) return email;
+  const [local, domain] = email.split('@');
+  return (local[0] || '') + '***@' + (domain || '***');
+}
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -237,13 +258,14 @@ function ProductCard({ product, flash }) {
 
 // ── VisitorCard ───────────────────────────────────────────────────────────────
 
-function VisitorCard({ profile, customerName, onClick }) {
+function VisitorCard({ profile, customerName, onClick, anonymized = false }) {
   const { t, lang } = useLang();
   const sm = STAGE_META[profile.stage] || STAGE_META.browsing;
   const c  = CM[sm.color] || CM.slate;
   const DevIcon = profile.device === 'mobile' ? Smartphone : profile.device === 'tablet' ? Tablet : Monitor;
   const inactive = Date.now() - profile.lastTs > 5 * 60 * 1000;
-  const fullName = customerName ? [customerName.first_name, customerName.last_name].filter(Boolean).join(' ') : null;
+  const rawName = customerName ? [customerName.first_name, customerName.last_name].filter(Boolean).join(' ') : null;
+  const fullName = anonymized ? maskName(rawName) : rawName;
   return (
     <div onClick={onClick}
       className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-[#5A4535] transition-all space-y-2
@@ -1172,7 +1194,7 @@ function calcAbandonmentRisk(profile, now = Date.now()) {
   return Math.min(Math.max(Math.round(risk), 0), 100);
 }
 
-function AbandonmentIntelligencePanel({ atRiskVisitors, customerNames, session, onVisitorClick }) {
+function AbandonmentIntelligencePanel({ atRiskVisitors, customerNames, session, onVisitorClick, anonymized = false }) {
   const { t, lang } = useLang();
   const { token, username, brand } = session;
   const [sending, setSending] = useState({}); // vid → 'sending' | 'sent' | 'error'
@@ -1232,7 +1254,8 @@ function AbandonmentIntelligencePanel({ atRiskVisitors, customerNames, session, 
             const risk = profile.riskScore;
             const badge = riskBadge(risk);
             const cn = customerNames[profile.customer_id];
-            const fullName = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
+            const rawFullName = cn ? [cn.first_name, cn.last_name].filter(Boolean).join(' ') : null;
+            const fullName = anonymized ? maskName(rawFullName) : rawFullName;
             const hasPhone = !!cn?.phone;
             const sendState = sending[profile.vid];
             const DevIcon = profile.device === 'mobile' ? Smartphone : profile.device === 'tablet' ? Tablet : Monitor;
@@ -1334,7 +1357,7 @@ function fmtRevenue(amount) {
   return `₺${amount.toFixed(0)}`;
 }
 
-function FlowPanel({ session }) {
+function FlowPanel({ session, anonymized = false }) {
   const { t, lang } = useLang();
   const { token, username, brand } = session;
   const base = API_URL;
@@ -1902,8 +1925,8 @@ function FlowPanel({ session }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 min-w-0">
-                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{o.customer_name}</p>}
-                      {o.phone && <p className="text-[10px] text-textMute font-mono">***{o.phone.slice(-4)}</p>}
+                      {o.customer_name && <p className="text-xs font-semibold text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</p>}
+                      {o.phone && <p className="text-[10px] text-textMute font-mono">{anonymized ? '***••••' : `***${o.phone.slice(-4)}`}</p>}
                     </div>
                     {o.order_id && (
                       <button
@@ -2002,7 +2025,7 @@ function FlowPanel({ session }) {
                           <MessageCircle size={8} /> WA ✓
                         </span>
                         {o.customer_name && (
-                          <span className="text-xs text-text truncate">{o.customer_name}</span>
+                          <span className="text-xs text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</span>
                         )}
                       </div>
                       <div className="text-right shrink-0">
@@ -2063,8 +2086,8 @@ function FlowPanel({ session }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-text font-semibold text-xs">{group.name}</span>
-                        <span className="text-textMute text-[10px] font-mono">{group.phone}</span>
+                        <span className="text-text font-semibold text-xs">{anonymized ? maskName(group.name) : group.name}</span>
+                        <span className="text-textMute text-[10px] font-mono">{anonymized ? maskPhone(group.phone) : group.phone}</span>
                         {group.converted && (
                           <span className="text-[10px] bg-greenSoft text-green border border-green/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                             <ShoppingBag size={8} />{t('flow.ordered')}
@@ -2274,6 +2297,7 @@ export default function Dashboard({ session, onLogout }) {
       .catch(() => {});
   }, [token]);
 
+  const [anonymized, setAnonymized] = useState(false);
   const [activeView, setActiveView] = useState('live');
   const [liveTab, setLiveTab]           = useState('realtime');
   const [prodOpen, setProdOpen]         = useState(true);
@@ -2840,6 +2864,15 @@ export default function Dashboard({ session, onLogout }) {
           </div>
           <LangSwitch />
           <ThemeSwitch />
+          <button onClick={() => setAnonymized(a => !a)}
+            title={anonymized ? 'Gerçek veriyi göster' : 'Veriyi anonimleştir (KVKK)'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-bold rounded-full transition-colors
+              ${anonymized
+                ? 'bg-amber/10 border-amber/40 text-amber hover:bg-amber/20'
+                : 'bg-surfaceAlt border-border text-textDim hover:text-text'}`}>
+            {anonymized ? <EyeOff size={12} /> : <Eye size={12} />}
+            {anonymized ? 'Gizli' : 'Gizle'}
+          </button>
           <button onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
             <LogOut size={12} /> {t('nav.logout')}
@@ -2848,7 +2881,7 @@ export default function Dashboard({ session, onLogout }) {
       </div>
 
       {/* WA Otomasyon view */}
-      {activeView === 'flow' && <FlowPanel session={session} />}
+      {activeView === 'flow' && <FlowPanel session={session} anonymized={anonymized} />}
 
       {activeView === 'live' && <>
 
@@ -2955,6 +2988,7 @@ export default function Dashboard({ session, onLogout }) {
               atRiskVisitors={atRiskVisitors}
               customerNames={customerNames}
               session={session}
+              anonymized={anonymized}
               onVisitorClick={setSelectedVisitor}
             />
 
@@ -2977,6 +3011,7 @@ export default function Dashboard({ session, onLogout }) {
                   {visitorProfiles.slice(0, 18).map(profile => (
                     <VisitorCard key={profile.vid} profile={profile}
                       customerName={customerNames[profile.customer_id]}
+                      anonymized={anonymized}
                       onClick={() => setSelectedVisitor(profile)} />
                   ))}
                 </div>
