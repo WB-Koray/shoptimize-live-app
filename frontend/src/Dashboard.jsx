@@ -1678,6 +1678,95 @@ function FlowPanel({ session, anonymized = false }) {
           </div>
         )}
 
+        {/* WA Tracked Orders — stats kartına tıklayınca hemen altında açılır */}
+        {ordersOpen && (
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+              <ShoppingBag size={13} className="text-blue" />
+              <div className="flex-1 min-w-0">
+                <span className="text-text font-semibold text-sm">{t('flow.wa_orders')}</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-textMute text-[10px]">{orders.length} {t('flow.total')}</span>
+                  {convertedCount > 0 && (
+                    <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
+                      {convertedCount} {t('flow.wa_attributed')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
+                <RefreshCw size={11} />
+              </button>
+            </div>
+            {orders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <ShoppingBag size={18} className="text-textMute/40" />
+                <p className="text-textMute text-xs">{t('flow.no_orders')}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
+                {orders.map((o, i) => (
+                  <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {o.order_number && (
+                          <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
+                            #{o.order_number}
+                          </span>
+                        )}
+                        {o.wa_attributed && (
+                          <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                            <MessageCircle size={8} /> WA ✓
+                          </span>
+                        )}
+                        {o.channel && o.channel !== 'Direct' && (
+                          <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
+                            {o.channel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-text">
+                          {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
+                        </p>
+                        <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        {o.customer_name && <p className="text-xs font-semibold text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</p>}
+                        {o.phone && <p className="text-[10px] text-textMute font-mono">{anonymized ? '***••••' : `***${o.phone.slice(-4)}`}</p>}
+                      </div>
+                      {o.order_id && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setJourneyOrderId(o.order_id); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blueSoft border border-blue/20 text-blue hover:bg-blue/10 transition-colors shrink-0">
+                          <TrendingUp size={9} /> {t('ojrn.order_btn')}
+                        </button>
+                      )}
+                    </div>
+                    {o.line_items?.length > 0 && (
+                      <div className="space-y-0.5">
+                        {o.line_items.slice(0, 3).map((item, j) => (
+                          <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
+                            <span className="truncate flex-1">{item.quantity}× {item.title}</span>
+                            <span className="shrink-0 ml-2 tabular-nums">
+                              {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                            </span>
+                          </div>
+                        ))}
+                        {o.line_items.length > 3 && (
+                          <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} {t('flow.more_items').replace('+{n} ', '')}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* WA ROI Panel */}
         {roiOpen && (
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
@@ -1921,95 +2010,6 @@ function FlowPanel({ session, anonymized = false }) {
             </div>
           )}
         </div>
-
-        {/* WA Tracked Orders */}
-        {ordersOpen && (
-          <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-              <ShoppingBag size={13} className="text-blue" />
-              <div className="flex-1 min-w-0">
-                <span className="text-text font-semibold text-sm">{t('flow.wa_orders')}</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-textMute text-[10px]">{orders.length} {t('flow.total')}</span>
-                  {convertedCount > 0 && (
-                    <span className="text-[10px] bg-greenSoft text-green px-1.5 py-0.5 rounded-full">
-                      {convertedCount} {t('flow.wa_attributed')}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <button onClick={fetchOrders} className="p-1.5 rounded-lg bg-surfaceAlt border border-border text-textMute hover:text-text transition-colors">
-                <RefreshCw size={11} />
-              </button>
-            </div>
-            {orders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <ShoppingBag size={18} className="text-textMute/40" />
-                <p className="text-textMute text-xs">{t('flow.no_orders')}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border/60 max-h-[480px] overflow-y-auto">
-                {orders.map((o, i) => (
-                  <div key={o.order_id || i} className="px-4 py-3 hover:bg-surfaceAlt/40 transition-colors space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {o.order_number && (
-                          <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
-                            #{o.order_number}
-                          </span>
-                        )}
-                        {o.wa_attributed && (
-                          <span className="text-[10px] bg-purple/10 text-purple border border-purple/20 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                            <MessageCircle size={8} /> WA ✓
-                          </span>
-                        )}
-                        {o.channel && o.channel !== 'Direct' && (
-                          <span className="text-[10px] bg-surfaceAlt text-blue border border-blue/20 px-1.5 py-0.5 rounded-full">
-                            {o.channel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-text">
-                          {parseFloat(o.total_price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {o.currency || 'TRY'}
-                        </p>
-                        <p className="text-[10px] text-textMute">{timeAgo(o.ts)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        {o.customer_name && <p className="text-xs font-semibold text-text truncate">{anonymized ? maskName(o.customer_name) : o.customer_name}</p>}
-                        {o.phone && <p className="text-[10px] text-textMute font-mono">{anonymized ? '***••••' : `***${o.phone.slice(-4)}`}</p>}
-                      </div>
-                      {o.order_id && (
-                        <button
-                          onClick={e => { e.stopPropagation(); setJourneyOrderId(o.order_id); }}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blueSoft border border-blue/20 text-blue hover:bg-blue/10 transition-colors shrink-0">
-                          <TrendingUp size={9} /> {t('ojrn.order_btn')}
-                        </button>
-                      )}
-                    </div>
-                    {o.line_items?.length > 0 && (
-                      <div className="space-y-0.5">
-                        {o.line_items.slice(0, 3).map((item, j) => (
-                          <div key={j} className="flex items-center justify-between text-[10px] text-textMute">
-                            <span className="truncate flex-1">{item.quantity}× {item.title}</span>
-                            <span className="shrink-0 ml-2 tabular-nums">
-                              {parseFloat(item.price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-                            </span>
-                          </div>
-                        ))}
-                        {o.line_items.length > 3 && (
-                          <p className="text-[10px] text-textMute/60">+{o.line_items.length - 3} {t('flow.more_items').replace('+{n} ', '')}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
       </>}
 
@@ -2973,15 +2973,17 @@ export default function Dashboard({ session, onLogout }) {
       </div>
 
       {/* Inner tab switcher */}
-      <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5 w-fit">
-        <button onClick={() => setLiveTab('realtime')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'realtime' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-          <Radio size={11} /> {t('nav.realtime')}
-        </button>
-        <button onClick={() => setLiveTab('analytics')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${liveTab === 'analytics' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-          <BarChart2 size={11} /> {t('nav.analytics')}
-        </button>
+      <div className="flex justify-center">
+        <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-xl p-1">
+          <button onClick={() => setLiveTab('realtime')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${liveTab === 'realtime' ? 'bg-surface border border-border text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+            <Radio size={11} /> {t('nav.realtime')}
+          </button>
+          <button onClick={() => setLiveTab('analytics')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${liveTab === 'analytics' ? 'bg-surface border border-border text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+            <BarChart2 size={11} /> {t('nav.analytics')}
+          </button>
+        </div>
       </div>
 
       {/* ── CANLI TAB ── */}
