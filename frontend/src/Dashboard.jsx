@@ -1503,10 +1503,11 @@ function FlowPanel({ session }) {
       if (!map[key]) {
         map[key] = {
           key, name: entry.name || 'Customer',
-          phone: entry.phone, product: entry.product,
+          phone: entry.phone, product: null,
           entries: [], converted: false,
           lastTs: 0, firstTs: Infinity,
           sentCount: 0, cooldownCount: 0,
+          cycleMap: {},
         };
       }
       const g = map[key];
@@ -1514,11 +1515,44 @@ function FlowPanel({ session }) {
       if (entry.ts > g.lastTs) g.lastTs = entry.ts;
       if (entry.ts < g.firstTs) g.firstTs = entry.ts;
       if (!g.name || g.name === 'Customer') g.name = entry.name || g.name;
-      if (!g.product && entry.product) g.product = entry.product;
       if (entry.converted) g.converted = true;
       if (entry.ok) g.sentCount++;
       if (entry.status === 'cooldown_skip') g.cooldownCount++;
+
+      // Per-cycle (checkout token) grouping
+      const tokenKey = entry.token || '__unknown__';
+      if (!g.cycleMap[tokenKey]) {
+        g.cycleMap[tokenKey] = {
+          token: tokenKey,
+          product: entry.product || null,
+          entries: [],
+          converted: false,
+          firstTs: Infinity,
+          lastTs: 0,
+          sentCount: 0,
+        };
+      }
+      const cycle = g.cycleMap[tokenKey];
+      cycle.entries.push(entry);
+      if (entry.ts < cycle.firstTs) cycle.firstTs = entry.ts;
+      if (entry.ts > cycle.lastTs) cycle.lastTs = entry.ts;
+      if (!cycle.product && entry.product) cycle.product = entry.product;
+      if (entry.converted) cycle.converted = true;
+      if (entry.ok) cycle.sentCount++;
     }
+
+    for (const g of Object.values(map)) {
+      // Sort cycles chronologically (oldest first)
+      g.cycles = Object.values(g.cycleMap).sort((a, b) => a.firstTs - b.firstTs);
+      delete g.cycleMap;
+      // Sort entries within each cycle chronologically
+      for (const c of g.cycles) {
+        c.entries.sort((a, b) => a.ts - b.ts);
+      }
+      // Customer-level product = most recent cycle's product
+      g.product = g.cycles.length > 0 ? (g.cycles[g.cycles.length - 1].product || null) : null;
+    }
+
     return Object.values(map).sort((a, b) => b.lastTs - a.lastTs);
   }, [logs]);
 
@@ -2014,7 +2048,6 @@ function FlowPanel({ session }) {
               </div>
             ) : customerGroups.map(group => {
               const isOpen = expandedCustomers.has(group.key);
-              const sortedEntries = [...group.entries].sort((a, b) => a.ts - b.ts);
               return (
                 <div key={group.key} className={`rounded-xl border overflow-hidden transition-colors
                   ${group.converted ? 'border-green/30' : group.cooldownCount > 0 ? 'border-amber/20' : 'border-border'}`}>
@@ -2044,62 +2077,96 @@ function FlowPanel({ session }) {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] bg-surfaceAlt text-textDim px-1.5 py-0.5 rounded-full">
-                        {group.sentCount} {t('flow.sent')}{group.cooldownCount > 0 ? ` · ${group.cooldownCount} ${t('flow.skipped_n').replace('{n} ', '')}` : ''}
+                        {group.sentCount} {t('flow.sent')}
+                        {group.cycles.length > 1 && ` · ${group.cycles.length} döngü`}
+                        {group.cooldownCount > 0 && ` · ${group.cooldownCount} atlandı`}
                       </span>
                       <span className="text-textMute text-[10px]">
-                        {new Date(group.firstTs).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(group.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       {isOpen ? <ChevronUp size={11} className="text-textMute" /> : <ChevronDown size={11} className="text-textMute" />}
                     </div>
                   </div>
 
-                  {/* Açılan journey timeline */}
+                  {/* Açılan journey timeline — döngü bazlı */}
                   {isOpen && (
-                    <div className="border-t border-border/60 px-4 pt-2.5 pb-3 bg-surfaceAlt/20 space-y-0">
-                      {sortedEntries.map((entry, i) => {
-                        const isCooldown = entry.status === 'cooldown_skip';
-                        const isLast = i === sortedEntries.length - 1;
+                    <div className="border-t border-border/60 px-4 pt-2.5 pb-3 bg-surfaceAlt/20 space-y-3">
+                      {group.cycles.map((cycle, cycleIdx) => {
+                        const cycleStart = new Date(cycle.firstTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit' });
+                        const cycleEnd   = new Date(cycle.lastTs).toLocaleString('tr-TR',  { day: '2-digit', month: '2-digit' });
+                        const sameDay    = cycleStart === cycleEnd;
                         return (
-                          <div key={i} className="flex gap-2.5">
-                            {/* Dikey bağlantı çizgisi */}
-                            <div className="flex flex-col items-center shrink-0 pt-1">
-                              <div className={`w-2 h-2 rounded-full shrink-0
-                                ${isCooldown ? 'bg-amber' : entry.ok ? 'bg-green' : 'bg-rose'}`} />
-                              {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
-                            </div>
-                            {/* Adım detayı */}
-                            <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : ''}`}>
-                              <div className="min-w-0">
-                                {isCooldown ? (
-                                  <span className="text-[11px] text-amber flex items-center gap-1">
-                                    <Clock size={10} />{t('flow.cooldown_skip')}
-                                  </span>
-                                ) : (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className={`text-[11px] font-medium ${entry.ok ? 'text-text' : 'text-rose'}`}>
-                                      {entry.ok ? '✓' : '✗'} {entry.step_label || `Step ${(entry.step ?? 0) + 1}`}
-                                    </span>
-                                    {entry.converted && (
-                                      <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
-                                        <ShoppingBag size={8} />{t('flow.post_order_lbl')}
-                                      </span>
-                                    )}
-                                    {entry.error && (
-                                      <span className="text-[10px] text-rose">{entry.error}</span>
-                                    )}
-                                  </div>
+                          <div key={cycle.token || cycleIdx}>
+                            {/* Döngü başlık bandı */}
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <div className="h-px flex-1 bg-border/60" />
+                              <span className="text-[10px] text-textMute font-medium shrink-0 flex items-center gap-1">
+                                <span className="bg-surfaceAlt border border-border px-1.5 py-0.5 rounded-full text-textDim">
+                                  #{cycleIdx + 1}
+                                </span>
+                                {cycle.product && (
+                                  <span className="max-w-[160px] truncate text-text">{cycle.product}</span>
                                 )}
-                              </div>
-                              <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
-                                {new Date(entry.ts).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                <span className="text-textMute">
+                                  {sameDay ? cycleStart : `${cycleStart} → ${cycleEnd}`}
+                                </span>
+                                {cycle.converted && (
+                                  <span className="bg-greenSoft text-green border border-green/20 px-1 py-0.5 rounded flex items-center gap-0.5">
+                                    <ShoppingBag size={8} />{t('flow.ordered')}
+                                  </span>
+                                )}
                               </span>
+                              <div className="h-px flex-1 bg-border/60" />
+                            </div>
+
+                            {/* Adımlar */}
+                            <div className="space-y-0">
+                              {cycle.entries.map((entry, i) => {
+                                const isCooldown = entry.status === 'cooldown_skip';
+                                const isLast     = i === cycle.entries.length - 1;
+                                return (
+                                  <div key={i} className="flex gap-2.5">
+                                    <div className="flex flex-col items-center shrink-0 pt-1">
+                                      <div className={`w-2 h-2 rounded-full shrink-0
+                                        ${isCooldown ? 'bg-amber' : entry.ok ? 'bg-green' : 'bg-rose'}`} />
+                                      {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+                                    </div>
+                                    <div className={`flex-1 min-w-0 flex items-start justify-between gap-2 ${!isLast ? 'pb-2' : 'pb-0.5'}`}>
+                                      <div className="min-w-0">
+                                        {isCooldown ? (
+                                          <span className="text-[11px] text-amber flex items-center gap-1">
+                                            <Clock size={10} />{t('flow.cooldown_skip')}
+                                          </span>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className={`text-[11px] font-medium ${entry.ok ? 'text-text' : 'text-rose'}`}>
+                                              {entry.ok ? '✓' : '✗'} {entry.step_label || `Step ${(entry.step ?? 0) + 1}`}
+                                            </span>
+                                            {entry.converted && (
+                                              <span className="text-[10px] bg-greenSoft text-green px-1 py-0.5 rounded flex items-center gap-0.5">
+                                                <ShoppingBag size={8} />{t('flow.post_order_lbl')}
+                                              </span>
+                                            )}
+                                            {entry.error && (
+                                              <span className="text-[10px] text-rose">{entry.error}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <span className="text-textMute text-[10px] whitespace-nowrap shrink-0">
+                                        {new Date(entry.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
                       })}
-                      {/* Sipariş verildi satırı */}
+                      {/* Sipariş verildi satırı (genel) */}
                       {group.converted && (
-                        <div className="flex gap-2.5 pt-1">
+                        <div className="flex gap-2.5 pt-0.5">
                           <div className="flex flex-col items-center shrink-0 pt-1">
                             <div className="w-2 h-2 rounded-full bg-green shrink-0" />
                           </div>
