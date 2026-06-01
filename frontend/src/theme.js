@@ -1,4 +1,47 @@
-// Atlas Tema Sistemi — Warm + Brutalist (her biri light + dark)
+﻿// Shoptimize Live â Tema Sistemi
+// SLATE (varsayÄ±lan, temiz modern SaaS) + WARM + BRUTALIST â her biri light + dark
+// frontend/src/theme.js ile birebir deÄiÅtirilebilir (drop-in).
+// SLATE, Dashboard UI Kit ile aynÄ± paleti kullanÄ±r: login ve dashboard tek deneyim.
+
+const SLATE = {
+  light: {
+    bg:'#F6F8FB', surface:'#FFFFFF', surfaceAlt:'#F1F5F9', surfaceSoft:'#FAFBFD',
+    border:'#E5EAF1', borderStrong:'#CBD5E1',
+    text:'#0F1A2A', textDim:'#51607A', textMute:'#8A97AB',
+    accent:'#16A34A', accentSoft:'#E2F6E9',
+    teal:'#0D9488', tealSoft:'#D9F2EF',
+    green:'#16A34A', greenSoft:'#E2F6E9',
+    amber:'#D97706', amberSoft:'#FBEBD2',
+    blue:'#2563EB', blueSoft:'#DEE9FD',
+    purple:'#9333EA', purpleSoft:'#EFE2FB',
+    rose:'#E11D48', roseSoft:'#FBDDE4',
+    chartA:'#16A34A', chartB:'#2563EB', chartC:'#9333EA', chartD:'#D97706',
+  },
+  dark: {
+    bg:'#0B0F16', surface:'#131A24', surfaceAlt:'#1B232F', surfaceSoft:'#0F151D',
+    border:'#232D3B', borderStrong:'#36465A',
+    text:'#E8EDF4', textDim:'#94A3B8', textMute:'#5E6B7E',
+    accent:'#22C55E', accentSoft:'#11271A',
+    teal:'#14B8A6', tealSoft:'#0E2724',
+    green:'#22C55E', greenSoft:'#11271A',
+    amber:'#F59E0B', amberSoft:'#2A2110',
+    blue:'#3B82F6', blueSoft:'#11203A',
+    purple:'#A855F7', purpleSoft:'#1F1233',
+    rose:'#F43F5E', roseSoft:'#2A0F18',
+    chartA:'#22C55E', chartB:'#3B82F6', chartC:'#A855F7', chartD:'#F59E0B',
+  },
+  fonts: {
+    display: "'Geist', system-ui, sans-serif",
+    body:    "'Geist', 'Inter', system-ui, sans-serif",
+    mono:    "'Geist Mono', ui-monospace, monospace",
+  },
+  radius: { sm:8, md:12, lg:16, xl:20 },
+  shadow: {
+    sm:'0 1px 2px rgba(2,6,12,0.30)',
+    md:'0 6px 18px rgba(2,6,12,0.35)',
+    lg:'0 20px 48px rgba(2,6,12,0.50)',
+  },
+};
 
 const WARM = {
   light: {
@@ -80,10 +123,10 @@ const BRUTALIST = {
   },
 };
 
-const THEMES = { warm: WARM, brutalist: BRUTALIST };
+const THEMES = { slate: SLATE, warm: WARM, brutalist: BRUTALIST };
 
-export function getTheme(vibe = 'warm', mode = 'dark') {
-  const t = THEMES[vibe] || WARM;
+export function getTheme(vibe = 'slate', mode = 'dark') {
+  const t = THEMES[vibe] || SLATE;
   return {
     vibe, mode,
     c: t[mode] || t.dark,
@@ -119,4 +162,4 @@ export function applyThemeToCSSVars(theme) {
   r.dataset.mode = theme.mode;
 }
 
-export const T = getTheme('warm', 'dark');
+export const T = getTheme('slate', 'dark');

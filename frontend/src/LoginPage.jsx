@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Zap, User, Lock, AlertCircle, ExternalLink, ShoppingBag, MessageCircle } from 'lucide-react';
 import logo from './assets/1200 px icon logo.png';
 import { useLang, LangSwitch } from './LangContext';
@@ -39,12 +39,25 @@ function Divider({ label }) {
   );
 }
 
+// KÃ¼Ã§Ã¼k yardÄ±mcÄ± bÃ¶lÃ¼m baÅlÄ±ÄÄ± (Shopify / WhatsApp giriÅleri iÃ§in)
+function AltAuth({ icon: Icon, title, help, children }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-textDim uppercase tracking-wide flex items-center gap-1.5">
+        <Icon size={13} /> {title}
+      </p>
+      <p className="text-[11px] text-textMute leading-relaxed">{help}</p>
+      {children}
+    </div>
+  );
+}
+
 export default function LoginPage({ onLogin }) {
   const { t, lang } = useLang();
 
   // Password login
   const [username, setUsername] = useState('');
-  // Brand: URL'den oku (multi-brand için ?brand=xxx), varsayılan 'default' — formda gizli
+  // Brand: URL'den oku (multi-brand iÃ§in ?brand=xxx), varsayÄ±lan 'default' â formda gizli
   const [brand, setBrand] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     return p.get('brand') || 'default';
@@ -63,7 +76,7 @@ export default function LoginPage({ onLogin }) {
   const [waLoading, setWaLoading] = useState(false);
   const [waStatus, setWaStatus] = useState(''); // 'sent' | 'not_found' | 'unavailable' | 'error'
 
-  // ── Password login ────────────────────────────────────────────────────────
+  // ââ Password login ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   async function handleSubmit() {
     if (!username.trim() || !password.trim()) {
@@ -99,7 +112,7 @@ export default function LoginPage({ onLogin }) {
 
   function onKey(e) { if (e.key === 'Enter') handleSubmit(); }
 
-  // ── Shopify re-auth ───────────────────────────────────────────────────────
+  // ââ Shopify re-auth âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   function handleShopifyLogin() {
     let shop = shopDomain.trim().toLowerCase();
@@ -111,7 +124,7 @@ export default function LoginPage({ onLogin }) {
 
   function onShopKey(e) { if (e.key === 'Enter') handleShopifyLogin(); }
 
-  // ── WA access link ────────────────────────────────────────────────────────
+  // ââ WA access link ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   async function handleWaSend() {
     if (!waPhone.trim()) return;
@@ -145,23 +158,28 @@ export default function LoginPage({ onLogin }) {
   }[waStatus];
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-bg">
-      {/* Dil toggle — sağ üst */}
+    <div className="relative min-h-screen flex items-center justify-center p-4 bg-bg overflow-hidden">
+      {/* Dekoratif yumuÅak parÄ±ltÄ± â derinlik iÃ§in (tema yeÅilini kullanÄ±r) */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[460px] h-[460px] rounded-full bg-green/10 blur-[130px]" />
+      <div className="pointer-events-none absolute -bottom-48 -right-24 w-[380px] h-[380px] rounded-full bg-teal/10 blur-[130px]" />
+
+      {/* Dil toggle â saÄ Ã¼st */}
       <div className="fixed top-4 right-4 z-10">
         <LangSwitch />
       </div>
 
-      <div className="w-full max-w-md">
+      <div className="relative w-full max-w-md">
 
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img src={logo} alt="Shoptimize Live" className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
-          <h1 className="text-2xl font-bold text-text">Shoptimize Live</h1>
+        {/* Logo + marka */}
+        <div className="text-center mb-7">
+          <img src={logo} alt="Shoptimize Live"
+            className="w-20 h-20 mx-auto mb-4 object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.35)]" />
+          <h1 className="text-2xl font-bold text-text tracking-tight">Shoptimize Live</h1>
           <p className="text-sm text-textMute mt-1">{t('login.subtitle')}</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-surface border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+        {/* Kart */}
+        <div className="bg-surface border border-border rounded-2xl p-6 shadow-2xl space-y-5">
 
           {/* Genel hata */}
           {error && (
@@ -171,7 +189,7 @@ export default function LoginPage({ onLogin }) {
             </div>
           )}
 
-          {/* Billing hatası */}
+          {/* Billing hatasÄ± */}
           {billingError && (
             <div className="bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 space-y-2">
               <div className="flex items-start gap-2 text-sm text-rose">
@@ -188,18 +206,19 @@ export default function LoginPage({ onLogin }) {
             </div>
           )}
 
-          {/* Şifre ile giriş */}
-          <Field label={t('login.username')} icon={User} value={username} onChange={setUsername}
-            placeholder="you@yourstore.com" helpText={t('login.username_help')} />
-          <Field label={t('login.password')} icon={Lock} type="password" value={password}
-            onChange={setPassword} onKeyDown={onKey} />
+          {/* Åifre ile giriÅ */}
+          <div className="space-y-3">
+            <Field label={t('login.username')} icon={User} value={username} onChange={setUsername}
+              placeholder="you@yourstore.com" helpText={t('login.username_help')} />
+            <Field label={t('login.password')} icon={Lock} type="password" value={password}
+              onChange={setPassword} onKeyDown={onKey} />
+          </div>
 
           <button onClick={handleSubmit} disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm
-              bg-gradient-to-r from-[#5A7A3C] to-[#3E8D7A] text-text
-              hover:from-[#6A8A4C] hover:to-[#4E9D8A] transition-all
-              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-            style={{ boxShadow: '0 4px 16px rgba(90,122,60,0.25)' }}>
+              bg-gradient-to-r from-green to-teal text-bg
+              hover:brightness-105 active:brightness-95 transition-all
+              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green/20">
             {loading
               ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -209,14 +228,9 @@ export default function LoginPage({ onLogin }) {
             }
           </button>
 
-          {/* ── Shopify ile giriş ── */}
+          {/* ââ Shopify ile giriÅ ââ */}
           <Divider label="veya" />
-
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-textDim uppercase tracking-wide flex items-center gap-1.5">
-              <ShoppingBag size={13} /> {t('login.shopify_title')}
-            </p>
-            <p className="text-[11px] text-textMute">{t('login.shopify_help')}</p>
+          <AltAuth icon={ShoppingBag} title={t('login.shopify_title')} help={t('login.shopify_help')}>
             <div className="flex gap-2">
               <input
                 value={shopDomain}
@@ -232,16 +246,11 @@ export default function LoginPage({ onLogin }) {
                 {shopLoading ? '...' : t('login.shopify_btn')}
               </button>
             </div>
-          </div>
+          </AltAuth>
 
-          {/* ── WA ile erişim linki ── */}
+          {/* ââ WA ile eriÅim linki ââ */}
           <Divider label="veya" />
-
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-textDim uppercase tracking-wide flex items-center gap-1.5">
-              <MessageCircle size={13} /> {t('login.wa_title')}
-            </p>
-            <p className="text-[11px] text-textMute">{t('login.wa_help')}</p>
+          <AltAuth icon={MessageCircle} title={t('login.wa_title')} help={t('login.wa_help')}>
             <div className="flex gap-2">
               <input
                 value={waPhone}
@@ -260,13 +269,13 @@ export default function LoginPage({ onLogin }) {
             {waStatusMsg && (
               <p className={`text-[11px] font-medium ${waStatusMsg.cls}`}>{waStatusMsg.text}</p>
             )}
-          </div>
+          </AltAuth>
 
         </div>
 
-        <p className="text-center text-[11px] text-textMute mt-4">
+        <p className="text-center text-[11px] text-textMute mt-5">
           <a href="/start" className="hover:text-text transition-colors">Kurulum Rehberi</a>
-          {' · '}
+          {' Â· '}
           <a href="/privacy" className="hover:text-text transition-colors">Gizlilik</a>
         </p>
 

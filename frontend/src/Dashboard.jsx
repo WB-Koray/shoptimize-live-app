@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Activity, Eye, ShoppingCart, Search, CreditCard, Package,
   Layers, CheckCircle, WifiOff, Zap, RefreshCw, Trash2,
@@ -189,7 +189,7 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
   return (
     <div onClick={onClick}
       className={`bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3 transition-colors
-        ${onClick ? 'cursor-pointer hover:border-[#5A4535]' : ''}`}>
+        ${onClick ? 'cursor-pointer hover:border-borderStrong' : ''}`}>
       <div className="flex items-start justify-between">
         <div className={`p-2.5 rounded-xl ${c.bg} relative`}>
           <Icon size={18} className={c.text} />
@@ -268,7 +268,7 @@ function VisitorCard({ profile, customerName, onClick, anonymized = false }) {
   const fullName = anonymized ? maskName(rawName) : rawName;
   return (
     <div onClick={onClick}
-      className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-[#5A4535] transition-all space-y-2
+      className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-borderStrong transition-all space-y-2
         ${inactive ? 'border-border/40 opacity-50' : 'border-border'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -489,7 +489,7 @@ function TrafficTable({ traffic, onSourceClick }) {
             className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
             <span className={`text-xs font-bold w-24 shrink-0 truncate ${srcColor(source)}`} title={source}>{source}</span>
             <div className="flex-1 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
+              <div className="h-full bg-gradient-to-r from-blue to-purple rounded-full transition-all duration-500"
                 style={{ width: `${(count / max) * 100}%` }} />
             </div>
             <span className="text-xs font-bold text-textDim tabular-nums w-5 text-right">{count}</span>
@@ -522,7 +522,7 @@ function SearchTable({ searches }) {
               <span className="text-sm text-text font-medium">"{s.query}"</span>
             </div>
             <div className="w-20 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full transition-all duration-500"
+              <div className="h-full bg-gradient-to-r from-blue to-purple rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(100, (s.count / searches[0].count) * 100)}%` }} />
             </div>
             <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
@@ -545,7 +545,7 @@ function JourneyModal({ profile, customerName, onClose }) {
   const fullName = customerName ? [customerName.first_name, customerName.last_name].filter(Boolean).join(' ') : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[82vh] flex flex-col shadow-2xl"
+      <div className="bg-surface border border-borderStrong rounded-2xl w-full max-w-lg max-h-[82vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
@@ -616,7 +616,7 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
   if (!title) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl"
+      <div className="bg-surface border border-borderStrong rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
@@ -769,7 +769,7 @@ function OrderJourneyModal({ orderId, session, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-[#5A4535] rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl"
+      <div className="bg-surface border border-borderStrong rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
@@ -2910,7 +2910,7 @@ export default function Dashboard({ session, onLogout }) {
             {anonymized ? t('nav.anonymized') : t('nav.anonymize')}
           </button>
           <button onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-borderStrong text-textDim text-xs font-bold rounded-full hover:text-text transition-colors">
             <LogOut size={12} /> {t('nav.logout')}
           </button>
         </div>
@@ -2923,7 +2923,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Pixel panel — always visible */}
       <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
-        ${pixelStatus?.installed ? 'bg-greenSoft/50 border-green/20' : 'bg-surfaceAlt/50 border-[#5A4535]'}`}>
+        ${pixelStatus?.installed ? 'bg-greenSoft/50 border-green/20' : 'bg-surfaceAlt/50 border-borderStrong'}`}>
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${pixelStatus?.installed ? 'bg-greenSoft' : 'bg-surfaceAlt/40'}`}>
             <Zap size={16} className={pixelStatus?.installed ? 'text-green' : 'text-textDim'} />
@@ -2963,7 +2963,7 @@ export default function Dashboard({ session, onLogout }) {
                     <Trash2 size={12} /> {t('pixel.remove')}
                   </button>
                 : <button onClick={handleInstall} disabled={installing || pixelLoading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#5A8A4A] to-[#3E8D7A] text-text text-xs font-bold rounded-lg hover:from-[#7AAA5A] hover:to-[#5AAE9A] transition-all disabled:opacity-50 shadow-lg">
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50 shadow-lg">
                     {installing ? <><RefreshCw size={12} className="animate-spin" /> {t('pixel.installing')}</> : <><Zap size={12} /> {t('pixel.one_click')}</>}
                   </button>
               }
@@ -3072,15 +3072,15 @@ export default function Dashboard({ session, onLogout }) {
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPaused(p => !p)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors
-                      ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-[#5A4535] text-textDim hover:text-text'}`}>
+                      ${paused ? 'bg-amberSoft border-amber/30 text-amber' : 'bg-surfaceAlt border-borderStrong text-textDim hover:text-text'}`}>
                     {paused ? t('feed.resume') : t('feed.pause')}
                   </button>
                   <button onClick={() => setEvents([])}
-                    className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
+                    className="p-1.5 bg-surfaceAlt border border-borderStrong text-textDim rounded-lg hover:text-rose transition-colors" title="Clear">
                     <Trash2 size={12} />
                   </button>
                   <button onClick={() => setFeedOpen(o => !o)}
-                    className="p-1.5 bg-surfaceAlt border border-[#5A4535] text-textDim rounded-lg hover:text-text transition-colors">
+                    className="p-1.5 bg-surfaceAlt border border-borderStrong text-textDim rounded-lg hover:text-text transition-colors">
                     {feedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 </div>
@@ -3104,7 +3104,7 @@ export default function Dashboard({ session, onLogout }) {
             {/* Empty state when no pixel */}
             {!pixelStatus?.installed && !pixelLoading && events.length === 0 && (
               <div className="bg-surface border border-border rounded-2xl p-8 text-center">
-                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-[#5A4535] flex items-center justify-center">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surfaceAlt/60 border border-borderStrong flex items-center justify-center">
                   <Radio size={24} className="text-textMute" />
                 </div>
                 <h3 className="text-text font-bold text-base mb-2">{t('howto.title')}</h3>
@@ -3161,7 +3161,7 @@ export default function Dashboard({ session, onLogout }) {
                           <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
                           <span className="flex-1 text-sm text-text font-medium">{col.handle}</span>
                           <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-[#6DC4B0] to-[#8FAECB] rounded-full"
+                            <div className="h-full bg-gradient-to-r from-teal to-blue rounded-full"
                               style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
                           </div>
                           <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
@@ -3189,7 +3189,7 @@ export default function Dashboard({ session, onLogout }) {
                           <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
                           <span className="flex-1 text-sm text-text font-medium">"{s.query}"</span>
                           <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-[#8FAECB] to-[#C4A5D4] rounded-full"
+                            <div className="h-full bg-gradient-to-r from-blue to-purple rounded-full"
                               style={{ width: `${Math.min(100, (s.count / searchStats[0].count) * 100)}%` }} />
                           </div>
                           <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>

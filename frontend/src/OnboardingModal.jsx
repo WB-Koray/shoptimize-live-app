@@ -70,10 +70,9 @@ export default function OnboardingModal({ token, onClose }) {
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={loading}
                 className="flex-1 py-2.5 rounded-xl font-bold text-sm
-                  bg-gradient-to-r from-[#5A7A3C] to-[#3E8D7A] text-text
-                  hover:from-[#6A8A4C] hover:to-[#4E9D8A] transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ boxShadow: '0 4px 12px rgba(90,122,60,0.2)' }}>
+                  bg-gradient-to-r from-green to-teal text-bg
+                  hover:brightness-105 transition-all
+                  disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green/20">
                 {loading ? '...' : t('onboarding.save')}
               </button>
               <button onClick={onClose}
