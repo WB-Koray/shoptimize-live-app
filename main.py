@@ -101,6 +101,10 @@ async def _abandoned_checkout_worker():
 
                 products    = co.get("line_items", [])
                 checkout_ts = co.get("ts", 0)
+                # Son aktif adımı bul (sequence tamamlanma kontrolü için)
+                enabled_step_indices = [i for i, s in enumerate(sequence) if s.get("enabled")]
+                last_enabled_idx = enabled_step_indices[-1] if enabled_step_indices else -1
+
                 for step_idx, step in enumerate(sequence):
                     if not step.get("enabled"):
                         continue
@@ -122,6 +126,11 @@ async def _abandoned_checkout_worker():
                     # İlk adım başarıyla gönderildiğinde telefonu aktif sequence'a kaydet
                     if step_idx == 0 and result.get("ok"):
                         await store.set_phone_active_token(phone, token, cooldown_hours)
+
+                    # Son adım gönderildiyse pending checkout'u kaldır — tekrar tetiklenmesin
+                    if step_idx == last_enabled_idx and result.get("ok"):
+                        await store.remove_pending_checkout(token)
+                        _log.info("[FLOW] ✓ Sequence tamamlandı — token=%s… checkout kaldırıldı", token[:8])
 
                     entry = {
                         "ts": int(now_ms), "token": token,
