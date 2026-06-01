@@ -916,7 +916,7 @@ const RFM_SEGMENTS = {
   lost:            { label: 'Lost',            emoji: '😴', cls: 'bg-surfaceAlt text-textDim border-border'     },
 };
 
-function RFMWidget({ session }) {
+function RFMWidget({ session, anonymized = false }) {
   const { t, lang } = useLang();
   const { token, username, brand } = session;
   const [rfmData, setRfmData] = useState(null);
@@ -1022,8 +1022,16 @@ function RFMWidget({ session }) {
                   <div key={c.id} className="flex items-center gap-3 px-3 py-2 hover:bg-surfaceAlt/60 transition-colors">
                     <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-text truncate">{c.name || c.email || t('rfm.anonymous')}</p>
-                      {c.email && c.name && <p className="text-[10px] text-textMute truncate">{c.email}</p>}
+                      <p className="text-xs font-semibold text-text truncate">
+                        {anonymized
+                          ? (c.name ? maskName(c.name) : c.email ? maskEmail(c.email) : t('rfm.anonymous'))
+                          : (c.name || c.email || t('rfm.anonymous'))}
+                      </p>
+                      {c.email && c.name && (
+                        <p className="text-[10px] text-textMute truncate">
+                          {anonymized ? maskEmail(c.email) : c.email}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-bold text-green tabular-nums">
@@ -3184,7 +3192,7 @@ export default function Dashboard({ session, onLogout }) {
             {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
 
             {/* RFM Müşteri Segmentasyonu */}
-            <RFMWidget session={session} />
+            <RFMWidget session={session} anonymized={anonymized} />
 
             {/* UTM campaigns accordion */}
             {utmStats.length > 0 && (
