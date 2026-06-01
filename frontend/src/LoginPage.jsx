@@ -140,7 +140,11 @@ export default function LoginPage({ onLogin }) {
       if (res.status === 503) { setWaStatus('unavailable'); return; }
       const data = await res.json();
       if (!data.ok) { setWaStatus('error'); return; }
-      setWaStatus(data.sent ? 'sent' : 'not_found');
+      if (!data.sent) {
+        setWaStatus(data.reason === 'wa_error' ? 'wa_error' : 'not_found');
+        return;
+      }
+      setWaStatus('sent');
     } catch {
       setWaStatus('error');
     } finally {
@@ -153,6 +157,7 @@ export default function LoginPage({ onLogin }) {
   const waStatusMsg = {
     sent:        { text: t('login.wa_sent'),        cls: 'text-green' },
     not_found:   { text: t('login.wa_not_found'),   cls: 'text-amber-400' },
+    wa_error:    { text: t('login.wa_unavailable'), cls: 'text-textMute' },
     unavailable: { text: t('login.wa_unavailable'), cls: 'text-textMute' },
     error:       { text: t('login.err.server'),     cls: 'text-rose' },
   }[waStatus];

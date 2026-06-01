@@ -562,7 +562,10 @@ async def request_access(body: AccessRequest):
 
     if result.get("ok"):
         logger.info("[AUTH] WA access linki gönderildi: %s", phone_e164[-4:])
-    return {"ok": True, "sent": result.get("ok", False)}
+        return {"ok": True, "sent": True}
+    # WA gönderimi başarısız — "not_found" değil "wa_error" olarak işaretle
+    logger.warning("[AUTH] WA access gönderimi başarısız: %s", result.get("error", ""))
+    return {"ok": True, "sent": False, "reason": "wa_error"}
 
 
 # ---------------------------------------------------------------------------

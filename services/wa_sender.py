@@ -6,7 +6,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-WA_API = "https://graph.facebook.com/v19.0"
+WA_API = "https://graph.facebook.com/v21.0"
 
 WA_TEMPLATE_NAME = "sepet_hatirlatma"
 WA_TEMPLATE_LANG = "tr"
@@ -122,9 +122,12 @@ async def send_wa_template(
             msg_id = data["messages"][0].get("id", "")
             logger.info("[WA] Template gönderildi [%s] %s → %s", template_name, to[-4:], msg_id)
             return {"ok": True, "message_id": msg_id}
-        error = data.get("error", {}).get("message", r.text[:200])
-        logger.warning("[WA] Gönderim hatası %s: %s", to, error)
-        return {"ok": False, "error": error}
+        err_obj = data.get("error", {})
+        error = err_obj.get("message", r.text[:300])
+        err_code = err_obj.get("code", r.status_code)
+        logger.warning("[WA] Gönderim hatası %s (#%s): %s | payload_template=%s lang=%s",
+                       to, err_code, error, template_name, language)
+        return {"ok": False, "error": error, "code": err_code}
     except Exception as e:
         logger.error("[WA] İstek hatası: %s", e)
         return {"ok": False, "error": str(e)}
