@@ -1,0 +1,21 @@
+{% comment %}
+  Shop X-Ray WA Cart Recovery — Pixel Tracker (App Embed Block)
+  Loads the storefront tracking pixel. Enable in Theme Editor > App Embeds.
+{% endcomment %}
+<script
+  async
+  src="https://live.shoptimize.com.tr/pixel.js?shop={{ shop.permanent_domain }}"
+></script>
+
+{% schema %}
+{
+  "name": "Shop X-Ray Pixel",
+  "target": "body",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Tracks visitor activity and enables WhatsApp cart recovery. Enable this embed to activate the Shop X-Ray pixel on your storefront."
+    }
+  ]
+}
+{% endschema %}

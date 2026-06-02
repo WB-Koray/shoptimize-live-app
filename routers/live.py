@@ -386,8 +386,22 @@ window._spt_loaded = true;
 
 
 @router.get("/pixel.js")
-async def serve_pixel(tid: str = Query(""), request: Request = None):
-    tracking_id = tid.strip() or "__NOTID__"
+async def serve_pixel(tid: str = Query(""), shop: str = Query(""), request: Request = None):
+    tracking_id = tid.strip()
+
+    # Theme App Extension path: shop= parametresi ile TID'yi DB'den çöz
+    if not tracking_id and shop:
+        shop_clean = shop.strip().replace("https://", "").replace("http://", "").rstrip("/")
+        try:
+            from services.db import lookup_username_by_shop
+            found = lookup_username_by_shop(shop_clean)
+            if found:
+                _u, _b = found
+                tracking_id = get_setting(_u, _b, "shopify", "pixel_tracking_id", "")
+        except Exception:
+            pass
+
+    tracking_id = tracking_id or "__NOTID__"
     js = _PIXEL_JS_TEMPLATE.replace("{TID}", tracking_id).replace("{API}", API_BASE_URL)
     return Response(content=js, media_type="application/javascript", headers={
         "Cache-Control": "no-cache",

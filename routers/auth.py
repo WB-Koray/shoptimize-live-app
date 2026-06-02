@@ -267,33 +267,25 @@ async def shopify_callback(
         )
         return RedirectResponse(redirect)
 
-    # 5. Pixel'i otomatik kur (GraphQL scriptTagCreate)
+    # 5. Pixel TID oluştur / kaydet (Theme App Extension embed block'u kullanıcı aktive eder)
     tid = ""
     try:
-        from routers.live import _get_or_create_tid, _shopify_graphql
+        from routers.live import _get_or_create_tid
         from services.redis_store import store
         import asyncio
 
         tid = _get_or_create_tid(username, brand)
-        script_url = f"{APP_URL}/pixel.js?tid={tid}"
-
-        _ST_MUT = """
-        mutation ScriptTagCreate($input: ScriptTagInput!) {
-          scriptTagCreate(input: $input) {
-            scriptTag { id }
-            userErrors { field message }
-          }
-        }
-        """
-        _shopify_graphql(shop, access_token, _ST_MUT, {"input": {"event": "ONLOAD", "src": script_url}})
 
         loop = asyncio.get_event_loop()
         if loop.is_running():
             asyncio.ensure_future(store.register_tid_owner(tid, username, brand))
 
-        logger.info("[OAuth] ✓ Pixel kuruldu (GraphQL): tid=%s shop=%s", tid, shop)
+        # NOT: Pixel artık Theme App Extension (App Embed Block) ile yükleniyor.
+        # Merchant, Theme Editor > App Embeds bölümünden aktive eder.
+        # ScriptTag API'si deprecated olduğu için burada script tag oluşturulmaz.
+        logger.info("[OAuth] ✓ TID hazır (Theme App Extension embed): tid=%s shop=%s", tid, shop)
     except Exception as e:
-        logger.warning("[OAuth] Pixel kurulum hatası (devam ediliyor): %s", e)
+        logger.warning("[OAuth] TID oluşturma hatası (devam ediliyor): %s", e)
 
     # 6. Webhook'ları kaydet (GraphQL webhookSubscriptionCreate)
     try:
