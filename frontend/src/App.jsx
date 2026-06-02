@@ -106,32 +106,14 @@ export default function App() {
       return;
     }
 
-    // ── Shopify admin context → App Bridge ile otomatik giriş ──────
+    // ── Shopify admin context → App Bridge ile her zaman session token al ──
+    // Requirement 1.1.1: localStorage'a güvenmek yerine her açılışta
+    // App Bridge session token exchange yapılır. Bu, farklı kullanıcıların
+    // aynı tarayıcıda güvenle kullanabilmesini sağlar (incognito dahil).
     if (!detectShopifyContext() || authAttempted.current) return;
 
-    if (!session) {
-      // Normal flow: session yok, Shopify auth yap
-      authAttempted.current = true;
-      doShopifyAuth();
-    } else {
-      // Session var — billing gerekiyor mu kontrol et
-      // (yeniden kurulum sonrası billing_status="needs_billing" olabilir)
-      authAttempted.current = true;
-      fetch(`${API_URL}/api/auth/status`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      })
-        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-        .then(data => {
-          if (data.billing_status === 'needs_billing') {
-            // Billing kurulmamış → session'ı temizle, token exchange + billing için re-auth
-            clearSession();
-            setSession(null);
-            authAttempted.current = false;
-            doShopifyAuth();
-          }
-        })
-        .catch(() => {}); // session geçersizse Dashboard 401 handle eder
-    }
+    authAttempted.current = true;
+    doShopifyAuth();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doShopifyAuth() {
