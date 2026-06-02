@@ -426,9 +426,9 @@ def _send_welcome_wa(username: str, brand: str, owner_name: str, owner_phone: st
 
 
 def _phone_lang(phone: str) -> str:
-    """Telefon ülke kodundan dil tahmini: +90 → tr, diğer → en_US."""
+    """Telefon ülke kodundan dil tahmini: +90 → tr, diğer → en."""
     normalized = phone.lstrip("+")
-    return "tr" if normalized.startswith("90") else "en_US"
+    return "tr" if normalized.startswith("90") else "en"
 
 
 async def _send_welcome_wa_async_direct(phone: str, name: str, shop_domain: str, dashboard_url: str) -> None:
@@ -546,8 +546,9 @@ async def request_access(body: AccessRequest):
 
     # Dil: istekten al, yoksa telefon ülke kodundan tahmin et
     lang = body.lang if body.lang in ("tr", "en_US", "en") else _phone_lang(phone_e164)
-    if lang == "en":
-        lang = "en_US"
+    # panel_access şablonu Meta'da "en" (English) diliyle kayıtlı — "en_US" değil!
+    if lang in ("en_US", "en"):
+        lang = "en"
 
     # TR → dashboard_erisim, EN → panel_access (farklı Meta template adları)
     tpl_name = "dashboard_erisim" if lang == "tr" else "panel_access"

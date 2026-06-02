@@ -49,14 +49,36 @@ def _build_params(template_name: str, name: str = "", product: str = "", order_n
             {"type": "text", "text": product or ""},            # {{magaza}}
             {"type": "text", "text": order_number or ""},       # {{link}}
         ]
-    if template_name in ("dashboard_erisim", "panel_access"):
-        # TR: dashboard_erisim  |  EN: panel_access
-        # Her ikisinde de tek değişken: {{link}} = erişim URL'i
-        return [
-            {"type": "text", "text": name or ""},              # {{link}}
-        ]
+    # dashboard_erisim / panel_access: link URL button component'ında —
+    # _build_components() tarafından ayrıca işlenir, buradan [] döner.
     # Bilinmeyen şablonlar için parametresiz gönder
     return []
+
+
+def _build_components(
+    template_name: str,
+    name: str = "",
+    product: str = "",
+    order_number: str = "",
+    products: list | None = None,
+) -> list:
+    """Template için tam components listesini oluşturur."""
+    if template_name in ("dashboard_erisim", "panel_access"):
+        # Body'de named variable {{link}} — Meta yeni UI ile oluşturulmuş şablonlar
+        # parameter_name alanı zorunlu (positional {{1}} değil)
+        return [
+            {
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "parameter_name": "link", "text": name or ""},
+                ],
+            }
+        ]
+    body_params = _build_params(
+        template_name, name=name, product=product,
+        order_number=order_number, products=products,
+    )
+    return [{"type": "body", "parameters": body_params}] if body_params else []
 
 
 async def handle_incoming_message(token_phone: str, from_phone: str, body: str) -> bool:
@@ -100,8 +122,11 @@ async def send_wa_template(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    # Şablona göre body parametrelerini oluştur
-    body_params = _build_params(template_name, name=name, product=product, order_number=order_number, products=products)
+    # Şablona göre component listesini oluştur (body veya button)
+    components = _build_components(
+        template_name, name=name, product=product,
+        order_number=order_number, products=products,
+    )
 
     payload = {
         "messaging_product": "whatsapp",
@@ -110,12 +135,14 @@ async def send_wa_template(
         "template": {
             "name": template_name,
             "language": {"code": language or WA_TEMPLATE_LANG},
-            "components": [{"type": "body", "parameters": body_params}] if body_params else [],
+            "components": components,
         },
     }
 
-    logger.debug("[WA] Gönderiliyor → url=%s tpl=%s lang=%s to=%s phone_id=%s",
-                 url, template_name, language, to[-4:], phone_number_id[-6:] if phone_number_id else "?")
+    logger.info("[WA] Gönderiliyor → tpl=%s lang=%s to=%s phone_id=%s components=%s",
+                template_name, language, to[-4:],
+                phone_number_id[-6:] if phone_number_id else "?",
+                components)
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, headers=headers, json=payload)
@@ -128,8 +155,8 @@ async def send_wa_template(
         error = err_obj.get("message", r.text[:300])
         err_code = err_obj.get("code", r.status_code)
         err_sub = err_obj.get("error_subcode", "")
-        logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | url=%s tpl=%s lang=%s",
-                       to, err_code, err_sub, error, url, template_name, language)
+        logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | url=%s tpl=%s lang=%s | full_resp=%s",
+                       to, err_code, err_sub, error, url, template_name, language, r.text[:1000])
         return {"ok": False, "error": error, "code": err_code}
     except Exception as e:
         logger.error("[WA] İstek hatası: %s", e)
