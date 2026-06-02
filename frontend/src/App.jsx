@@ -51,6 +51,24 @@ async function waitForAppBridge(maxMs = 3000) {
   return typeof window.shopify?.idToken === 'function';
 }
 
+/**
+ * URL'deki id_token süresi dolmamışsa döner, dolmuşsa null.
+ * Shopify token'ları ~60sn geçerli; ağ gecikmesi için 10sn buffer bırakır.
+ */
+function getFreshUrlToken() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('id_token');
+    if (!token) return null;
+    const b64 = token.split('.')[1];
+    const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+    const payload = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.exp > (Date.now() / 1000) + 10 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   const [session, setSession]           = useState(readSession);
   const [adminToken, setAdminToken]     = useState(null);
@@ -99,19 +117,29 @@ export default function App() {
     setShopifyLoading(true);
     setShopifyError('');
     try {
-      // 1. Önce URL'deki id_token'ı dene — Shopify her page load'da gönderir
-      const params = new URLSearchParams(window.location.search);
-      let sessionToken = params.get('id_token');
+      // 1. URL'deki id_token'ı dene — ama süresi dolmamış olmalı (10sn buffer)
+      let sessionToken = getFreshUrlToken();
 
-      // 2. URL'de yoksa App Bridge ile al (5sn timeout ile)
+      // 2. URL tokeni yoksa / süresi dolmuşsa App Bridge ile taze token al
       if (!sessionToken) {
         const ready = await waitForAppBridge();
-        if (!ready) throw new Error('App Bridge yüklenemedi');
-        const tokenPromise = window.shopify.idToken();
-        const timeout = new Promise((_, rej) =>
-          setTimeout(() => rej(new Error('Session token timeout (5s)')), 5000)
-        );
-        sessionToken = await Promise.race([tokenPromise, timeout]);
+        if (ready) {
+          try {
+            const tokenPromise = window.shopify.idToken();
+            const timeout = new Promise((_, rej) =>
+              setTimeout(() => rej(new Error('timeout')), 5000)
+            );
+            sessionToken = await Promise.race([tokenPromise, timeout]);
+          } catch {
+            // App Bridge timeout veya hata → sayfayı yenile, Shopify yeni token gönderir
+            window.location.reload();
+            return;
+          }
+        } else {
+          // App Bridge yüklenemedi → yenile
+          window.location.reload();
+          return;
+        }
       }
 
       const res = await fetch(`${API_URL}/api/auth/shopify-token`, {
