@@ -1,12 +1,12 @@
 """
 routers/billing.py
-Shopify Billing API — tekrarlayan abonelik akışı.
+Shopify Billing API — tekrarlayan abonelik akışı (GraphQL).
 
 Akış:
   1. OAuth install tamamlanınca create_charge() çağrılır
   2. Merchant, Shopify onay sayfasına yönlendirilir
   3. Merchant onaylar → GET /billing/callback?charge_id=X&shop=Y çağrılır
-  4. Charge aktive edilir, charge_id DB'ye yazılır
+  4. Subscription durumu kontrol edilir / aktive edilir, DB'ye yazılır
   5. Merchant dashboard'a yönlendirilir
 """
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing")
 
 APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
-SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
+SHOPIFY_GRAPHQL_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 
 PLAN_NAME = os.getenv("BILLING_PLAN_NAME", "Shoptimize Live")
 PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
@@ -31,17 +31,17 @@ PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 TEST_MODE = os.getenv("BILLING_TEST_MODE", "true").lower() == "true"
 
 
-def _shopify_url(shop: str, path: str) -> str:
-    return f"https://{shop}/admin/api/{SHOPIFY_API_VERSION}/{path}"
+def _graphql_url(shop: str) -> str:
+    return f"https://{shop}/admin/api/{SHOPIFY_GRAPHQL_VERSION}/graphql.json"
 
 
-def _shopify_headers(token: str) -> dict:
+def _graphql_headers(token: str) -> dict:
     return {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
 
 
 def create_charge(shop: str, access_token: str, username: str, brand: str) -> str:
     """
-    RecurringApplicationCharge oluştur.
+    GraphQL appSubscriptionCreate ile abonelik oluştur.
     Dönen değer: merchant'ın yönlendirileceği Shopify onay URL'i.
     """
     return_url = (
@@ -49,39 +49,94 @@ def create_charge(shop: str, access_token: str, username: str, brand: str) -> st
         f"?shop={shop}&username={username}&brand={brand}"
     )
 
-    payload = {
-        "recurring_application_charge": {
-            "name": PLAN_NAME,
-            "price": PLAN_PRICE,
-            "trial_days": PLAN_TRIAL_DAYS,
-            "test": TEST_MODE,
-            "return_url": return_url,
+    mutation = """
+    mutation AppSubscriptionCreate(
+      $name: String!,
+      $returnUrl: URL!,
+      $lineItems: [AppSubscriptionLineItemInput!]!,
+      $test: Boolean,
+      $trialDays: Int
+    ) {
+      appSubscriptionCreate(
+        name: $name
+        returnUrl: $returnUrl
+        lineItems: $lineItems
+        test: $test
+        trialDays: $trialDays
+      ) {
+        appSubscription {
+          id
+          status
         }
+        confirmationUrl
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+    """
+
+    variables = {
+        "name": PLAN_NAME,
+        "returnUrl": return_url,
+        "lineItems": [
+            {
+                "plan": {
+                    "appRecurringPricingDetails": {
+                        "price": {"amount": str(PLAN_PRICE), "currencyCode": "USD"},
+                        "interval": "EVERY_30_DAYS",
+                    }
+                }
+            }
+        ],
+        "test": TEST_MODE,
+        "trialDays": PLAN_TRIAL_DAYS,
     }
 
-    logger.warning("[BILLING] Charge oluşturuluyor: shop=%s token_len=%d test=%s url=%s", shop, len(access_token), TEST_MODE, _shopify_url(shop, "recurring_application_charges.json"))
+    logger.warning(
+        "[BILLING] GraphQL abonelik oluşturuluyor: shop=%s test=%s price=%s",
+        shop, TEST_MODE, PLAN_PRICE,
+    )
+
     r = requests.post(
-        _shopify_url(shop, "recurring_application_charges.json"),
-        json=payload,
-        headers=_shopify_headers(access_token),
+        _graphql_url(shop),
+        json={"query": mutation, "variables": variables},
+        headers=_graphql_headers(access_token),
         timeout=15,
     )
 
-    if r.status_code not in (200, 201):
-        logger.error("[BILLING] Charge hatası: status=%s body=%s headers=%s", r.status_code, r.text, dict(r.headers))
-        raise HTTPException(502, f"Billing charge oluşturulamadı: {r.text}")
+    logger.warning("[BILLING] GraphQL yanıt: status=%d body=%s", r.status_code, r.text[:800])
 
-    charge = r.json().get("recurring_application_charge", {})
-    charge_id = charge.get("id")
-    confirmation_url = charge.get("confirmation_url", "")
+    if r.status_code != 200:
+        logger.error("[BILLING] GraphQL HTTP hatası: status=%s body=%s", r.status_code, r.text)
+        raise HTTPException(502, f"Billing oluşturulamadı: {r.text}")
 
-    # Henüz "pending" durumunda — aktive edilmesini bekle
+    body = r.json()
+    errors = body.get("errors")
+    if errors:
+        logger.error("[BILLING] GraphQL errors: %s", errors)
+        raise HTTPException(502, f"GraphQL hatası: {errors}")
+
+    result = body.get("data", {}).get("appSubscriptionCreate", {})
+    user_errors = result.get("userErrors", [])
+    if user_errors:
+        logger.error("[BILLING] userErrors: %s", user_errors)
+        raise HTTPException(502, f"Billing hatası: {user_errors[0].get('message', user_errors)}")
+
+    subscription = result.get("appSubscription") or {}
+    gid = subscription.get("id", "")           # gid://shopify/AppSubscription/12345
+    confirmation_url = result.get("confirmationUrl", "")
+
+    # GID'den sayısal ID çıkar
+    numeric_id = gid.split("/")[-1] if gid else ""
+
     set_connection_settings(username, brand, "shopify", {
-        "billing_charge_id": charge_id,
+        "billing_charge_id": numeric_id,
         "billing_status": "pending",
     })
 
-    logger.info("[BILLING] Charge oluşturuldu: id=%s shop=%s price=%s", charge_id, shop, PLAN_PRICE)
+    logger.info("[BILLING] AppSubscription oluşturuldu: gid=%s numeric_id=%s shop=%s", gid, numeric_id, shop)
     return confirmation_url
 
 
@@ -93,25 +148,46 @@ async def billing_callback(
     shop: str = Query(...),
     username: str = Query(...),
     brand: str = Query("default"),
-    charge_id: int = Query(...),
+    charge_id: str = Query(...),
 ):
+    """
+    Shopify, merchant onayından sonra buraya yönlendirir.
+    charge_id = AppSubscription'ın sayısal ID'si.
+    """
     access_token = get_setting(username, brand, "shopify", "admin_api_token", "")
     if not access_token:
         raise HTTPException(400, "Mağaza bağlantısı bulunamadı")
 
-    # Charge durumunu kontrol et
-    r = requests.get(
-        _shopify_url(shop, f"recurring_application_charges/{charge_id}.json"),
-        headers=_shopify_headers(access_token),
+    gid = f"gid://shopify/AppSubscription/{charge_id}"
+
+    # ── 1. Subscription durumunu sorgula ────────────────────────────
+    status_query = """
+    query AppSubscriptionStatus($id: ID!) {
+      appSubscription(id: $id) {
+        id
+        status
+        currentPeriodEnd
+      }
+    }
+    """
+
+    r = requests.post(
+        _graphql_url(shop),
+        json={"query": status_query, "variables": {"id": gid}},
+        headers=_graphql_headers(access_token),
         timeout=15,
     )
+
+    logger.warning("[BILLING] Status sorgusu: charge_id=%s status=%d body=%s", charge_id, r.status_code, r.text[:500])
+
     if r.status_code != 200:
-        raise HTTPException(502, f"Charge bilgisi alınamadı: {r.text}")
+        raise HTTPException(502, f"Subscription bilgisi alınamadı: {r.text}")
 
-    charge = r.json().get("recurring_application_charge", {})
-    status = charge.get("status", "")
+    body = r.json()
+    sub_data = body.get("data", {}).get("appSubscription") or {}
+    status = sub_data.get("status", "")
 
-    if status == "declined":
+    if status == "DECLINED":
         logger.warning("[BILLING] Merchant ödemeyi reddetti: shop=%s charge_id=%s", shop, charge_id)
         set_connection_settings(username, brand, "shopify", {
             "billing_charge_id": charge_id,
@@ -119,26 +195,62 @@ async def billing_callback(
         })
         return RedirectResponse(f"{APP_URL}/billing/declined?shop={shop}")
 
-    if status != "accepted":
-        raise HTTPException(400, f"Beklenmeyen charge durumu: {status}")
+    if status == "ACTIVE":
+        # Zaten aktif (bazı durumlarda otomatik aktive olur)
+        logger.info("[BILLING] Subscription zaten aktif: id=%s shop=%s", charge_id, shop)
+        set_connection_settings(username, brand, "shopify", {
+            "billing_charge_id": charge_id,
+            "billing_status": "active",
+        })
 
-    # Charge'ı aktive et
-    activate_r = requests.post(
-        _shopify_url(shop, f"recurring_application_charges/{charge_id}/activate.json"),
-        json={},
-        headers=_shopify_headers(access_token),
-        timeout=15,
-    )
-    if activate_r.status_code not in (200, 201):
-        raise HTTPException(502, f"Charge aktive edilemedi: {activate_r.text}")
+    elif status in ("ACCEPTED", "PENDING"):
+        # Onaylandı ama aktive edilmesi gerekiyor → appSubscriptionActivate
+        activate_mutation = """
+        mutation AppSubscriptionActivate($id: ID!) {
+          appSubscriptionActivate(id: $id) {
+            appSubscription {
+              id
+              status
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        """
 
-    set_connection_settings(username, brand, "shopify", {
-        "billing_charge_id": charge_id,
-        "billing_status": "active",
-    })
+        act_r = requests.post(
+            _graphql_url(shop),
+            json={"query": activate_mutation, "variables": {"id": gid}},
+            headers=_graphql_headers(access_token),
+            timeout=15,
+        )
 
-    logger.info("[BILLING] Charge aktive edildi: id=%s shop=%s", charge_id, shop)
+        logger.warning("[BILLING] Activate yanıt: status=%d body=%s", act_r.status_code, act_r.text[:500])
 
+        if act_r.status_code != 200:
+            raise HTTPException(502, f"Subscription aktive edilemedi: {act_r.text}")
+
+        act_body = act_r.json()
+        act_result = act_body.get("data", {}).get("appSubscriptionActivate", {})
+        act_errors = act_result.get("userErrors", [])
+        if act_errors:
+            logger.error("[BILLING] Activate userErrors: %s", act_errors)
+            raise HTTPException(502, f"Activate hatası: {act_errors[0].get('message', act_errors)}")
+
+        activated_status = (act_result.get("appSubscription") or {}).get("status", "")
+        logger.info("[BILLING] Subscription aktive edildi: id=%s shop=%s new_status=%s", charge_id, shop, activated_status)
+
+        set_connection_settings(username, brand, "shopify", {
+            "billing_charge_id": charge_id,
+            "billing_status": "active",
+        })
+
+    else:
+        raise HTTPException(400, f"Beklenmeyen subscription durumu: {status!r}")
+
+    # ── 2. Merchant'ı dashboard'a yönlendir ─────────────────────────
     from services.auth import create_access_token
     token = create_access_token(username, brand)
     tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
@@ -153,8 +265,8 @@ async def billing_callback(
         from routers.auth import _send_welcome_wa
         _send_welcome_wa(
             username, brand,
-            owner_name="",  # shop.json'dan alınmışsa Redis'te var
-            owner_phone="",  # telefon Redis'te var, oradan bulunacak
+            owner_name="",
+            owner_phone="",
             shop_domain=shop,
             dashboard_url=f"{APP_URL}/?auto_token={token}&u={username}&b={brand}" + (f"&tid={tid}" if tid else ""),
         )
