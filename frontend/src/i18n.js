@@ -56,9 +56,9 @@ const translations = {
 
     // Pixel panel
     'pixel.installed':            'Storefront Pixel Installed',
-    'pixel.not_installed':        'Storefront Pixel Not Installed',
+    'pixel.not_installed':        'App Embed Not Activated',
     'pixel.tracking_id':          'Tracking ID',
-    'pixel.install_prompt':       'Install the pixel to track visitor activity',
+    'pixel.install_prompt':       'Activate the App Embed in Theme Editor to start tracking',
     'pixel.active_via_shopify':   'Active via Shopify',
     'pixel.installing':           'Installing...',
     'pixel.order_active':         'Order Tracking Active',
@@ -66,6 +66,8 @@ const translations = {
     'pixel.remove':               'Remove',
     'pixel.one_click':            'One-Click Install',
     'pixel.uninstall_confirm':    'Pixel will be removed and tracking will stop. Are you sure?',
+    'pixel.open_theme_editor':    'Activate in Theme Editor',
+    'pixel.embed_hint':           'Go to Theme Editor → App Embeds and enable "Shop X-Ray Pixel"',
 
     // Stat cards
     'stat.events':          'Events',
@@ -376,9 +378,9 @@ const translations = {
 
     // Pixel paneli
     'pixel.installed':            'Storefront Pixel Kurulu',
-    'pixel.not_installed':        'Storefront Pixel Kurulu Değil',
+    'pixel.not_installed':        'App Embed Etkin Değil',
     'pixel.tracking_id':          'İzleme ID',
-    'pixel.install_prompt':       'Ziyaretçi aktivitesini izlemek için pixel kurun',
+    'pixel.install_prompt':       'Takibi başlatmak için Theme Editor\'da App Embed\'i etkinleştirin',
     'pixel.active_via_shopify':   'Shopify Üzerinden Aktif',
     'pixel.installing':           'Kuruluyor...',
     'pixel.order_active':         'Sipariş Takibi Aktif',
@@ -386,6 +388,8 @@ const translations = {
     'pixel.remove':               'Kaldır',
     'pixel.one_click':            'Tek Tıkla Kur',
     'pixel.uninstall_confirm':    'Pixel kaldırılacak ve takip duracak. Emin misiniz?',
+    'pixel.open_theme_editor':    'Theme Editor\'da Etkinleştir',
+    'pixel.embed_hint':           'Theme Editor → App Embeds\'e gidip "Shop X-Ray Pixel"\'i açın',
 
     // İstatistik kartları
     'stat.events':          'Etkinlikler',

@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Tablet, Globe, X, ArrowRight, BarChart2, LogOut,
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
-  ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings,
+  ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings, ExternalLink,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -2311,6 +2311,12 @@ export default function Dashboard({ session, onLogout }) {
   const { token, username, brand, tid } = session;
   const qs = `username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
 
+  // Shopify mağaza domain'i — App Embeds linki için
+  const shopifyShop = sessionStorage.getItem('spt_shopify_shop') || '';
+  const themeEditorUrl = shopifyShop
+    ? `https://${shopifyShop}/admin/themes/current/editor?context=apps`
+    : null;
+
   // Onboarding modal — ilk girişte telefon numarası sor
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('spt_onboarding_done');
@@ -2935,7 +2941,9 @@ export default function Dashboard({ session, onLogout }) {
             <p className="text-textMute text-[10px]">
               {pixelStatus?.installed
                 ? `${t('pixel.tracking_id')}: ${pixelStatus.tracking_id || '—'}`
-                : t('pixel.install_prompt')}
+                : themeEditorUrl
+                  ? t('pixel.embed_hint')
+                  : t('pixel.install_prompt')}
             </p>
           </div>
         </div>
@@ -2962,10 +2970,19 @@ export default function Dashboard({ session, onLogout }) {
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-lg hover:bg-roseSoft/80 transition-colors disabled:opacity-50">
                     <Trash2 size={12} /> {t('pixel.remove')}
                   </button>
-                : <button onClick={handleInstall} disabled={installing || pixelLoading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50 shadow-lg">
-                    {installing ? <><RefreshCw size={12} className="animate-spin" /> {t('pixel.installing')}</> : <><Zap size={12} /> {t('pixel.one_click')}</>}
-                  </button>
+                : themeEditorUrl
+                  ? <a
+                      href={themeEditorUrl}
+                      target="_top"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all shadow-lg no-underline"
+                    >
+                      <ExternalLink size={12} /> {t('pixel.open_theme_editor')}
+                    </a>
+                  : <button onClick={handleInstall} disabled={installing || pixelLoading}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50 shadow-lg">
+                      {installing ? <><RefreshCw size={12} className="animate-spin" /> {t('pixel.installing')}</> : <><Zap size={12} /> {t('pixel.one_click')}</>}
+                    </button>
               }
             </>
           )}
