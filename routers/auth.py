@@ -34,7 +34,7 @@ DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 OPERATOR_WA_TOKEN    = os.getenv("OPERATOR_WA_TOKEN", "")
 OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 
-SCOPES = "read_script_tags,write_script_tags,read_customers,read_orders,read_checkouts"
+SCOPES = "read_checkouts,read_customers,read_orders"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() == "true"
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 

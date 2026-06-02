@@ -163,8 +163,10 @@ export default function App() {
 
       if (res.status === 404) {
         // Uygulama bu mağazada kurulu değil → install'a yönlendir
+        // window.top kullanılmalı: embedded app iframe içinde çalışıyor,
+        // OAuth top-level window'da olmalı (iframe'de OAuth çalışmaz).
         const shop = sessionStorage.getItem('spt_shopify_shop') || '';
-        window.location.href = `${API_URL}/auth/shopify/install?shop=${encodeURIComponent(shop)}`;
+        window.top.location.href = `${API_URL}/auth/shopify/install?shop=${encodeURIComponent(shop)}`;
         return;
       }
 
