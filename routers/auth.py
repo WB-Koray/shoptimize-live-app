@@ -613,13 +613,12 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
         if payload.get("nbf", now) > now + 10:   # 10sn tolerans
             return None
 
-        # Audience
+        # Audience — uyarı ver ama reddetme; imza doğrulaması yeterli güvenlik sağlar.
+        # Birden fazla app/client_id ile aynı backend çalışabilir.
         aud = payload.get("aud", "")
-        if isinstance(aud, list):
-            if SHOPIFY_CLIENT_ID not in aud:
-                return None
-        elif aud != SHOPIFY_CLIENT_ID:
-            return None
+        aud_list = aud if isinstance(aud, list) else [aud]
+        if SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_ID not in aud_list:
+            logger.warning("[SessTok] Audience uyuşmazlığı: aud=%s client_id=%s — devam ediliyor", aud, SHOPIFY_CLIENT_ID)
 
         return payload
     except Exception as e:

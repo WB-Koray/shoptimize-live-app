@@ -99,11 +99,20 @@ export default function App() {
     setShopifyLoading(true);
     setShopifyError('');
     try {
-      const ready = await waitForAppBridge();
-      if (!ready) throw new Error('App Bridge yüklenemedi');
+      // 1. Önce URL'deki id_token'ı dene — Shopify her page load'da gönderir
+      const params = new URLSearchParams(window.location.search);
+      let sessionToken = params.get('id_token');
 
-      // App Bridge v4 session token al
-      const sessionToken = await window.shopify.idToken();
+      // 2. URL'de yoksa App Bridge ile al (5sn timeout ile)
+      if (!sessionToken) {
+        const ready = await waitForAppBridge();
+        if (!ready) throw new Error('App Bridge yüklenemedi');
+        const tokenPromise = window.shopify.idToken();
+        const timeout = new Promise((_, rej) =>
+          setTimeout(() => rej(new Error('Session token timeout (5s)')), 5000)
+        );
+        sessionToken = await Promise.race([tokenPromise, timeout]);
+      }
 
       const res = await fetch(`${API_URL}/api/auth/shopify-token`, {
         method: 'POST',
