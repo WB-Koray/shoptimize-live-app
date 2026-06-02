@@ -117,29 +117,31 @@ export default function App() {
     setShopifyLoading(true);
     setShopifyError('');
     try {
-      // 1. URL'deki id_token'ı dene — ama süresi dolmamış olmalı (10sn buffer)
-      let sessionToken = getFreshUrlToken();
+      let sessionToken = null;
 
-      // 2. URL tokeni yoksa / süresi dolmuşsa App Bridge ile taze token al
-      if (!sessionToken) {
-        const ready = await waitForAppBridge();
-        if (ready) {
-          try {
-            const tokenPromise = window.shopify.idToken();
-            const timeout = new Promise((_, rej) =>
-              setTimeout(() => rej(new Error('timeout')), 5000)
-            );
-            sessionToken = await Promise.race([tokenPromise, timeout]);
-          } catch {
-            // App Bridge timeout veya hata → sayfayı yenile, Shopify yeni token gönderir
-            window.location.reload();
-            return;
-          }
-        } else {
-          // App Bridge yüklenemedi → yenile
-          window.location.reload();
-          return;
+      // 1. App Bridge'den taze token almayı dene (her zaman taze token verir)
+      //    Shopify admin doğru client_id ile kuruluysa çalışır.
+      const bridgeReady = await waitForAppBridge(2000);
+      if (bridgeReady) {
+        try {
+          const tokenPromise = window.shopify.idToken();
+          const timeout = new Promise((_, rej) =>
+            setTimeout(() => rej(new Error('timeout')), 4000)
+          );
+          sessionToken = await Promise.race([tokenPromise, timeout]);
+        } catch {
+          // App Bridge yavaş / uyumsuz → URL fallback'e geç
         }
+      }
+
+      // 2. App Bridge çalışmadıysa URL'deki taze id_token'ı dene (60sn geçerli)
+      if (!sessionToken) {
+        sessionToken = getFreshUrlToken();
+      }
+
+      // 3. İkisi de yoksa → kullanıcı uygulamayı yeniden açmalı
+      if (!sessionToken) {
+        throw new Error('Oturum süresi doldu. Sol menüden uygulamayı yeniden tıklayın.');
       }
 
       const res = await fetch(`${API_URL}/api/auth/shopify-token`, {
@@ -151,22 +153,10 @@ export default function App() {
       const data = await res.json();
 
       if (res.status === 401) {
-        // Token süresi dolmuş veya geçersiz → sayfayı yenile, Shopify taze token gönderir.
-        // Sonsuz döngü önlemi: max 3 yenileme (5sn arayla)
-        const key = 'spt_auth_reload';
-        const attempts = parseInt(sessionStorage.getItem(key) || '0');
-        if (attempts < 3) {
-          sessionStorage.setItem(key, String(attempts + 1));
-          setTimeout(() => window.location.reload(), 500);
-          return;
-        }
-        // 3 denemeden sonra hata göster
-        sessionStorage.removeItem(key);
-        throw new Error(data.detail || 'Kimlik doğrulaması başarısız');
+        // Token geçersiz / süresi dolmuş → URL token'ı temizle ve App Bridge ile yeniden dene
+        // (URL token'ı atlayarak direkt App Bridge'e gider)
+        throw new Error('Oturum süresi doldu. Sol menüden uygulamayı yeniden tıklayın.');
       }
-
-      // Başarılı auth → reload sayacını sıfırla
-      sessionStorage.removeItem('spt_auth_reload');
 
       if (res.status === 404) {
         // Uygulama bu mağazada kurulu değil → install'a yönlendir
