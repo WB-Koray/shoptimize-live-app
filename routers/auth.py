@@ -552,21 +552,15 @@ async def request_access(body: AccessRequest):
     # TR → dashboard_erisim, EN → panel_access (farklı Meta template adları)
     tpl_name = "dashboard_erisim" if lang == "tr" else "panel_access"
 
-    # Merchant'ın kendi WA credentials'larını kullan (OPERATOR'dan daha güvenilir;
-    # aynı WABA → template kesinlikle erişilebilir). OPERATOR yalnızca fallback.
-    flow_settings = await store.get_flow_settings(username, brand)
-    wa_token    = flow_settings.get("wa_token", "")    or OPERATOR_WA_TOKEN
-    wa_phone_id = flow_settings.get("phone_number_id", "") or OPERATOR_WA_PHONE_ID
-
     from services.wa_sender import send_wa_template
+    logger.info("[AUTH] WA access gönderiliyor: op_phone_id=%s tpl=%s lang=%s",
+                OPERATOR_WA_PHONE_ID[-6:] if OPERATOR_WA_PHONE_ID else "?", tpl_name, lang)
     result = await send_wa_template(
-        wa_token, wa_phone_id, phone_e164,
+        OPERATOR_WA_TOKEN, OPERATOR_WA_PHONE_ID, phone_e164,
         name=access_url,  # {{link}} parametresi
         template_name=tpl_name,
         language=lang,
     )
-    logger.info("[AUTH] WA access gönderiliyor: phone_id=%s tpl=%s lang=%s",
-                wa_phone_id[-6:] if wa_phone_id else "?", tpl_name, lang)
 
     if result.get("ok"):
         logger.info("[AUTH] WA access linki gönderildi: %s", phone_e164[-4:])
