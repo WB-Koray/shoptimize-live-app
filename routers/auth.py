@@ -650,9 +650,8 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
 
 def _exchange_session_token_for_offline(shop: str, session_token: str) -> Optional[str]:
     """
-    Shopify App Bridge session token'ını expiring offline access token ile değiştirir.
-    Token Exchange grant (RFC 8693) — her zaman expiring format döner.
-    Dönen token non-expiring token sorununu çözer.
+    Shopify App Bridge session token'ını offline access token ile değiştirir.
+    Token Exchange grant (RFC 8693).
     """
     url = f"https://{shop}/admin/oauth/access_token"
     payload = {
@@ -663,22 +662,56 @@ def _exchange_session_token_for_offline(shop: str, session_token: str) -> Option
         "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
         "requested_token_type": "urn:shopify:params:oauth:token-type:offline-access-token",
     }
-    logger.warning("[TokenExchange] Deneniyor: shop=%s url=%s", shop, url)
+    logger.warning("[TokenExchange/offline] Deneniyor: shop=%s", shop)
     try:
         r = requests.post(url, json=payload, timeout=10)
-        logger.warning("[TokenExchange] Response: shop=%s status=%d body=%s",
+        logger.warning("[TokenExchange/offline] Response: shop=%s status=%d body=%s",
                        shop, r.status_code, r.text[:500])
         if r.status_code == 200:
             data  = r.json()
             token = data.get("access_token", "")
             if token:
-                logger.warning("[TokenExchange] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
+                logger.warning("[TokenExchange/offline] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
                                shop, len(token), token[:8])
                 return token
-            logger.warning("[TokenExchange] 200 ama access_token yok: body=%s", data)
+            logger.warning("[TokenExchange/offline] 200 ama access_token yok: body=%s", data)
         return None
     except Exception as e:
-        logger.warning("[TokenExchange] Hata: shop=%s error=%s", shop, e)
+        logger.warning("[TokenExchange/offline] Hata: shop=%s error=%s", shop, e)
+        return None
+
+
+def _exchange_session_token_for_online(shop: str, session_token: str) -> Optional[str]:
+    """
+    Shopify App Bridge session token'ını kısa süreli ONLINE access token ile değiştirir.
+    Online token'lar ~1 gün geçerlidir ve Shopify tarafından her zaman "expiring" kabul edilir.
+    Billing API çağrıları için kullanılır (non-expiring token 403 hatasını önler).
+    """
+    url = f"https://{shop}/admin/oauth/access_token"
+    payload = {
+        "client_id":            SHOPIFY_CLIENT_ID,
+        "client_secret":        SHOPIFY_CLIENT_SECRET,
+        "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token":        session_token,
+        "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
+        "requested_token_type": "urn:shopify:params:oauth:token-type:online-access-token",
+    }
+    logger.warning("[TokenExchange/online] Deneniyor: shop=%s", shop)
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        logger.warning("[TokenExchange/online] Response: shop=%s status=%d body=%s",
+                       shop, r.status_code, r.text[:500])
+        if r.status_code == 200:
+            data  = r.json()
+            token = data.get("access_token", "")
+            if token:
+                logger.warning("[TokenExchange/online] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
+                               shop, len(token), token[:8])
+                return token
+            logger.warning("[TokenExchange/online] 200 ama access_token yok: body=%s", data)
+        return None
+    except Exception as e:
+        logger.warning("[TokenExchange/online] Hata: shop=%s error=%s", shop, e)
         return None
 
 
@@ -728,7 +761,16 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     if BILLING_ENABLED:
         billing_status = get_setting(username, brand, "shopify", "billing_status", "")
         if billing_status in ("needs_billing", ""):
-            access_token_for_billing = new_access_token or get_setting(username, brand, "shopify", "admin_api_token", "")
+            # Online token her zaman "expiring" — non-expiring token 403 hatasını önler
+            online_token = _exchange_session_token_for_online(shop, body.session_token)
+            access_token_for_billing = (
+                online_token
+                or new_access_token
+                or get_setting(username, brand, "shopify", "admin_api_token", "")
+            )
+            logger.warning("[SessTok] Billing için token: online=%s offline=%s",
+                           "evet" if online_token else "yok",
+                           "evet" if new_access_token else "yok")
             if access_token_for_billing:
                 try:
                     from routers.billing import create_charge
