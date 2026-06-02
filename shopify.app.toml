@@ -1,39 +1,33 @@
-name = "Shoptimize Live"
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
 client_id = "1e80272ad8faa2261f770841ddee0377"
+name = "Shop X-Ray WA Cart Recovery"
 application_url = "https://live.shoptimize.com.tr"
-embedded = false
-
-[access_scopes]
-# read_checkouts: required to receive checkouts/create + checkouts/update webhooks
-# write_script_tags: required to install/remove the storefront tracking pixel
-scopes = "read_customers,read_orders,read_checkouts,read_script_tags,write_script_tags"
-
-[auth]
-redirect_urls = [
-  "https://live.shoptimize.com.tr/auth/shopify/callback"
-]
+embedded = true
 
 [webhooks]
 api_version = "2026-04"
 
-  # Webhooks below are also registered programmatically during OAuth install.
-  # Declaring them here ensures Shopify CLI / Partner Dashboard stays in sync.
   [[webhooks.subscriptions]]
-  topics = ["orders/create"]
-  uri = "/api/shopify/webhook/orders-create"
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = [ "customers/data_request" ]
 
   [[webhooks.subscriptions]]
-  topics = ["checkouts/create", "checkouts/update"]
-  uri = "/api/shopify/webhook/checkouts-create"
+  uri = "/webhooks/customers/redact"
+  compliance_topics = [ "customers/redact" ]
 
   [[webhooks.subscriptions]]
-  topics = ["app/uninstalled"]
-  uri = "/webhooks/app/uninstalled"
+  uri = "/webhooks/shop/redact"
+  compliance_topics = [ "shop/redact" ]
 
-  [webhooks.privacy_compliance]
-  customer_data_request_url = "https://live.shoptimize.com.tr/webhooks/customers/data_request"
-  customer_deletion_url = "https://live.shoptimize.com.tr/webhooks/customers/redact"
-  shop_deletion_url = "https://live.shoptimize.com.tr/webhooks/shop/redact"
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_checkouts,read_customers,read_orders,read_script_tags,write_script_tags"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://live.shoptimize.com.tr/auth/shopify/callback" ]
 
 [pos]
 embedded = false

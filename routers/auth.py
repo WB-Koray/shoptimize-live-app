@@ -3,6 +3,7 @@ routers/auth.py
 Shopify OAuth 2.0 install flow
 """
 
+import base64
 import hashlib
 import hmac
 import json
@@ -569,6 +570,100 @@ async def request_access(body: AccessRequest):
     # WA gönderimi başarısız — "not_found" değil "wa_error" olarak işaretle
     logger.warning("[AUTH] WA access gönderimi başarısız: %s", result.get("error", ""))
     return {"ok": True, "sent": False, "reason": "wa_error"}
+
+
+# ---------------------------------------------------------------------------
+# App Bridge session token → dashboard JWT  (embedded app auth)
+# ---------------------------------------------------------------------------
+
+class ShopifySessionTokenRequest(BaseModel):
+    session_token: str
+
+
+def _verify_shopify_session_token(token: str) -> Optional[dict]:
+    """
+    Shopify App Bridge session token'ı doğrular (JWT HS256).
+    Signature key  : SHOPIFY_CLIENT_SECRET
+    Audience check : SHOPIFY_CLIENT_ID
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        header_b64, payload_b64, sig_b64 = parts
+
+        # Signature doğrula
+        message = f"{header_b64}.{payload_b64}".encode()
+        sig_padded  = sig_b64   + "=" * ((4 - len(sig_b64)   % 4) % 4)
+        sig_bytes   = base64.urlsafe_b64decode(sig_padded)
+        expected    = hmac.new(SHOPIFY_CLIENT_SECRET.encode(), message, hashlib.sha256).digest()
+        if not hmac.compare_digest(expected, sig_bytes):
+            logger.warning("[SessTok] Signature mismatch")
+            return None
+
+        # Payload decode
+        pay_padded = payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload    = json.loads(base64.urlsafe_b64decode(pay_padded))
+
+        # Expiry / nbf
+        now = time.time()
+        if payload.get("exp", 0) < now:
+            logger.warning("[SessTok] Token süresi dolmuş")
+            return None
+        if payload.get("nbf", now) > now + 10:   # 10sn tolerans
+            return None
+
+        # Audience
+        aud = payload.get("aud", "")
+        if isinstance(aud, list):
+            if SHOPIFY_CLIENT_ID not in aud:
+                return None
+        elif aud != SHOPIFY_CLIENT_ID:
+            return None
+
+        return payload
+    except Exception as e:
+        logger.warning("[SessTok] Parse hatası: %s", e)
+        return None
+
+
+@router.post("/api/auth/shopify-token")
+async def shopify_session_auth(body: ShopifySessionTokenRequest):
+    """
+    App Bridge session token → dashboard JWT.
+    Shopify admin embedded app için şifresiz otomatik giriş sağlar.
+    """
+    payload = _verify_shopify_session_token(body.session_token)
+    if not payload:
+        raise HTTPException(401, "Geçersiz veya süresi dolmuş session token")
+
+    # dest: "https://mystore.myshopify.com"
+    dest = payload.get("dest", "")
+    shop = dest.replace("https://", "").replace("http://", "").rstrip("/")
+
+    if not shop or not shop.endswith(".myshopify.com"):
+        raise HTTPException(401, f"Geçersiz shop: {dest}")
+
+    found = lookup_username_by_shop(shop)
+    if not found:
+        logger.warning("[SessTok] Mağaza bulunamadı: %s", shop)
+        raise HTTPException(404, "Mağaza bulunamadı. Uygulamayı Shopify App Store'dan yükleyin.")
+
+    username, brand = found
+    _check_billing(username, brand)   # 402 fırlatır gerekirse
+
+    from services.auth import create_access_token
+    token = create_access_token(username, brand)
+    tid   = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+
+    logger.info("[SessTok] ✓ Embedded giriş: shop=%s username=%s", shop, username)
+    return {
+        "ok":       True,
+        "token":    token,
+        "username": username,
+        "brand":    brand,
+        "tid":      tid or "",
+    }
 
 
 # ---------------------------------------------------------------------------
