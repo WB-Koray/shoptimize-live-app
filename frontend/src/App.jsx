@@ -175,6 +175,12 @@ export default function App() {
         throw new Error(data.detail || 'Giriş başarısız');
       }
 
+      // Billing onayı gerekiyorsa Shopify onay sayfasına yönlendir
+      if (data.billing_url) {
+        window.top.location.href = data.billing_url;
+        return;
+      }
+
       const newSession = {
         token:    data.token,
         username: data.username,

@@ -315,26 +315,25 @@ async def shopify_callback(
     except Exception as e:
         logger.warning("[OAuth] Webhook kurulum hatası: %s", e)
 
-    # 7. Billing — onay sayfasına yönlendir
-    try:
-        from routers.billing import create_charge
-        confirmation_url = create_charge(shop, access_token, username, brand)
-        # WA kurulum mesajı billing callback'te gönderilecek — orada auto_token var
-        return RedirectResponse(confirmation_url)
-    except Exception as e:
-        logger.warning("[OAuth] Billing oluşturulamadı, direkt giriş yapılıyor: %s", e)
-        from services.auth import create_access_token
-        token = create_access_token(username, brand)
-        if not tid:
-            tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
-        redirect = (
-            f"{APP_URL}/?auto_token={token}"
-            f"&u={username}&b={brand}"
-            + (f"&tid={tid}" if tid else "")
-        )
-        # WA kurulum mesajı gönder
-        _send_welcome_wa(username, brand, owner_name, owner_phone, shop, f"{APP_URL}/?auto_token={token}&u={username}&b={brand}")
-        return RedirectResponse(redirect)
+    # 7. Billing — embedded app açıldığında token exchange ile yapılacak
+    #    Non-expiring token OAuth'ta alınıyor; billing için expiring token gerekiyor.
+    #    İlk embedded oturumda /api/auth/shopify-token token exchange yapar ve billing başlatır.
+    if BILLING_ENABLED:
+        set_connection_settings(username, brand, "shopify", {"billing_status": "needs_billing"})
+        logger.info("[OAuth] Billing embedded app oturumuna ertelendi: shop=%s", shop)
+
+    from services.auth import create_access_token
+    token = create_access_token(username, brand)
+    if not tid:
+        tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    redirect = (
+        f"{APP_URL}/?auto_token={token}"
+        f"&u={username}&b={brand}"
+        + (f"&tid={tid}" if tid else "")
+    )
+    # WA kurulum mesajı gönder
+    _send_welcome_wa(username, brand, owner_name, owner_phone, shop, f"{APP_URL}/?auto_token={token}&u={username}&b={brand}")
+    return RedirectResponse(redirect)
 
 
 class TokenRequest(BaseModel):
@@ -645,11 +644,47 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
         return None
 
 
+def _exchange_session_token_for_offline(shop: str, session_token: str) -> Optional[str]:
+    """
+    Shopify App Bridge session token'ını expiring offline access token ile değiştirir.
+    Token Exchange grant (RFC 8693) — her zaman expiring format döner.
+    Dönen token non-expiring token sorununu çözer.
+    """
+    try:
+        r = requests.post(
+            f"https://{shop}/admin/oauth/access_token",
+            json={
+                "client_id":            SHOPIFY_CLIENT_ID,
+                "client_secret":        SHOPIFY_CLIENT_SECRET,
+                "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+                "subject_token":        session_token,
+                "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
+                "requested_token_type": "urn:shopify:params:oauth:token-type:offline-access-token",
+            },
+            timeout=10,
+        )
+        if r.status_code == 200:
+            data  = r.json()
+            token = data.get("access_token", "")
+            if token:
+                logger.info("[TokenExchange] ✓ Expiring offline token alındı: shop=%s token_len=%d", shop, len(token))
+                return token
+        logger.warning("[TokenExchange] Başarısız: shop=%s status=%d body=%s", shop, r.status_code, r.text[:300])
+        return None
+    except Exception as e:
+        logger.warning("[TokenExchange] Hata: shop=%s error=%s", shop, e)
+        return None
+
+
 @router.post("/api/auth/shopify-token")
 async def shopify_session_auth(body: ShopifySessionTokenRequest):
     """
     App Bridge session token → dashboard JWT.
     Shopify admin embedded app için şifresiz otomatik giriş sağlar.
+
+    Ek olarak:
+    - Token exchange ile expiring offline token alır ve DB'ye kaydeder (non-expiring token sorununu düzeltir)
+    - billing_status=="needs_billing" ise billing charge oluşturur ve onay URL'ini döner
     """
     payload = _verify_shopify_session_token(body.session_token)
     if not payload:
@@ -668,19 +703,43 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         raise HTTPException(404, "Mağaza bulunamadı. Uygulamayı Shopify App Store'dan yükleyin.")
 
     username, brand = found
+
+    # ── Token exchange: expiring offline token al, DB'yi güncelle ──────────
+    # OAuth'tan gelen token non-expiring olabilir; token exchange her zaman
+    # expiring format döndürür ve Admin API 403 sorununu çözer.
+    new_access_token = _exchange_session_token_for_offline(shop, body.session_token)
+    if new_access_token:
+        set_connection_settings(username, brand, "shopify", {"admin_api_token": new_access_token})
+
     _check_billing(username, brand)   # 402 fırlatır gerekirse
 
     from services.auth import create_access_token
     token = create_access_token(username, brand)
     tid   = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
 
-    logger.info("[SessTok] ✓ Embedded giriş: shop=%s username=%s", shop, username)
+    # ── Billing: "needs_billing" durumunda charge oluştur ───────────────────
+    billing_url = None
+    if BILLING_ENABLED:
+        billing_status = get_setting(username, brand, "shopify", "billing_status", "")
+        if billing_status in ("needs_billing", ""):
+            access_token_for_billing = new_access_token or get_setting(username, brand, "shopify", "admin_api_token", "")
+            if access_token_for_billing:
+                try:
+                    from routers.billing import create_charge
+                    billing_url = create_charge(shop, access_token_for_billing, username, brand)
+                    logger.info("[SessTok] Billing charge oluşturuldu: shop=%s", shop)
+                except Exception as e:
+                    logger.warning("[SessTok] Billing charge oluşturulamadı: %s", e)
+
+    logger.info("[SessTok] ✓ Embedded giriş: shop=%s username=%s billing_url=%s",
+                shop, username, "yes" if billing_url else "no")
     return {
-        "ok":       True,
-        "token":    token,
-        "username": username,
-        "brand":    brand,
-        "tid":      tid or "",
+        "ok":          True,
+        "token":       token,
+        "username":    username,
+        "brand":       brand,
+        "tid":         tid or "",
+        "billing_url": billing_url,   # varsa frontend buraya yönlendirir
     }
 
 
