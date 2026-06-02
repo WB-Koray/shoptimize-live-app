@@ -131,7 +131,7 @@ export default function LoginPage({ onLogin }) {
     setWaLoading(true);
     setWaStatus('');
     try {
-      const waLang = lang === 'tr' ? 'tr' : 'en_US';
+      const waLang = lang === 'tr' ? 'tr' : 'en';
       const res = await fetch(`${API_URL}/api/auth/request-access`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

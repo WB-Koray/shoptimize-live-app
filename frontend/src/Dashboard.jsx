@@ -2101,7 +2101,7 @@ function FlowPanel({ session, anonymized = false }) {
                     className="w-full bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text focus:outline-none focus:border-green/60">
                     <option value="tr">TR</option>
                     <option value="en">EN</option>
-                    <option value="en_US">en_US</option>
+                    <option value="en_US" style={{display:'none'}}>en_US</option>
                   </select>
                 </div>
               </div>
