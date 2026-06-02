@@ -107,9 +107,30 @@ export default function App() {
     }
 
     // ── Shopify admin context → App Bridge ile otomatik giriş ──────
-    if (!session && detectShopifyContext() && !authAttempted.current) {
+    if (!detectShopifyContext() || authAttempted.current) return;
+
+    if (!session) {
+      // Normal flow: session yok, Shopify auth yap
       authAttempted.current = true;
       doShopifyAuth();
+    } else {
+      // Session var — billing gerekiyor mu kontrol et
+      // (yeniden kurulum sonrası billing_status="needs_billing" olabilir)
+      authAttempted.current = true;
+      fetch(`${API_URL}/api/auth/status`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      })
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then(data => {
+          if (data.billing_status === 'needs_billing') {
+            // Billing kurulmamış → session'ı temizle, token exchange + billing için re-auth
+            clearSession();
+            setSession(null);
+            authAttempted.current = false;
+            doShopifyAuth();
+          }
+        })
+        .catch(() => {}); // session geçersizse Dashboard 401 handle eder
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
