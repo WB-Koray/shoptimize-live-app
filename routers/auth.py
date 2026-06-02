@@ -26,6 +26,8 @@ router = APIRouter()
 
 SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
+# Eski app sürümünün secret'ı (geçiş dönemi için fallback)
+SHOPIFY_CLIENT_SECRET_LEGACY = os.getenv("SHOPIFY_CLIENT_SECRET_LEGACY", "")
 APP_URL = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
 REDIRECT_URI = f"{APP_URL}/auth/shopify/callback"
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
@@ -580,11 +582,23 @@ class ShopifySessionTokenRequest(BaseModel):
     session_token: str
 
 
+def _verify_jwt_with_secret(header_b64: str, payload_b64: str, sig_b64: str, secret: str) -> bool:
+    """Verilen secret ile JWT HS256 imzasını doğrular."""
+    try:
+        message   = f"{header_b64}.{payload_b64}".encode()
+        sig_padded = sig_b64 + "=" * ((4 - len(sig_b64) % 4) % 4)
+        sig_bytes  = base64.urlsafe_b64decode(sig_padded)
+        expected   = hmac.new(secret.encode(), message, hashlib.sha256).digest()
+        return hmac.compare_digest(expected, sig_bytes)
+    except Exception:
+        return False
+
+
 def _verify_shopify_session_token(token: str) -> Optional[dict]:
     """
     Shopify App Bridge session token'ı doğrular (JWT HS256).
-    Signature key  : SHOPIFY_CLIENT_SECRET
-    Audience check : SHOPIFY_CLIENT_ID
+    Önce SHOPIFY_CLIENT_SECRET, başarısız olursa SHOPIFY_CLIENT_SECRET_LEGACY dener.
+    Bu sayede eski ve yeni app sürümleri aynı backend'i paylaşabilir.
     """
     try:
         parts = token.split(".")
@@ -592,13 +606,18 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
             return None
         header_b64, payload_b64, sig_b64 = parts
 
-        # Signature doğrula
-        message = f"{header_b64}.{payload_b64}".encode()
-        sig_padded  = sig_b64   + "=" * ((4 - len(sig_b64)   % 4) % 4)
-        sig_bytes   = base64.urlsafe_b64decode(sig_padded)
-        expected    = hmac.new(SHOPIFY_CLIENT_SECRET.encode(), message, hashlib.sha256).digest()
-        if not hmac.compare_digest(expected, sig_bytes):
-            logger.warning("[SessTok] Signature mismatch")
+        # Önce ana secret'ı dene, sonra legacy fallback
+        secrets_to_try = [s for s in [SHOPIFY_CLIENT_SECRET, SHOPIFY_CLIENT_SECRET_LEGACY] if s]
+        verified = False
+        for idx, secret in enumerate(secrets_to_try):
+            if _verify_jwt_with_secret(header_b64, payload_b64, sig_b64, secret):
+                if idx > 0:
+                    logger.info("[SessTok] Legacy secret ile doğrulandı (eski app sürümü)")
+                verified = True
+                break
+
+        if not verified:
+            logger.warning("[SessTok] Signature mismatch (denenen secret sayısı: %d)", len(secrets_to_try))
             return None
 
         # Payload decode
@@ -618,7 +637,7 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
         aud = payload.get("aud", "")
         aud_list = aud if isinstance(aud, list) else [aud]
         if SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_ID not in aud_list:
-            logger.warning("[SessTok] Audience uyuşmazlığı: aud=%s client_id=%s — devam ediliyor", aud, SHOPIFY_CLIENT_ID)
+            logger.info("[SessTok] Farklı audience (eski app): aud=%s — devam ediliyor", aud)
 
         return payload
     except Exception as e:
