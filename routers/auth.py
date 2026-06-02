@@ -654,26 +654,28 @@ def _exchange_session_token_for_offline(shop: str, session_token: str) -> Option
     Token Exchange grant (RFC 8693) — her zaman expiring format döner.
     Dönen token non-expiring token sorununu çözer.
     """
+    url = f"https://{shop}/admin/oauth/access_token"
+    payload = {
+        "client_id":            SHOPIFY_CLIENT_ID,
+        "client_secret":        SHOPIFY_CLIENT_SECRET,
+        "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token":        session_token,
+        "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
+        "requested_token_type": "urn:shopify:params:oauth:token-type:offline-access-token",
+    }
+    logger.warning("[TokenExchange] Deneniyor: shop=%s url=%s", shop, url)
     try:
-        r = requests.post(
-            f"https://{shop}/admin/oauth/access_token",
-            json={
-                "client_id":            SHOPIFY_CLIENT_ID,
-                "client_secret":        SHOPIFY_CLIENT_SECRET,
-                "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
-                "subject_token":        session_token,
-                "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
-                "requested_token_type": "urn:shopify:params:oauth:token-type:offline-access-token",
-            },
-            timeout=10,
-        )
+        r = requests.post(url, json=payload, timeout=10)
+        logger.warning("[TokenExchange] Response: shop=%s status=%d body=%s",
+                       shop, r.status_code, r.text[:500])
         if r.status_code == 200:
             data  = r.json()
             token = data.get("access_token", "")
             if token:
-                logger.info("[TokenExchange] ✓ Expiring offline token alındı: shop=%s token_len=%d", shop, len(token))
+                logger.warning("[TokenExchange] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
+                               shop, len(token), token[:8])
                 return token
-        logger.warning("[TokenExchange] Başarısız: shop=%s status=%d body=%s", shop, r.status_code, r.text[:300])
+            logger.warning("[TokenExchange] 200 ama access_token yok: body=%s", data)
         return None
     except Exception as e:
         logger.warning("[TokenExchange] Hata: shop=%s error=%s", shop, e)
