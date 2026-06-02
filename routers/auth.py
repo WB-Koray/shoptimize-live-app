@@ -317,22 +317,26 @@ async def shopify_callback(
 
     # 7. Billing — embedded app açıldığında token exchange ile yapılacak
     #    Non-expiring token OAuth'ta alınıyor; billing için expiring token gerekiyor.
-    #    İlk embedded oturumda /api/auth/shopify-token token exchange yapar ve billing başlatır.
+    #    auto_token VERMEDEN Shopify admin'e yönlendir → embedded app session yok →
+    #    doShopifyAuth() → shopify_session_auth → token exchange → billing charge akışı.
     if BILLING_ENABLED:
         set_connection_settings(username, brand, "shopify", {"billing_status": "needs_billing"})
-        logger.info("[OAuth] Billing embedded app oturumuna ertelendi: shop=%s", shop)
+        # WA mesajı billing onayından sonra (billing/callback'te) gönderilecek.
+        logger.info("[OAuth] Billing için admin'e yönlendiriliyor: shop=%s client=%s", shop, SHOPIFY_CLIENT_ID)
+        return RedirectResponse(f"https://{shop}/admin/apps/{SHOPIFY_CLIENT_ID}")
 
-    from services.auth import create_access_token
-    token = create_access_token(username, brand)
+    # BILLING_ENABLED=False → direkt giriş
+    from services.auth import create_access_token as _cat
+    _token = _cat(username, brand)
     if not tid:
         tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
     redirect = (
-        f"{APP_URL}/?auto_token={token}"
+        f"{APP_URL}/?auto_token={_token}"
         f"&u={username}&b={brand}"
         + (f"&tid={tid}" if tid else "")
     )
-    # WA kurulum mesajı gönder
-    _send_welcome_wa(username, brand, owner_name, owner_phone, shop, f"{APP_URL}/?auto_token={token}&u={username}&b={brand}")
+    _send_welcome_wa(username, brand, owner_name, owner_phone, shop,
+                     f"{APP_URL}/?auto_token={_token}&u={username}&b={brand}")
     return RedirectResponse(redirect)
 
 
