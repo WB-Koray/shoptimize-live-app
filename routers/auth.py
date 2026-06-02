@@ -223,32 +223,37 @@ async def shopify_callback(
         })
         logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s", shop, username)
 
-    # 4b. Mağaza sahibi bilgilerini al ve kaydet
+    # 4b. Mağaza sahibi bilgilerini al ve kaydet (GraphQL)
     owner_phone = ""
     owner_name = ""
     try:
-        from routers.live import _shopify_headers, _shopify_url
-        shop_r = requests.get(
-            _shopify_url(shop, "shop.json"),
-            headers=_shopify_headers(access_token),
-            timeout=10,
-        )
-        if shop_r.status_code == 200:
-            shop_info = shop_r.json().get("shop", {})
-            owner_phone = str(shop_info.get("phone") or "").strip()
-            owner_name  = str(shop_info.get("shop_owner") or shop_info.get("name") or "").strip()
-            if owner_phone:
-                # E.164 formatına çevir (TR numaraları için)
-                digits = "".join(c for c in owner_phone if c.isdigit())
-                if digits and not owner_phone.startswith("+"):
-                    owner_phone = f"+9{digits}" if digits.startswith("0") else f"+{digits}"
-                from services.redis_store import store as _store
-                import asyncio
-                if asyncio.get_event_loop().is_running():
-                    asyncio.ensure_future(_store.set_owner_phone(username, brand, owner_phone))
-                logger.info("[OAuth] Mağaza sahibi telefonu kaydedildi: %s", owner_phone[-4:])
+        from routers.live import _shopify_graphql
+        _SHOP_GQL = """
+        query {
+          shop {
+            name
+            email
+            phone
+            billingAddress { name phone }
+          }
+        }
+        """
+        shop_resp = _shopify_graphql(shop, access_token, _SHOP_GQL)
+        shop_info = shop_resp.get("data", {}).get("shop", {})
+        billing   = shop_info.get("billingAddress") or {}
+        owner_phone = str(shop_info.get("phone") or billing.get("phone") or "").strip()
+        owner_name  = str(billing.get("name") or shop_info.get("name") or "").strip()
+        if owner_phone:
+            digits = "".join(c for c in owner_phone if c.isdigit())
+            if digits and not owner_phone.startswith("+"):
+                owner_phone = f"+9{digits}" if digits.startswith("0") else f"+{digits}"
+            from services.redis_store import store as _store
+            import asyncio
+            if asyncio.get_event_loop().is_running():
+                asyncio.ensure_future(_store.set_owner_phone(username, brand, owner_phone))
+            logger.info("[OAuth] Mağaza sahibi telefonu kaydedildi: %s", owner_phone[-4:])
     except Exception as e:
-        logger.warning("[OAuth] shop.json alınamadı: %s", e)
+        logger.warning("[OAuth] shop GraphQL alınamadı: %s", e)
 
     if is_reauth:
         # Yeniden giriş: doğrudan dashboard'a yönlendir
@@ -262,34 +267,37 @@ async def shopify_callback(
         )
         return RedirectResponse(redirect)
 
-    # 5. Pixel'i otomatik kur
+    # 5. Pixel'i otomatik kur (GraphQL scriptTagCreate)
     tid = ""
     try:
-        from routers.live import _get_or_create_tid, _shopify_headers, _shopify_url
+        from routers.live import _get_or_create_tid, _shopify_graphql
         from services.redis_store import store
         import asyncio
 
         tid = _get_or_create_tid(username, brand)
         script_url = f"{APP_URL}/pixel.js?tid={tid}"
 
-        requests.post(
-            _shopify_url(shop, "script_tags.json"),
-            json={"script_tag": {"event": "onload", "src": script_url}},
-            headers=_shopify_headers(access_token),
-            timeout=15,
-        )
+        _ST_MUT = """
+        mutation ScriptTagCreate($input: ScriptTagInput!) {
+          scriptTagCreate(input: $input) {
+            scriptTag { id }
+            userErrors { field message }
+          }
+        }
+        """
+        _shopify_graphql(shop, access_token, _ST_MUT, {"input": {"event": "ONLOAD", "src": script_url}})
 
         loop = asyncio.get_event_loop()
         if loop.is_running():
             asyncio.ensure_future(store.register_tid_owner(tid, username, brand))
 
-        logger.info("[OAuth] ✓ Pixel kuruldu: tid=%s shop=%s", tid, shop)
+        logger.info("[OAuth] ✓ Pixel kuruldu (GraphQL): tid=%s shop=%s", tid, shop)
     except Exception as e:
         logger.warning("[OAuth] Pixel kurulum hatası (devam ediliyor): %s", e)
 
-    # 6. Webhook'ları kaydet
+    # 6. Webhook'ları kaydet (GraphQL webhookSubscriptionCreate)
     try:
-        from routers.live import _shopify_headers, _shopify_url
+        from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP
         import secrets as _secrets
 
         wh_token = get_setting(username, brand, "shopify", "webhook_token", "")
@@ -299,19 +307,26 @@ async def shopify_callback(
 
         checkout_url = f"{APP_URL}/api/shopify/webhook/checkouts-create?token={wh_token}&username={username}&brand={brand}"
         webhook_topics = [
-            ("orders/create",     f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
-            ("checkouts/create",  checkout_url),
-            ("checkouts/update",  checkout_url),  # müşteri email/telefon bilgisi bu event'te gelir
-            ("app/uninstalled",   f"{APP_URL}/webhooks/app/uninstalled"),
+            ("orders/create",    f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
+            ("checkouts/create", checkout_url),
+            ("checkouts/update", checkout_url),
+            ("app/uninstalled",  f"{APP_URL}/webhooks/app/uninstalled"),
         ]
+        _WH_MUT = """
+        mutation WebhookCreate($topic: WebhookSubscriptionTopic!, $callbackUrl: URL!) {
+          webhookSubscriptionCreate(topic: $topic, webhookSubscription: {callbackUrl: $callbackUrl, format: JSON}) {
+            webhookSubscription { id }
+            userErrors { field message }
+          }
+        }
+        """
         for topic, callback_url in webhook_topics:
-            requests.post(
-                _shopify_url(shop, "webhooks.json"),
-                json={"webhook": {"topic": topic, "address": callback_url, "format": "json"}},
-                headers=_shopify_headers(access_token),
-                timeout=15,
-            )
-        logger.info("[OAuth] ✓ Webhook'lar kaydedildi: shop=%s", shop)
+            gql_topic = _WEBHOOK_TOPIC_MAP.get(topic, topic.upper().replace("/", "_"))
+            try:
+                _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
+            except Exception as _we:
+                logger.warning("[OAuth] Webhook kayıt hatası: topic=%s err=%s", topic, _we)
+        logger.info("[OAuth] ✓ Webhook'lar kaydedildi (GraphQL): shop=%s", shop)
     except Exception as e:
         logger.warning("[OAuth] Webhook kurulum hatası: %s", e)
 

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from services.auth import get_current_user
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2024-10")
+SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 from services.db import get_setting, set_connection_settings
 from services.redis_store import store
 
@@ -541,6 +541,30 @@ def _shopify_url(domain: str, path: str, version: str = None) -> str:
     return f"https://{domain}/admin/api/{v}/{path}"
 
 
+def _shopify_graphql(domain: str, token: str, query: str, variables: dict = None, version: str = None) -> dict:
+    """Shopify GraphQL Admin API çağrısı. Dönen dict: r.json() içeriği."""
+    domain_clean = domain.replace("https://", "").replace("http://", "").strip().rstrip("/")
+    v = version or SHOPIFY_API_VERSION
+    url = f"https://{domain_clean}/admin/api/{v}/graphql.json"
+    r = requests.post(
+        url,
+        json={"query": query, "variables": variables or {}},
+        headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
+        timeout=15,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+# REST → GraphQL topic dönüşüm tablosu
+_WEBHOOK_TOPIC_MAP = {
+    "orders/create":    "ORDERS_CREATE",
+    "checkouts/create": "CHECKOUTS_CREATE",
+    "checkouts/update": "CHECKOUTS_UPDATE",
+    "app/uninstalled":  "APP_UNINSTALLED",
+}
+
+
 def _get_or_create_tid(username: str, brand: str) -> str:
     existing = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
     if existing:
@@ -551,18 +575,30 @@ def _get_or_create_tid(username: str, brand: str) -> str:
 
 
 def _find_our_scripttag(domain: str, token: str, version: str = None) -> Optional[dict]:
+    """Mağazada kurulu pixel script tag'ini GraphQL ile bulur."""
+    _GQL = """
+    query ScriptTags($cursor: String) {
+      scriptTags(first: 50, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        edges { node { id src } }
+      }
+    }
+    """
+    search_bases = [b for b in [API_BASE_URL, _SHOPIFY_APP_URL] if b]
+    cursor = None
     try:
-        r = requests.get(
-            _shopify_url(domain, "script_tags.json", version),
-            headers=_shopify_headers(token), timeout=15
-        )
-        if r.status_code != 200:
-            return None
-        search_bases = [b for b in [API_BASE_URL, _SHOPIFY_APP_URL] if b]
-        for tag in r.json().get("script_tags", []):
-            src = tag.get("src", "")
-            if any(src.startswith(base + "/pixel.js") for base in search_bases):
-                return tag
+        while True:
+            resp = _shopify_graphql(domain, token, _GQL, {"cursor": cursor}, version)
+            st = resp.get("data", {}).get("scriptTags", {})
+            for edge in st.get("edges", []):
+                node = edge["node"]
+                src = node.get("src", "")
+                if any(src.startswith(base + "/pixel.js") for base in search_bases):
+                    return {"id": node["id"], "src": src}
+            pi = st.get("pageInfo", {})
+            if not pi.get("hasNextPage"):
+                break
+            cursor = pi.get("endCursor")
     except Exception:
         pass
     return None
@@ -640,18 +676,24 @@ async def pixel_install(username: str = Query(""), brand: str = Query("default")
     tid = _get_or_create_tid(username, brand)
     await store.register_tid_owner(tid, username, brand)
     script_url = f"{API_BASE_URL}/pixel.js?tid={tid}"
+    _MUT = """
+    mutation ScriptTagCreate($input: ScriptTagInput!) {
+      scriptTagCreate(input: $input) {
+        scriptTag { id src }
+        userErrors { field message }
+      }
+    }
+    """
     try:
-        r = requests.post(
-            _shopify_url(domain, "script_tags.json", version),
-            json={"script_tag": {"event": "onload", "src": script_url}},
-            headers=_shopify_headers(token), timeout=15
-        )
+        resp = _shopify_graphql(domain, token, _MUT, {"input": {"event": "ONLOAD", "src": script_url}}, version)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    if r.status_code == 201:
-        tag = r.json().get("script_tag", {})
-        return {"ok": True, "installed": True, "tracking_id": tid, "script_tag_id": tag.get("id")}
-    return JSONResponse({"ok": False, "error": r.text, "status": r.status_code}, status_code=502)
+    result = resp.get("data", {}).get("scriptTagCreate", {})
+    errs = result.get("userErrors", [])
+    if errs:
+        return JSONResponse({"ok": False, "error": errs[0].get("message")}, status_code=502)
+    tag = result.get("scriptTag") or {}
+    return {"ok": True, "installed": True, "tracking_id": tid, "script_tag_id": tag.get("id")}
 
 
 @router.delete("/api/shopify/pixel/uninstall")
@@ -664,16 +706,23 @@ async def pixel_uninstall(username: str = Query(""), brand: str = Query("default
     tag = _find_our_scripttag(domain, token, version)
     if not tag:
         return {"ok": True, "already_uninstalled": True}
+    _MUT = """
+    mutation ScriptTagDelete($id: ID!) {
+      scriptTagDelete(id: $id) {
+        deletedScriptTagId
+        userErrors { field message }
+      }
+    }
+    """
     try:
-        r = requests.delete(
-            _shopify_url(domain, f"script_tags/{tag['id']}.json", version),
-            headers=_shopify_headers(token), timeout=15
-        )
+        resp = _shopify_graphql(domain, token, _MUT, {"id": tag["id"]}, version)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    if r.status_code in (200, 204):
-        return {"ok": True, "uninstalled": True}
-    return JSONResponse({"ok": False, "error": r.text}, status_code=502)
+    result = resp.get("data", {}).get("scriptTagDelete", {})
+    errs = result.get("userErrors", [])
+    if errs:
+        return JSONResponse({"ok": False, "error": errs[0].get("message")}, status_code=502)
+    return {"ok": True, "uninstalled": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1209,24 +1258,32 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
         ("checkouts/create", "checkouts-create"),
         ("checkouts/update", "checkouts-create"),
     ]
+    _MUT = """
+    mutation WebhookCreate($topic: WebhookSubscriptionTopic!, $callbackUrl: URL!) {
+      webhookSubscriptionCreate(topic: $topic, webhookSubscription: {callbackUrl: $callbackUrl, format: JSON}) {
+        webhookSubscription { id }
+        userErrors { field message }
+      }
+    }
+    """
     results = {}
     for topic, slug in topics:
         callback_url = (
             f"{API_BASE_URL}/api/shopify/webhook/{slug}"
             f"?token={wh_token}&username={username}&brand={brand}"
         )
+        gql_topic = _WEBHOOK_TOPIC_MAP.get(topic, topic.upper().replace("/", "_"))
         try:
-            r = requests.post(
-                _shopify_url(domain, "webhooks.json", version),
-                json={"webhook": {"topic": topic, "address": callback_url, "format": "json"}},
-                headers=_shopify_headers(token), timeout=15,
-            )
-            if r.status_code in (200, 201):
-                results[topic] = {"ok": True, "webhook_id": r.json().get("webhook", {}).get("id")}
-            elif r.status_code == 422 and "taken" in r.text.lower():
+            resp = _shopify_graphql(domain, token, _MUT, {"topic": gql_topic, "callbackUrl": callback_url}, version)
+            result = resp.get("data", {}).get("webhookSubscriptionCreate", {})
+            errs = result.get("userErrors", [])
+            if errs and "already" in (errs[0].get("message") or "").lower():
                 results[topic] = {"ok": True, "already_registered": True}
+            elif errs:
+                results[topic] = {"ok": False, "error": errs[0].get("message")}
             else:
-                results[topic] = {"ok": False, "error": r.text}
+                wh = result.get("webhookSubscription") or {}
+                results[topic] = {"ok": True, "webhook_id": wh.get("id")}
         except Exception as e:
             results[topic] = {"ok": False, "error": str(e)}
 
@@ -1240,15 +1297,19 @@ async def get_webhook_status(username: str = Query(""), brand: str = Query("defa
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
     if not domain or not token:
         return {"ok": False, "webhooks": []}
+    _QRY = """
+    query WebhookStatus {
+      webhookSubscriptions(first: 20, topics: ORDERS_CREATE) {
+        edges { node { id callbackUrl topic } }
+      }
+    }
+    """
     try:
-        r = requests.get(
-            _shopify_url(domain, "webhooks.json?topic=orders/create", version),
-            headers=_shopify_headers(token), timeout=10,
-        )
-        if r.status_code == 200:
-            hooks = r.json().get("webhooks", [])
-            ours  = [h for h in hooks if API_BASE_URL in h.get("address", "")]
-            return {"ok": True, "registered": bool(ours), "webhooks": ours}
+        resp = _shopify_graphql(domain, token, _QRY, version=version)
+        edges = resp.get("data", {}).get("webhookSubscriptions", {}).get("edges", [])
+        hooks = [e["node"] for e in edges]
+        ours  = [h for h in hooks if API_BASE_URL in h.get("callbackUrl", "")]
+        return {"ok": True, "registered": bool(ours), "webhooks": ours}
     except Exception:
         pass
     return {"ok": False, "webhooks": []}
