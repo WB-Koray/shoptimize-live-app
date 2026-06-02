@@ -150,6 +150,24 @@ export default function App() {
 
       const data = await res.json();
 
+      if (res.status === 401) {
+        // Token süresi dolmuş veya geçersiz → sayfayı yenile, Shopify taze token gönderir.
+        // Sonsuz döngü önlemi: max 3 yenileme (5sn arayla)
+        const key = 'spt_auth_reload';
+        const attempts = parseInt(sessionStorage.getItem(key) || '0');
+        if (attempts < 3) {
+          sessionStorage.setItem(key, String(attempts + 1));
+          setTimeout(() => window.location.reload(), 500);
+          return;
+        }
+        // 3 denemeden sonra hata göster
+        sessionStorage.removeItem(key);
+        throw new Error(data.detail || 'Kimlik doğrulaması başarısız');
+      }
+
+      // Başarılı auth → reload sayacını sıfırla
+      sessionStorage.removeItem('spt_auth_reload');
+
       if (res.status === 404) {
         // Uygulama bu mağazada kurulu değil → install'a yönlendir
         const shop = sessionStorage.getItem('spt_shopify_shop') || '';
