@@ -56,6 +56,7 @@ _DEFAULT_TEMPLATES = [
 
 def _get_waba_id(phone_number_id: str, token: str) -> str | None:
     """Phone Number ID'den WhatsApp Business Account ID'yi alır."""
+    # Yöntem 1: Phone Number ID üzerinden
     try:
         r = _requests.get(
             f"{META_GRAPH}/{phone_number_id}",
@@ -63,10 +64,29 @@ def _get_waba_id(phone_number_id: str, token: str) -> str | None:
             timeout=10,
         )
         data = r.json()
-        return data.get("whatsapp_business_account", {}).get("id")
+        logger.info("[WA Templates] WABA lookup v1 status=%d body=%s", r.status_code, str(data)[:300])
+        waba_id = data.get("whatsapp_business_account", {}).get("id")
+        if waba_id:
+            return waba_id
     except Exception as e:
-        logger.warning("[WA Templates] WABA ID alınamadı: %s", e)
-        return None
+        logger.warning("[WA Templates] WABA lookup v1 hata: %s", e)
+
+    # Yöntem 2: Token'a bağlı business account'ları listele
+    try:
+        r2 = _requests.get(
+            f"{META_GRAPH}/me/whatsapp_business_accounts",
+            params={"access_token": token},
+            timeout=10,
+        )
+        data2 = r2.json()
+        logger.info("[WA Templates] WABA lookup v2 status=%d body=%s", r2.status_code, str(data2)[:300])
+        accounts = data2.get("data", [])
+        if accounts:
+            return accounts[0].get("id")
+    except Exception as e:
+        logger.warning("[WA Templates] WABA lookup v2 hata: %s", e)
+
+    return None
 
 
 def _create_template(waba_id: str, token: str, name: str, body: str, language: str, category: str = "MARKETING") -> dict:
