@@ -382,9 +382,9 @@ async def create_templates(
     if not token or not phone_number_id:
         return JSONResponse({"ok": False, "error": "WA Token ve Phone Number ID önce kaydedilmeli"}, status_code=400)
 
-    waba_id = _get_waba_id(phone_number_id, token)
+    waba_id = settings.get("waba_id", "").strip() or _get_waba_id(phone_number_id, token)
     if not waba_id:
-        return JSONResponse({"ok": False, "error": "WABA ID alınamadı. Token ve Phone Number ID'yi kontrol edin."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "WABA ID bulunamadı. Settings → Connection'da WABA ID alanını doldurun."}, status_code=400)
 
     templates = request_data.get("templates", _DEFAULT_TEMPLATES)
     results = []
@@ -424,10 +424,11 @@ async def get_template_status(
     if not token or not phone_number_id:
         return {"ok": True, "statuses": {}}
 
-    waba_id = _get_waba_id(phone_number_id, token)
+    # Merchant'ın kaydettiği WABA ID'yi önce dene, yoksa API'den çözümle
+    waba_id = settings.get("waba_id", "").strip() or _get_waba_id(phone_number_id, token)
     if not waba_id:
         logger.warning("[WA Templates] WABA ID alınamadı — phone_id=%s", phone_number_id[:8] if phone_number_id else "?")
-        return {"ok": True, "statuses": {}, "error": "WABA ID alınamadı — token izinlerini kontrol edin"}
+        return {"ok": True, "statuses": {}, "error": "WABA ID alınamadı — Settings'e WABA ID'yi girin"}
 
     names = [t["name"] for t in _DEFAULT_TEMPLATES]
     statuses = _get_template_statuses(waba_id, token, names)

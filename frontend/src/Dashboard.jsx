@@ -1538,7 +1538,7 @@ function FlowPanel({ session, anonymized = false }) {
   const authH = { Authorization: `Bearer ${token}` };
 
   const [settings, setSettings] = useState({
-    enabled: false, wa_token: '', phone_number_id: '',
+    enabled: false, wa_token: '', phone_number_id: '', waba_id: '',
     sequence: DEFAULT_SEQUENCE,
     post_order: { enabled: false, template: 'siparis_onay' },
     cooldown_hours: 48,
@@ -1592,6 +1592,7 @@ function FlowPanel({ session, anonymized = false }) {
           enabled:         s.enabled ?? false,
           wa_token:        '',
           phone_number_id: s.phone_number_id || '',
+          waba_id:         s.waba_id         || '',
           sequence:          s.sequence?.length ? s.sequence : DEFAULT_SEQUENCE,
           post_order:        s.post_order || { enabled: false, template: 'siparis_onay' },
           cooldown_hours:    s.cooldown_hours ?? 48,
@@ -2314,6 +2315,19 @@ function FlowPanel({ session, anonymized = false }) {
                           className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
                     }
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.waba_id')}</label>
+                  <div className="relative">
+                    <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMute" />
+                    {anonymized
+                      ? <div className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-textMute tracking-widest">• • • • • •</div>
+                      : <input value={settings.waba_id || ''} onChange={e => setSettings(s => ({ ...s, waba_id: e.target.value }))}
+                          placeholder="123456789012345"
+                          className="w-full bg-surfaceAlt border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60 transition-colors" />
+                    }
+                  </div>
+                  <p className="text-[10px] text-textMute">{t('flow.waba_id_hint')}</p>
                 </div>
               </div>
             )}
