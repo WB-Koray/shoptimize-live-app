@@ -176,6 +176,7 @@ async def save_flow_settings(
         "enabled":           bool(request_data.get("enabled", False)),
         "wa_token":          wa_token,
         "phone_number_id":   str(request_data.get("phone_number_id", "")).strip(),
+        "waba_id":           str(request_data.get("waba_id", "")).strip(),
         "delay_minutes":     sequence[0]["delay_minutes"] if sequence else 15,
         "sequence":          sequence,
         "cooldown_hours":    max(1, min(168, int(request_data.get("cooldown_hours", 48)))),
