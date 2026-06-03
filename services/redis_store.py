@@ -225,23 +225,60 @@ class RedisStore:
 
     _OPTOUT_TTL = 86400 * 365  # 1 yıl
 
-    async def add_optout(self, phone: str) -> None:
+    async def add_optout(self, phone: str, username: str = "", brand: str = "default") -> None:
         normalized = phone.strip().lstrip("+")
-        await self._redis.setex(f"optout:{normalized}", self._OPTOUT_TTL, "1")
+        if username:
+            await self._redis.setex(f"optout:{username}:{brand}:{normalized}", self._OPTOUT_TTL, "1")
+        else:
+            # legacy global key (geriye dönük uyumluluk)
+            await self._redis.setex(f"optout:{normalized}", self._OPTOUT_TTL, "1")
 
-    async def is_optout(self, phone: str) -> bool:
+    async def is_optout(self, phone: str, username: str = "", brand: str = "default") -> bool:
         normalized = phone.strip().lstrip("+")
+        if username:
+            if await self._redis.exists(f"optout:{username}:{brand}:{normalized}"):
+                return True
+        # Legacy global key fallback
         return bool(await self._redis.exists(f"optout:{normalized}"))
 
-    async def remove_optout(self, phone: str) -> None:
+    async def remove_optout(self, phone: str, username: str = "", brand: str = "default") -> None:
         normalized = phone.strip().lstrip("+")
+        if username:
+            await self._redis.delete(f"optout:{username}:{brand}:{normalized}")
         await self._redis.delete(f"optout:{normalized}")
 
-    async def get_all_optouts(self) -> list[str]:
+    async def get_all_optouts(self, username: str = "", brand: str = "default") -> list[str]:
         result = []
-        async for key in self._redis.scan_iter("optout:*"):
-            result.append("+" + key.split("optout:", 1)[1])
+        if username:
+            prefix = f"optout:{username}:{brand}:"
+            async for key in self._redis.scan_iter(f"{prefix}*"):
+                result.append("+" + key.split(prefix, 1)[1])
+        else:
+            async for key in self._redis.scan_iter("optout:*"):
+                result.append("+" + key.split("optout:", 1)[1])
         return sorted(result)
+
+    async def find_optout_owner(self, phone: str) -> tuple[str, str] | None:
+        """Telefon numarasına ait opt-out kaydının (username, brand) bilgisini döner."""
+        normalized = phone.strip().lstrip("+")
+        async for key in self._redis.scan_iter(f"optout:*:{normalized}"):
+            parts = key.split(":")
+            if len(parts) == 4:  # optout:username:brand:phone
+                return parts[1], parts[2]
+        return None
+
+    async def set_merchant_phone_id(self, phone_number_id: str, username: str, brand: str) -> None:
+        """WA phone_number_id → merchant eşlemesini kaydeder (opt-out routing için)."""
+        await self._redis.set(f"wa_phone_id:{phone_number_id}", f"{username}:{brand}")
+
+    async def find_merchant_by_phone_id(self, phone_number_id: str) -> tuple[str, str] | None:
+        """WA phone_number_id'den (username, brand) döner."""
+        val = await self._redis.get(f"wa_phone_id:{phone_number_id}")
+        if val:
+            parts = val.split(":", 1)
+            if len(parts) == 2:
+                return parts[0], parts[1]
+        return None
 
     # ── Telefon bazlı aktif sequence takibi (cooldown dedup) ────────────────────
 

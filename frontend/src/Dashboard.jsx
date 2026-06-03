@@ -2952,6 +2952,19 @@ export default function Dashboard({ session, onLogout }) {
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-greenSoft border border-green/20 text-green text-xs font-bold rounded-lg">
               <CheckCircle size={11} /> {t('pixel.active_via_shopify')}
             </span>
+          ) : pixelStatus?.detected_via === 'theme_extension' ? (
+            // Embed ayarlı ama henüz ziyaretçi yok
+            <>
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-bold rounded-lg">
+                <CheckCircle size={11} /> {t('pixel.embed_configured')}
+              </span>
+              {themeEditorUrl && (
+                <a href={themeEditorUrl} target="_top" rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-surfaceAlt border border-border text-textDim text-xs font-semibold rounded-lg hover:text-text transition-colors no-underline">
+                  <ExternalLink size={11} /> {t('pixel.manage_embed')}
+                </a>
+              )}
+            </>
           ) : (
             <>
               {pixelStatus?.installed && (
@@ -2987,6 +3000,7 @@ export default function Dashboard({ session, onLogout }) {
             </>
           )}
         </div>
+
       </div>
 
       {/* Inner tab switcher */}

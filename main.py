@@ -120,6 +120,7 @@ async def _abandoned_checkout_worker():
                         wa_token, phone_id, phone,
                         name=co.get("name", ""), product=co.get("product", ""),
                         template_name=tmpl, language=lang, products=products,
+                        username=username, brand=brand,
                     )
                     await store.mark_step_sent(token, step_idx)
 

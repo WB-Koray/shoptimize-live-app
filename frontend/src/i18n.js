@@ -68,6 +68,8 @@ const translations = {
     'pixel.uninstall_confirm':    'Pixel will be removed and tracking will stop. Are you sure?',
     'pixel.open_theme_editor':    'Activate in Theme Editor',
     'pixel.embed_hint':           'Go to Theme Editor → App Embeds and enable "Shop X-Ray Pixel"',
+    'pixel.embed_configured':     'Embed Configured',
+    'pixel.manage_embed':         'Manage in Theme Editor',
 
     // Stat cards
     'stat.events':          'Events',
@@ -390,6 +392,8 @@ const translations = {
     'pixel.uninstall_confirm':    'Pixel kaldırılacak ve takip duracak. Emin misiniz?',
     'pixel.open_theme_editor':    'Theme Editor\'da Etkinleştir',
     'pixel.embed_hint':           'Theme Editor → App Embeds\'e gidip "Shop X-Ray Pixel"\'i açın',
+    'pixel.embed_configured':     'Embed Ayarlı',
+    'pixel.manage_embed':         'Theme Editor\'da Yönet',
 
     // İstatistik kartları
     'stat.events':          'Etkinlikler',

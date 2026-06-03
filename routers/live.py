@@ -624,27 +624,24 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
     token  = get_setting(username, brand, "shopify", "admin_api_token", "")
     tid    = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
 
-    # Primary path: verify via Shopify API when credentials available
+    # Primary path: Shopify merchant with Theme App Extension
+    # ScriptTag deprecated → TID varlığı = embed konfigüre edilmiş demek.
+    # "installed: True" + detected_via="theme_extension" → embed ayarlı ama henüz event yok
+    # "installed: True" + detected_via="events" → gerçek trafik var, embed aktif
     if domain and token:
-        tag = _find_our_scripttag(domain, token)
-        # If DB has no TID but the script tag is installed, extract TID from tag URL and save it
-        if tag and not tid:
-            from urllib.parse import urlparse, parse_qs as _parse_qs
-            _src_qs = _parse_qs(urlparse(tag.get("src", "")).query)
-            extracted = (_src_qs.get("tid") or [""])[0]
-            if extracted:
-                tid = extracted
-                set_connection_settings(username, brand, "shopify", {"pixel_tracking_id": tid})
-                logger.info("[PIXEL] TID extracted from script tag and saved: %s", tid[:16])
         if tid:
             await store.register_tid_owner(tid, username, brand)
-        return {
-            "ok": True,
-            "installed": tag is not None,
-            "tracking_id": tid or None,
-            "script_tag_id": tag["id"] if tag else None,
-            "script_url": tag.get("src") if tag else None,
-        }
+            # Event'lerin gelip gelmediğini kontrol et
+            has_events = bool(await store.get_user_tid(username, brand))
+            return {
+                "ok": True,
+                "installed": True,
+                "tracking_id": tid,
+                "script_tag_id": None,
+                "script_url": None,
+                "detected_via": "events" if has_events else "theme_extension",
+            }
+        return {"ok": True, "installed": False, "tracking_id": None}
 
     # Fallback: no Shopify credentials (password-login user) — use Redis event presence
     if tid:

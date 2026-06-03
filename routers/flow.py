@@ -73,6 +73,10 @@ async def save_flow_settings(
     }
 
     await store.save_flow_settings(username, brand, settings)
+    # WA phone_number_id → merchant eşlemesini kaydet (opt-out routing için)
+    phone_number_id = settings.get("phone_number_id", "")
+    if phone_number_id:
+        await store.set_merchant_phone_id(phone_number_id, username, brand)
     return {"ok": True}
 
 
@@ -207,7 +211,9 @@ async def get_wa_roi(
 
 @router.get("/api/flow/optouts")
 async def get_optouts(current_user: dict = Depends(get_current_user)):
-    phones = await store.get_all_optouts()
+    username = current_user.get("username", "")
+    brand    = current_user.get("brand", "default")
+    phones = await store.get_all_optouts(username, brand)
     return {"ok": True, "phones": phones}
 
 
@@ -216,10 +222,12 @@ async def add_optout(
     request_data: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    phone = str(request_data.get("phone", "")).strip()
+    phone    = str(request_data.get("phone", "")).strip()
+    username = current_user.get("username", "")
+    brand    = current_user.get("brand", "default")
     if not phone:
         return JSONResponse({"ok": False, "error": "Telefon gerekli"}, status_code=400)
-    await store.add_optout(phone)
+    await store.add_optout(phone, username, brand)
     return {"ok": True}
 
 
@@ -228,7 +236,9 @@ async def remove_optout(
     phone: str = Query(""),
     current_user: dict = Depends(get_current_user),
 ):
+    username = current_user.get("username", "")
+    brand    = current_user.get("brand", "default")
     if not phone:
         return JSONResponse({"ok": False, "error": "Telefon gerekli"}, status_code=400)
-    await store.remove_optout(phone)
+    await store.remove_optout(phone, username, brand)
     return {"ok": True}

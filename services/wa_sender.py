@@ -87,8 +87,16 @@ async def handle_incoming_message(token_phone: str, from_phone: str, body: str) 
     for kw in OPTOUT_KEYWORDS:
         if kw in clean:
             from services.redis_store import store
-            await store.add_optout(from_phone)
-            logger.info("[WA] Opt-out kaydedildi: %s", from_phone[-4:])
+            # Hangi merchant'ın gönderdiğini bul (phone_number_id → username/brand)
+            owner = await store.find_merchant_by_phone_id(token_phone)
+            if owner:
+                username, brand = owner
+                await store.add_optout(from_phone, username, brand)
+                logger.info("[WA] Opt-out kaydedildi (merchant=%s): %s", username, from_phone[-4:])
+            else:
+                # Bilinmeyen merchant — global olarak kaydet (fallback)
+                await store.add_optout(from_phone)
+                logger.info("[WA] Opt-out kaydedildi (global): %s", from_phone[-4:])
             return True
     return False
 
@@ -103,6 +111,8 @@ async def send_wa_template(
     order_number: str = "",
     language: str = WA_TEMPLATE_LANG,
     products: list | None = None,
+    username: str = "",
+    brand: str = "default",
 ) -> dict:
     """
     WhatsApp Cloud API üzerinden onaylı template mesajı gönderir.
@@ -113,7 +123,7 @@ async def send_wa_template(
         return {"ok": False, "error": "missing_credentials"}
 
     from services.redis_store import store
-    if await store.is_optout(to):
+    if await store.is_optout(to, username, brand):
         logger.info("[WA] Opt-out listesinde — gönderilmedi: %s", to[-4:])
         return {"ok": False, "error": "opted_out", "opted_out": True}
 
