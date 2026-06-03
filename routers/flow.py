@@ -17,23 +17,39 @@ META_GRAPH = "https://graph.facebook.com/v19.0"
 _DEFAULT_TEMPLATES = [
     {
         "name": "sepet_hatirlatma",
+        "category": "MARKETING",
         "body_tr": "Merhaba {{1}}, sepetinizde {{2}} bıraktınız! Hâlâ sizi bekliyor 🛒",
         "body_en": "Hi {{1}}, you left {{2}} in your cart! It's still waiting for you 🛒",
     },
     {
         "name": "sepet_hatirlatma_2",
+        "category": "MARKETING",
         "body_tr": "{{1}}, sepetinizdeki ürünler hâlâ duruyor. Stoklar sınırlı olabilir! ⏰",
         "body_en": "{{1}}, the items in your cart are still there. Stocks may be limited! ⏰",
     },
     {
         "name": "sepet_hatirlatma_3",
+        "category": "MARKETING",
         "body_tr": "Son hatırlatma: {{1}}, sepetinizdeki {{2}} için fırsatı kaçırmayın! 🎯",
         "body_en": "Last reminder: {{1}}, don't miss out on {{2}} still in your cart! 🎯",
     },
     {
         "name": "siparis_onay",
+        "category": "UTILITY",
         "body_tr": "Teşekkürler {{1}}! {{2}} siparişiniz alındı ve hazırlanıyor. 📦",
         "body_en": "Thank you {{1}}! Your order for {{2}} has been received and is being prepared. 📦",
+    },
+    {
+        "name": "optout_onay",
+        "category": "UTILITY",
+        "body_tr": "Talebiniz alındı. Bildirim gönderme servisimiz sizin için devre dışı bırakıldı. Tekrar almak isterseniz 'BAŞLAT' yazabilirsiniz.",
+        "body_en": "Your request has been received. Our notification service has been disabled for you. Reply 'START' anytime to re-enable it.",
+    },
+    {
+        "name": "optin_onay",
+        "category": "UTILITY",
+        "body_tr": "Tekrar hoş geldiniz! Bildirim servisimiz yeniden aktif edildi. Sepet hatırlatmaları ve sipariş bildirimlerinizi almaya başlayacaksınız. 🎉",
+        "body_en": "Welcome back! Our notification service has been re-enabled for you. You will start receiving cart reminders and order notifications again. 🎉",
     },
 ]
 
@@ -53,12 +69,12 @@ def _get_waba_id(phone_number_id: str, token: str) -> str | None:
         return None
 
 
-def _create_template(waba_id: str, token: str, name: str, body: str, language: str) -> dict:
+def _create_template(waba_id: str, token: str, name: str, body: str, language: str, category: str = "MARKETING") -> dict:
     """Tek bir WhatsApp template oluşturur ve Meta'ya onaya gönderir."""
     payload = {
         "name": name,
         "language": language,
-        "category": "MARKETING",
+        "category": category,
         "components": [{"type": "BODY", "text": body}],
     }
     r = _requests.post(
@@ -359,12 +375,13 @@ async def create_templates(
         body_en  = tpl.get("body_en", "")
         tpl_result = {"name": name, "tr": None, "en": None}
 
+        category = tpl.get("category", "MARKETING")
         if body_tr:
-            res = _create_template(waba_id, token, name, body_tr, "tr")
+            res = _create_template(waba_id, token, name, body_tr, "tr", category)
             tpl_result["tr"] = res.get("status") or res.get("error", {}).get("message") or str(res)
 
         if body_en:
-            res = _create_template(waba_id, token, name, body_en, "en_US")
+            res = _create_template(waba_id, token, name, body_en, "en_US", category)
             tpl_result["en"] = res.get("status") or res.get("error", {}).get("message") or str(res)
 
         results.append(tpl_result)
