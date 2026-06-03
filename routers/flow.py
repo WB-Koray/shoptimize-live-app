@@ -4,11 +4,87 @@ Sequence ayarları, log görüntüleme, test gönderimi, opt-out yönetimi.
 """
 
 import logging
+import requests as _requests
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from services.auth import get_current_user
 from services.redis_store import store
 from services.wa_sender import send_wa_template
+
+META_GRAPH = "https://graph.facebook.com/v19.0"
+
+# Varsayılan şablon tanımları — merchant düzenleyebilir
+_DEFAULT_TEMPLATES = [
+    {
+        "name": "sepet_hatirlatma",
+        "body_tr": "Merhaba {{1}}, sepetinizde {{2}} bıraktınız! Hâlâ sizi bekliyor 🛒",
+        "body_en": "Hi {{1}}, you left {{2}} in your cart! It's still waiting for you 🛒",
+    },
+    {
+        "name": "sepet_hatirlatma_2",
+        "body_tr": "{{1}}, sepetinizdeki ürünler hâlâ duruyor. Stoklar sınırlı olabilir! ⏰",
+        "body_en": "{{1}}, the items in your cart are still there. Stocks may be limited! ⏰",
+    },
+    {
+        "name": "sepet_hatirlatma_3",
+        "body_tr": "Son hatırlatma: {{1}}, sepetinizdeki {{2}} için fırsatı kaçırmayın! 🎯",
+        "body_en": "Last reminder: {{1}}, don't miss out on {{2}} still in your cart! 🎯",
+    },
+    {
+        "name": "siparis_onay",
+        "body_tr": "Teşekkürler {{1}}! {{2}} siparişiniz alındı ve hazırlanıyor. 📦",
+        "body_en": "Thank you {{1}}! Your order for {{2}} has been received and is being prepared. 📦",
+    },
+]
+
+
+def _get_waba_id(phone_number_id: str, token: str) -> str | None:
+    """Phone Number ID'den WhatsApp Business Account ID'yi alır."""
+    try:
+        r = _requests.get(
+            f"{META_GRAPH}/{phone_number_id}",
+            params={"fields": "whatsapp_business_account", "access_token": token},
+            timeout=10,
+        )
+        data = r.json()
+        return data.get("whatsapp_business_account", {}).get("id")
+    except Exception as e:
+        logger.warning("[WA Templates] WABA ID alınamadı: %s", e)
+        return None
+
+
+def _create_template(waba_id: str, token: str, name: str, body: str, language: str) -> dict:
+    """Tek bir WhatsApp template oluşturur ve Meta'ya onaya gönderir."""
+    payload = {
+        "name": name,
+        "language": language,
+        "category": "MARKETING",
+        "components": [{"type": "BODY", "text": body}],
+    }
+    r = _requests.post(
+        f"{META_GRAPH}/{waba_id}/message_templates",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    return r.json()
+
+
+def _get_template_statuses(waba_id: str, token: str, names: list[str]) -> dict:
+    """Template'lerin onay durumlarını döner: {name_lang: status}"""
+    result = {}
+    try:
+        r = _requests.get(
+            f"{META_GRAPH}/{waba_id}/message_templates",
+            params={"fields": "name,language,status", "limit": 100, "access_token": token},
+            timeout=10,
+        )
+        for tpl in r.json().get("data", []):
+            key = f"{tpl['name']}_{tpl['language']}"
+            result[key] = tpl.get("status", "UNKNOWN")
+    except Exception as e:
+        logger.warning("[WA Templates] Durum alınamadı: %s", e)
+    return result
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -242,3 +318,79 @@ async def remove_optout(
         return JSONResponse({"ok": False, "error": "Telefon gerekli"}, status_code=400)
     await store.remove_optout(phone, username, brand)
     return {"ok": True}
+
+
+# ── WhatsApp Template Yönetimi ───────────────────────────────────────────────
+
+@router.get("/api/flow/template-defaults")
+async def get_template_defaults(current_user: dict = Depends(get_current_user)):
+    """Varsayılan şablon metinlerini döner (merchant düzenleyebilir)."""
+    return {"ok": True, "templates": _DEFAULT_TEMPLATES}
+
+
+@router.post("/api/flow/create-templates")
+async def create_templates(
+    request_data: dict,
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Merchant'ın WA token'ı ile Meta'ya şablon oluşturma isteği gönderir.
+    request_data: { templates: [{name, body_tr, body_en}, ...] }
+    """
+    settings = await store.get_flow_settings(username, brand)
+    token          = settings.get("wa_token", "")
+    phone_number_id = settings.get("phone_number_id", "")
+
+    if not token or not phone_number_id:
+        return JSONResponse({"ok": False, "error": "WA Token ve Phone Number ID önce kaydedilmeli"}, status_code=400)
+
+    waba_id = _get_waba_id(phone_number_id, token)
+    if not waba_id:
+        return JSONResponse({"ok": False, "error": "WABA ID alınamadı. Token ve Phone Number ID'yi kontrol edin."}, status_code=400)
+
+    templates = request_data.get("templates", _DEFAULT_TEMPLATES)
+    results = []
+
+    for tpl in templates:
+        name     = tpl.get("name", "")
+        body_tr  = tpl.get("body_tr", "")
+        body_en  = tpl.get("body_en", "")
+        tpl_result = {"name": name, "tr": None, "en": None}
+
+        if body_tr:
+            res = _create_template(waba_id, token, name, body_tr, "tr")
+            tpl_result["tr"] = res.get("status") or res.get("error", {}).get("message") or str(res)
+
+        if body_en:
+            res = _create_template(waba_id, token, name, body_en, "en_US")
+            tpl_result["en"] = res.get("status") or res.get("error", {}).get("message") or str(res)
+
+        results.append(tpl_result)
+        logger.info("[WA Templates] %s: tr=%s en=%s", name, tpl_result["tr"], tpl_result["en"])
+
+    return {"ok": True, "waba_id": waba_id, "results": results}
+
+
+@router.get("/api/flow/template-status")
+async def get_template_status(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Template'lerin Meta onay durumlarını döner."""
+    settings = await store.get_flow_settings(username, brand)
+    token           = settings.get("wa_token", "")
+    phone_number_id = settings.get("phone_number_id", "")
+
+    if not token or not phone_number_id:
+        return {"ok": True, "statuses": {}}
+
+    waba_id = _get_waba_id(phone_number_id, token)
+    if not waba_id:
+        return {"ok": False, "error": "WABA ID alınamadı"}
+
+    names = [t["name"] for t in _DEFAULT_TEMPLATES]
+    statuses = _get_template_statuses(waba_id, token, names)
+    return {"ok": True, "waba_id": waba_id, "statuses": statuses}
