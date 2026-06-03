@@ -250,19 +250,14 @@ class RedisStore:
     async def get_all_optouts(self, username: str = "", brand: str = "default") -> list[str]:
         seen = set()
         if username:
-            # Yeni format: optout:{username}:{brand}:{phone}
+            # Sadece bu merchant'a ait yeni format key'ler: optout:{username}:{brand}:{phone}
             prefix = f"optout:{username}:{brand}:"
             async for key in self._redis.scan_iter(f"{prefix}*"):
                 phone = key.split(prefix, 1)[1]
                 if phone:
                     seen.add("+" + phone)
-            # Legacy format: optout:{phone} — eski kayıtlar, username içermez
-            async for key in self._redis.scan_iter("optout:*"):
-                parts = key.split(":")
-                # Sadece 2 parçalı key'ler legacy format (optout:905...)
-                if len(parts) == 2 and parts[1]:
-                    seen.add("+" + parts[1])
         else:
+            # username verilmemişse sadece legacy format göster
             async for key in self._redis.scan_iter("optout:*"):
                 parts = key.split(":")
                 if len(parts) == 2 and parts[1]:
