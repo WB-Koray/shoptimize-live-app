@@ -1374,31 +1374,32 @@ const STATUS_BADGE = {
 };
 const STATUS_LABEL = { APPROVED: '✓ Approved', PENDING: '⏳ Pending', REJECTED: '✗ Rejected', IN_APPEAL: '↩ Appeal', UNKNOWN: '?' };
 
-function WaTemplateManager({ qs, t }) {
+function WaTemplateManager({ qs, t, token }) {
   const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
-  const [open, setOpen]         = useState(false);
+  const authH = { Authorization: `Bearer ${token}` };
+  const [open, setOpen]           = useState(true);
   const [templates, setTemplates] = useState(null);
-  const [statuses, setStatuses]  = useState({});
-  const [creating, setCreating]  = useState(false);
-  const [result, setResult]      = useState(null);
+  const [statuses, setStatuses]   = useState({});
+  const [creating, setCreating]   = useState(false);
+  const [result, setResult]       = useState(null);
+  const [loading, setLoading]     = useState(false);
 
-  async function loadDefaults() {
-    if (templates) return;
-    const r = await fetch(`${API_URL}/api/flow/template-defaults?${qs}`);
-    const d = await r.json();
-    if (d.ok) setTemplates(d.templates);
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [dr, sr] = await Promise.all([
+        fetch(`${API_URL}/api/flow/template-defaults?${qs}`, { headers: authH }),
+        fetch(`${API_URL}/api/flow/template-status?${qs}`,   { headers: authH }),
+      ]);
+      const [dd, sd] = await Promise.all([dr.json(), sr.json()]);
+      if (dd.ok) setTemplates(dd.templates);
+      if (sd.ok) setStatuses(sd.statuses || {});
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function loadStatuses() {
-    const r = await fetch(`${API_URL}/api/flow/template-status?${qs}`);
-    const d = await r.json();
-    if (d.ok) setStatuses(d.statuses || {});
-  }
-
-  function handleOpen() {
-    setOpen(o => !o);
-    if (!open) { loadDefaults(); loadStatuses(); }
-  }
+  useEffect(() => { loadAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreate() {
     setCreating(true);
@@ -1406,12 +1407,12 @@ function WaTemplateManager({ qs, t }) {
     try {
       const r = await fetch(`${API_URL}/api/flow/create-templates?${qs}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authH },
         body: JSON.stringify({ templates }),
       });
       const d = await r.json();
       setResult(d);
-      if (d.ok) setTimeout(loadStatuses, 2000);
+      if (d.ok) setTimeout(loadAll, 3000);
     } catch (e) {
       setResult({ ok: false, error: e.message });
     } finally {
@@ -1419,100 +1420,102 @@ function WaTemplateManager({ qs, t }) {
     }
   }
 
-  const allApproved = Object.keys(statuses).length >= 8 &&
-    Object.values(statuses).every(s => s === 'APPROVED');
+  const approvedCount = Object.values(statuses).filter(s => s === 'APPROVED').length;
+  const totalCount    = Object.keys(statuses).length;
 
   return (
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-      <button onClick={handleOpen}
+      <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
         <MessageCircle size={13} className="text-textDim shrink-0" />
         <span className="flex-1 text-left text-textDim font-semibold text-xs uppercase tracking-wide">
           {t('flow.tpl_manager')}
         </span>
-        {allApproved
-          ? <span className="text-[10px] text-green bg-greenSoft px-2 py-0.5 rounded-full">All Approved</span>
-          : Object.keys(statuses).length > 0
-            ? <span className="text-[10px] text-amber-500 bg-amber-400/10 px-2 py-0.5 rounded-full">{Object.values(statuses).filter(s=>s==='APPROVED').length}/{Object.keys(statuses).length} Approved</span>
-            : null
-        }
+        {totalCount > 0 && (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${approvedCount === totalCount ? 'text-green bg-greenSoft' : 'text-amber-500 bg-amber-400/10'}`}>
+            {approvedCount}/{totalCount} Approved
+          </span>
+        )}
         {open ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
       </button>
 
       {open && (
-        <div className="px-4 pb-4 border-t border-border/60 pt-3 space-y-4">
-          <p className="text-xs text-textMute">{t('flow.tpl_manager_desc')}</p>
-
-          {/* Template listesi */}
-          {templates && (
-            <div className="space-y-3">
-              {templates.map((tpl, i) => (
-                <div key={tpl.name} className="bg-surfaceAlt border border-border rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <code className="text-xs font-mono font-bold text-text">{tpl.name}</code>
-                    <div className="flex gap-1.5">
-                      {['tr','en_US'].map(lang => {
-                        const key = `${tpl.name}_${lang}`;
-                        const st  = statuses[key] || 'UNKNOWN';
-                        return (
-                          <span key={lang} className={`text-[10px] font-bold px-2 py-0.5 rounded border ${STATUS_BADGE[st] || STATUS_BADGE.UNKNOWN}`}>
-                            {lang === 'tr' ? 'TR' : 'EN'} {STATUS_LABEL[st] || st}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div>
-                      <label className="text-[10px] text-textMute uppercase tracking-wide">🇹🇷 Türkçe</label>
-                      <textarea value={tpl.body_tr} rows={2}
-                        onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_tr: e.target.value} : t))}
-                        className="w-full mt-0.5 bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-textMute uppercase tracking-wide">🇬🇧 English</label>
-                      <textarea value={tpl.body_en} rows={2}
-                        onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_en: e.target.value} : t))}
-                        className="w-full mt-0.5 bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <div className="border-t border-border/60">
+          {/* Açıklama + butonlar */}
+          <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
+            <p className="text-xs text-textMute flex-1">{t('flow.tpl_manager_desc')}</p>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={loadAll} disabled={loading}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-surfaceAlt border border-border text-textDim text-xs rounded-lg hover:text-text transition-colors disabled:opacity-50">
+                <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> {t('flow.tpl_refresh')}
+              </button>
+              <button onClick={handleCreate} disabled={creating || !templates}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50">
+                {creating ? <><RefreshCw size={11} className="animate-spin" /> {t('flow.tpl_creating')}</>
+                  : <><Send size={11} /> {t('flow.tpl_create_btn')}</>}
+              </button>
             </div>
-          )}
-
-          {/* Aksiyon butonları */}
-          <div className="flex items-center gap-2">
-            <button onClick={handleCreate} disabled={creating || !templates}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50 shadow">
-              {creating ? <><RefreshCw size={12} className="animate-spin" /> {t('flow.tpl_creating')}</>
-                : <><Send size={12} /> {t('flow.tpl_create_btn')}</>}
-            </button>
-            <button onClick={loadStatuses}
-              className="flex items-center gap-1.5 px-3 py-2 bg-surfaceAlt border border-border text-textDim text-xs font-semibold rounded-lg hover:text-text transition-colors">
-              <RefreshCw size={11} /> {t('flow.tpl_refresh')}
-            </button>
           </div>
 
-          {/* Sonuç */}
+          {/* Sonuç mesajı */}
           {result && (
-            <div className={`rounded-xl px-3 py-2.5 text-xs border ${result.ok ? 'bg-greenSoft border-green/20 text-green' : 'bg-roseSoft border-rose/20 text-rose'}`}>
-              {result.ok ? (
-                <div className="space-y-1">
-                  <p className="font-bold">✓ {t('flow.tpl_sent')}</p>
-                  {result.results?.map(r => (
-                    <p key={r.name} className="text-[11px] opacity-80">
-                      {r.name}: TR={r.tr || '?'} · EN={r.en || '?'}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p>✗ {result.error}</p>
-              )}
+            <div className={`mx-4 mb-3 rounded-xl px-3 py-2 text-xs border ${result.ok ? 'bg-greenSoft border-green/20 text-green' : 'bg-roseSoft border-rose/20 text-rose'}`}>
+              {result.ok
+                ? <span className="font-bold">✓ {t('flow.tpl_sent')}</span>
+                : <span>✗ {result.error}</span>}
             </div>
           )}
 
-          <p className="text-[10px] text-textMute">{t('flow.tpl_approval_note')}</p>
+          {/* Şablonlar — her biri ayrı kart */}
+          {loading && !templates && (
+            <div className="px-4 pb-4 text-xs text-textMute flex items-center gap-2">
+              <RefreshCw size={11} className="animate-spin" /> Loading...
+            </div>
+          )}
+          {templates && (
+            <div className="px-4 pb-4 space-y-3">
+              {templates.map((tpl, i) => {
+                const stTR = statuses[`${tpl.name}_tr`]    || 'UNKNOWN';
+                const stEN = statuses[`${tpl.name}_en_US`] || 'UNKNOWN';
+                return (
+                  <div key={tpl.name} className="border border-border rounded-xl overflow-hidden">
+                    {/* Başlık */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-surfaceAlt/60">
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs font-mono font-bold text-text">{tpl.name}</code>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${tpl.category === 'UTILITY' ? 'text-blue border-blue/20 bg-blue/10' : 'text-purple-500 border-purple-500/20 bg-purple-500/10'}`}>
+                          {tpl.category || 'MARKETING'}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {[['tr', stTR], ['en_US', stEN]].map(([lang, st]) => (
+                          <span key={lang} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${STATUS_BADGE[st] || STATUS_BADGE.UNKNOWN}`}>
+                            {lang === 'tr' ? 'TR' : 'EN'} {STATUS_LABEL[st] || '?'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Metin alanları */}
+                    <div className="p-3 space-y-2">
+                      <div>
+                        <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇹🇷 Türkçe</label>
+                        <textarea value={tpl.body_tr} rows={2}
+                          onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_tr: e.target.value} : t))}
+                          className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇬🇧 English</label>
+                        <textarea value={tpl.body_en} rows={2}
+                          onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_en: e.target.value} : t))}
+                          className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-textMute">{t('flow.tpl_approval_note')}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2309,7 +2312,7 @@ function FlowPanel({ session, anonymized = false }) {
           </div>
 
           {/* WhatsApp Templates */}
-          {maskedToken && <WaTemplateManager qs={qp.slice(1)} t={t} />}
+          {maskedToken && <WaTemplateManager qs={qp.slice(1)} t={t} token={token} />}
 
           {/* Sequence */}
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
