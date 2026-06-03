@@ -248,15 +248,26 @@ class RedisStore:
         await self._redis.delete(f"optout:{normalized}")
 
     async def get_all_optouts(self, username: str = "", brand: str = "default") -> list[str]:
-        result = []
+        seen = set()
         if username:
+            # Yeni format: optout:{username}:{brand}:{phone}
             prefix = f"optout:{username}:{brand}:"
             async for key in self._redis.scan_iter(f"{prefix}*"):
-                result.append("+" + key.split(prefix, 1)[1])
+                phone = key.split(prefix, 1)[1]
+                if phone:
+                    seen.add("+" + phone)
+            # Legacy format: optout:{phone} — eski kayıtlar, username içermez
+            async for key in self._redis.scan_iter("optout:*"):
+                parts = key.split(":")
+                # Sadece 2 parçalı key'ler legacy format (optout:905...)
+                if len(parts) == 2 and parts[1]:
+                    seen.add("+" + parts[1])
         else:
             async for key in self._redis.scan_iter("optout:*"):
-                result.append("+" + key.split("optout:", 1)[1])
-        return sorted(result)
+                parts = key.split(":")
+                if len(parts) == 2 and parts[1]:
+                    seen.add("+" + parts[1])
+        return sorted(seen)
 
     async def find_optout_owner(self, phone: str) -> tuple[str, str] | None:
         """Telefon numarasına ait opt-out kaydının (username, brand) bilgisini döner."""
