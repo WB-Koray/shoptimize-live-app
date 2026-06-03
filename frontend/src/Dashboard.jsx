@@ -2028,34 +2028,88 @@ function FlowPanel({ session, anonymized = false }) {
               {guideOpen ? <ChevronUp size={13} className="text-blue shrink-0" /> : <ChevronDown size={13} className="text-blue shrink-0" />}
             </button>
             {guideOpen && (
-              <div className="px-4 pb-4 border-t border-blue/20 pt-3 space-y-3 text-xs text-textDim">
-                <p className="font-semibold text-text">{t('flow.guide_intro')}</p>
-                {[
-                  { n: 1, title: t('flow.guide_step1_title'), desc: t('flow.guide_step1_desc'), url: 'https://business.facebook.com' },
-                  { n: 2, title: t('flow.guide_step2_title'), desc: t('flow.guide_step2_desc'), url: 'https://developers.facebook.com/apps' },
-                  { n: 3, title: t('flow.guide_step3_title'), desc: t('flow.guide_step3_desc') },
-                  { n: 4, title: t('flow.guide_step4_title'), desc: t('flow.guide_step4_desc') },
-                  { n: 5, title: t('flow.guide_step5_title'), desc: t('flow.guide_step5_desc') },
-                ].map(step => (
-                  <div key={step.n} className="flex gap-3">
-                    <span className="w-5 h-5 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[10px]">{step.n}</span>
-                    <div>
-                      <p className="font-semibold text-text">{step.title}</p>
-                      <p className="text-textMute leading-relaxed">{step.desc}</p>
-                      {step.url && (
-                        <a href={step.url} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-blue hover:underline mt-0.5">
-                          <ExternalLink size={10} /> {step.url.replace('https://', '')}
-                        </a>
-                      )}
+              <div className="px-4 pb-5 border-t border-blue/20 pt-4 space-y-5 text-xs">
+
+                <p className="text-textDim leading-relaxed">{t('flow.guide_intro')}</p>
+
+                {/* Step 1 */}
+                <div className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">1</span>
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-text">{t('flow.guide_step1_title')}</p>
+                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
+                      {t('flow.guide_step1_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
+                    </ul>
+                    <a href="https://business.facebook.com" target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-blue hover:underline">
+                      <ExternalLink size={10} /> business.facebook.com
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">2</span>
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-text">{t('flow.guide_step2_title')}</p>
+                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
+                      {t('flow.guide_step2_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
+                    </ul>
+                    <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-blue hover:underline">
+                      <ExternalLink size={10} /> developers.facebook.com/apps
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">3</span>
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-text">{t('flow.guide_step3_title')}</p>
+                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
+                      {t('flow.guide_step3_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
+                    </ul>
+                    <div className="bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2 text-amber-600 dark:text-amber-400">
+                      {t('flow.guide_step3_note')}
                     </div>
                   </div>
-                ))}
-                <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2 text-amber-600 dark:text-amber-400">
-                  <p className="font-semibold">{t('flow.guide_templates_title')}</p>
-                  <p className="text-textMute mt-0.5">{t('flow.guide_templates_desc')}</p>
-                  <code className="mt-1 block text-[11px] font-mono">sepet_hatirlatma · sepet_hatirlatma_2 · sepet_hatirlatma_3 · siparis_onay</code>
                 </div>
+
+                {/* Step 4 */}
+                <div className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">4</span>
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-text">{t('flow.guide_step4_title')}</p>
+                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
+                      {t('flow.guide_step4_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
+                    </ul>
+                    <div className="bg-rose/5 border border-rose/20 rounded-lg px-3 py-2 text-rose">
+                      {t('flow.guide_step4_warning')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 5 */}
+                <div className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">5</span>
+                  <div className="space-y-1.5">
+                    <p className="font-bold text-text">{t('flow.guide_step5_title')}</p>
+                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
+                      {t('flow.guide_step5_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
+                    </ul>
+                    <div className="bg-surface border border-border rounded-lg px-3 py-2.5 space-y-1.5">
+                      <p className="font-semibold text-text">{t('flow.guide_templates_title')}</p>
+                      <p className="text-textMute">{t('flow.guide_templates_desc')}</p>
+                      <div className="grid grid-cols-2 gap-1 mt-1">
+                        {['sepet_hatirlatma','sepet_hatirlatma_2','sepet_hatirlatma_3','siparis_onay'].map(name => (
+                          <code key={name} className="bg-surfaceAlt border border-border rounded px-2 py-1 text-[10px] font-mono text-textDim">{name}</code>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
