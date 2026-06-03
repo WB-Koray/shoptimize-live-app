@@ -406,8 +406,10 @@ async def get_template_status(
 
     waba_id = _get_waba_id(phone_number_id, token)
     if not waba_id:
-        return {"ok": False, "error": "WABA ID alınamadı"}
+        logger.warning("[WA Templates] WABA ID alınamadı — phone_id=%s", phone_number_id[:8] if phone_number_id else "?")
+        return {"ok": True, "statuses": {}, "error": "WABA ID alınamadı — token izinlerini kontrol edin"}
 
     names = [t["name"] for t in _DEFAULT_TEMPLATES]
     statuses = _get_template_statuses(waba_id, token, names)
+    logger.info("[WA Templates] Durum alındı: waba=%s count=%d", waba_id, len(statuses))
     return {"ok": True, "waba_id": waba_id, "statuses": statuses}
