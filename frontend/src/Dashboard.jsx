@@ -2309,7 +2309,7 @@ function FlowPanel({ session, anonymized = false }) {
           </div>
 
           {/* WhatsApp Templates */}
-          {maskedToken && <WaTemplateManager qs={qs} t={t} />}
+          {maskedToken && <WaTemplateManager qs={qp.slice(1)} t={t} />}
 
           {/* Sequence */}
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
