@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DEFAULT_SEQUENCE = [
-    {"delay_minutes": 15,   "template": "sepet_hatirlatma", "language": "tr", "enabled": True,  "label": "İlk hatırlatma"},
-    {"delay_minutes": 1440, "template": "sepet_hatirlatma", "language": "tr", "enabled": False, "label": "24 saat sonra"},
-    {"delay_minutes": 2880, "template": "sepet_hatirlatma", "language": "tr", "enabled": False, "label": "48 saat sonra"},
+    {"delay_minutes": 15,   "template": "sepet_hatirlatma",   "language": "tr", "enabled": True,  "label": "First reminder"},
+    {"delay_minutes": 1440, "template": "sepet_hatirlatma_2", "language": "tr", "enabled": False, "label": "After 24 hours"},
+    {"delay_minutes": 2880, "template": "sepet_hatirlatma_3", "language": "tr", "enabled": False, "label": "After 48 hours"},
 ]
 
 

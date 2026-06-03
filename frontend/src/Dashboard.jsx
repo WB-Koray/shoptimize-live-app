@@ -1327,9 +1327,9 @@ function AbandonmentIntelligencePanel({ atRiskVisitors, customerNames, session, 
 // ── Flow (WA Otomasyon) Panel ─────────────────────────────────────────────────
 
 const DEFAULT_SEQUENCE = [
-  { delay_minutes: 15,   template: 'sepet_hatirlatma', language: 'tr', enabled: true,  label: 'First reminder' },
-  { delay_minutes: 1440, template: 'sepet_hatirlatma', language: 'tr', enabled: false, label: 'After 24 hours' },
-  { delay_minutes: 2880, template: 'sepet_hatirlatma', language: 'tr', enabled: false, label: 'After 48 hours' },
+  { delay_minutes: 15,   template: 'sepet_hatirlatma',   language: 'tr', enabled: true,  label: 'First reminder' },
+  { delay_minutes: 1440, template: 'sepet_hatirlatma_2', language: 'tr', enabled: false, label: 'After 24 hours' },
+  { delay_minutes: 2880, template: 'sepet_hatirlatma_3', language: 'tr', enabled: false, label: 'After 48 hours' },
 ];
 
 function fmtDelay(m, lang = 'en') {
@@ -1411,6 +1411,7 @@ function FlowPanel({ session, anonymized = false }) {
   const [removingOptout, setRmOptout] = useState('');
 
   const [connOpen, setConnOpen]   = useState(true);
+  const [guideOpen, setGuideOpen] = useState(true);
   const [seqOpen, setSeqOpen]     = useState(true);
   const [testOpen, setTestOpen]   = useState(false);
   const [waTab, setWaTab]         = useState('dashboard');
@@ -2017,6 +2018,49 @@ function FlowPanel({ session, anonymized = false }) {
       {waTab === 'settings' && (
         <div className="max-w-2xl mx-auto space-y-4">
 
+          {/* Setup Guide */}
+          {!maskedToken && (
+          <div className="bg-blue/5 border border-blue/20 rounded-2xl overflow-hidden">
+            <button onClick={() => setGuideOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-4 py-3 hover:bg-blue/10 transition-colors">
+              <FileText size={13} className="text-blue shrink-0" />
+              <span className="flex-1 text-left text-blue font-semibold text-xs uppercase tracking-wide">{t('flow.setup_guide')}</span>
+              {guideOpen ? <ChevronUp size={13} className="text-blue shrink-0" /> : <ChevronDown size={13} className="text-blue shrink-0" />}
+            </button>
+            {guideOpen && (
+              <div className="px-4 pb-4 border-t border-blue/20 pt-3 space-y-3 text-xs text-textDim">
+                <p className="font-semibold text-text">{t('flow.guide_intro')}</p>
+                {[
+                  { n: 1, title: t('flow.guide_step1_title'), desc: t('flow.guide_step1_desc'), url: 'https://business.facebook.com' },
+                  { n: 2, title: t('flow.guide_step2_title'), desc: t('flow.guide_step2_desc'), url: 'https://developers.facebook.com/apps' },
+                  { n: 3, title: t('flow.guide_step3_title'), desc: t('flow.guide_step3_desc') },
+                  { n: 4, title: t('flow.guide_step4_title'), desc: t('flow.guide_step4_desc') },
+                  { n: 5, title: t('flow.guide_step5_title'), desc: t('flow.guide_step5_desc') },
+                ].map(step => (
+                  <div key={step.n} className="flex gap-3">
+                    <span className="w-5 h-5 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[10px]">{step.n}</span>
+                    <div>
+                      <p className="font-semibold text-text">{step.title}</p>
+                      <p className="text-textMute leading-relaxed">{step.desc}</p>
+                      {step.url && (
+                        <a href={step.url} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-blue hover:underline mt-0.5">
+                          <ExternalLink size={10} /> {step.url.replace('https://', '')}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2 text-amber-600 dark:text-amber-400">
+                  <p className="font-semibold">{t('flow.guide_templates_title')}</p>
+                  <p className="text-textMute mt-0.5">{t('flow.guide_templates_desc')}</p>
+                  <code className="mt-1 block text-[11px] font-mono">sepet_hatirlatma · sepet_hatirlatma_2 · sepet_hatirlatma_3 · siparis_onay</code>
+                </div>
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Bağlantı ayarları */}
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
             <button onClick={() => setConnOpen(o => !o)}
@@ -2221,6 +2265,8 @@ function FlowPanel({ session, anonymized = false }) {
           <select value={testTemplate} onChange={e => setTestTmpl(e.target.value)}
             className="bg-surfaceAlt border border-border rounded-xl px-2 text-xs text-text focus:outline-none shrink-0">
             <option value="sepet_hatirlatma">sepet_hatirlatma</option>
+            <option value="sepet_hatirlatma_2">sepet_hatirlatma_2</option>
+            <option value="sepet_hatirlatma_3">sepet_hatirlatma_3</option>
             <option value="siparis_onay">siparis_onay</option>
           </select>
           <button onClick={handleTest} disabled={testLoading || !testPhone.trim()}
