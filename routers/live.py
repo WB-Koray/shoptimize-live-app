@@ -629,9 +629,15 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
     # "installed: True" + detected_via="theme_extension" → embed ayarlı ama henüz event yok
     # "installed: True" + detected_via="events" → gerçek trafik var, embed aktif
     if domain and token:
+        if not tid:
+            # TID DB'de yoksa reverse mapping'den kurtarmayı dene
+            tid = await store.get_user_tid(username, brand) or ""
+            if tid:
+                set_connection_settings(username, brand, "shopify", {"pixel_tracking_id": tid})
+                logger.info("[PIXEL] TID reverse mapping'den kurtarıldı: %s", tid[:16])
         if tid:
             await store.register_tid_owner(tid, username, brand)
-            # Event'lerin gelip gelmediğini kontrol et
+            # Event gelip gelmediğini kontrol et
             has_events = bool(await store.get_user_tid(username, brand))
             return {
                 "ok": True,
