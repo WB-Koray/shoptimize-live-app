@@ -139,6 +139,12 @@ def _create_template(waba_id: str, token: str, name: str, body: str, language: s
     )
     data = r.json()
     if r.status_code != 200:
+        err = data.get("error", {})
+        subcode = err.get("error_subcode")
+        # 2388024 = şablon bu dilde zaten var → başarı gibi davran
+        if subcode == 2388024:
+            logger.info("[WA Templates] Zaten mevcut: name=%s lang=%s", name, language)
+            return {"status": "ALREADY_EXISTS", "id": ""}
         logger.warning("[WA Templates] Meta hata: name=%s lang=%s status=%d body=%s",
                        name, language, r.status_code, str(data)[:300])
     return data

@@ -1366,17 +1366,18 @@ function fmtRevenue(amount) {
 }
 
 const STATUS_BADGE = {
-  APPROVED:  'bg-greenSoft border-green/20 text-green',
-  ACTIVE:    'bg-greenSoft border-green/20 text-green',
-  PENDING:   'bg-amber-400/10 border-amber-400/20 text-amber-500',
-  REJECTED:  'bg-roseSoft border-rose/20 text-rose',
-  PAUSED:    'bg-amber-400/10 border-amber-400/20 text-amber-500',
-  DISABLED:  'bg-roseSoft border-rose/20 text-rose',
-  IN_APPEAL: 'bg-blue/10 border-blue/20 text-blue',
-  UNKNOWN:   'bg-surfaceAlt border-border text-textMute',
+  APPROVED:      'bg-greenSoft border-green/20 text-green',
+  ACTIVE:        'bg-greenSoft border-green/20 text-green',
+  ALREADY_EXISTS:'bg-greenSoft border-green/20 text-green',
+  PENDING:       'bg-amber-400/10 border-amber-400/20 text-amber-500',
+  REJECTED:      'bg-roseSoft border-rose/20 text-rose',
+  PAUSED:        'bg-amber-400/10 border-amber-400/20 text-amber-500',
+  DISABLED:      'bg-roseSoft border-rose/20 text-rose',
+  IN_APPEAL:     'bg-blue/10 border-blue/20 text-blue',
+  UNKNOWN:       'bg-surfaceAlt border-border text-textMute',
 };
 const STATUS_LABEL = {
-  APPROVED: '✓ Approved', ACTIVE: '✓ Active',
+  APPROVED: '✓ Approved', ACTIVE: '✓ Active', ALREADY_EXISTS: '✓ Exists',
   PENDING: '⏳ Pending', REJECTED: '✗ Rejected',
   PAUSED: '⏸ Paused', DISABLED: '✗ Disabled',
   IN_APPEAL: '↩ Appeal', UNKNOWN: '?',
@@ -1461,10 +1462,11 @@ function WaTemplateManager({ qs, t, token }) {
   async function handleCreateAll() {
     setCreating(true);
     setResult(null);
+    const OK = ['APPROVED','ACTIVE','ALREADY_EXISTS'];
     const pending = templates.filter(tpl => {
       const stTR = statuses[`${tpl.name}_tr`];
       const stEN = statuses[`${tpl.name}_en_US`];
-      return !['APPROVED','ACTIVE'].includes(stTR) || !['APPROVED','ACTIVE'].includes(stEN);
+      return !OK.includes(stTR) || !OK.includes(stEN);
     });
     try {
       const r = await fetch(`${API_URL}/api/flow/create-templates?${qs}`, {
@@ -1496,7 +1498,7 @@ function WaTemplateManager({ qs, t, token }) {
     setTemplates(prev => prev.filter((_,j) => j !== i));
   }
 
-  const approvedCount = Object.values(statuses).filter(s => s === 'APPROVED' || s === 'ACTIVE').length;
+  const approvedCount = Object.values(statuses).filter(s => ['APPROVED','ACTIVE','ALREADY_EXISTS'].includes(s)).length;
   const totalCount    = Object.keys(statuses).length;
 
   return (
