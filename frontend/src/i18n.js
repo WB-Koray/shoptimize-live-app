@@ -303,6 +303,7 @@ const translations = {
     'flow.tpl_refresh':     'Refresh Status',
     'flow.tpl_sent':        'Templates submitted to Meta for review!',
     'flow.tpl_approval_note': '⏳ Meta usually approves templates within 1–24 hours. Status updates automatically.',
+    'flow.tpl_add_new':       '+ Add New Template',
     'flow.setup_guide':     '📋 Setup Guide — How to Connect WhatsApp',
     'flow.guide_intro':     'To send automated WhatsApp messages, you need a Meta Business WhatsApp account. This is a one-time setup that takes about 20–30 minutes. Follow the steps below carefully:',
 
@@ -658,6 +659,7 @@ const translations = {
     'flow.tpl_refresh':     'Durumu Güncelle',
     'flow.tpl_sent':        'Şablonlar Meta\'ya inceleme için gönderildi!',
     'flow.tpl_approval_note': '⏳ Meta şablonları genellikle 1–24 saat içinde onaylar. Durum otomatik güncellenir.',
+    'flow.tpl_add_new':       '+ Yeni Şablon Ekle',
     'flow.setup_guide':     '📋 Kurulum Rehberi — WhatsApp Nasıl Bağlanır',
     'flow.guide_intro':     'Otomatik WhatsApp mesajları gönderebilmek için Meta Business WhatsApp hesabına ihtiyacınız var. Bu tek seferlik bir kurulum olup yaklaşık 20–30 dakika sürer. Adımları sırasıyla takip edin:',
 

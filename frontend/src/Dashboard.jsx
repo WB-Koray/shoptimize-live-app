@@ -1389,6 +1389,7 @@ function WaTemplateManager({ qs, t, token }) {
   const [templates, setTemplates] = useState(null);
   const [statuses, setStatuses]   = useState({});
   const [creating, setCreating]   = useState(false);
+  const [tplLoading, setTplLoading] = useState({});
   const [result, setResult]       = useState(null);
   const [loading, setLoading]     = useState(false);
 
@@ -1429,14 +1430,47 @@ function WaTemplateManager({ qs, t, token }) {
 
   useEffect(() => { loadAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleCreate() {
-    setCreating(true);
-    setResult(null);
+  // Tek şablon gönder — lang: 'tr' | 'en' | 'both'
+  async function submitOne(tpl, lang) {
+    const sending = [tpl];
+    const filtered = lang === 'both' ? sending : sending.map(t => ({
+      ...t,
+      body_tr:   lang === 'en' ? '' : t.body_tr,
+      body_en:   lang === 'tr' ? '' : t.body_en,
+      header_tr: lang === 'en' ? '' : t.header_tr,
+      header_en: lang === 'tr' ? '' : t.header_en,
+    }));
+    setTplLoading(prev => ({ ...prev, [`${tpl.name}_${lang}`]: true }));
     try {
       const r = await fetch(`${API_URL}/api/flow/create-templates?${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authH },
-        body: JSON.stringify({ templates }),
+        body: JSON.stringify({ templates: filtered }),
+      });
+      const d = await r.json();
+      if (d.ok) setTimeout(loadAll, 3000);
+      else alert(d.error || 'Gönderim başarısız');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setTplLoading(prev => ({ ...prev, [`${tpl.name}_${lang}`]: false }));
+    }
+  }
+
+  // Tümünü gönder — sadece henüz onaylanmamış olanları
+  async function handleCreateAll() {
+    setCreating(true);
+    setResult(null);
+    const pending = templates.filter(tpl => {
+      const stTR = statuses[`${tpl.name}_tr`];
+      const stEN = statuses[`${tpl.name}_en_US`];
+      return !['APPROVED','ACTIVE'].includes(stTR) || !['APPROVED','ACTIVE'].includes(stEN);
+    });
+    try {
+      const r = await fetch(`${API_URL}/api/flow/create-templates?${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH },
+        body: JSON.stringify({ templates: pending.length ? pending : templates }),
       });
       const d = await r.json();
       setResult(d);
@@ -1446,6 +1480,20 @@ function WaTemplateManager({ qs, t, token }) {
     } finally {
       setCreating(false);
     }
+  }
+
+  function addNewTemplate() {
+    setTemplates(prev => [...prev, {
+      name: '', category: 'MARKETING',
+      header_tr: '', header_en: '',
+      body_tr: '', body_en: '',
+      button_text: '', button_url: '',
+      _custom: true,
+    }]);
+  }
+
+  function removeTemplate(i) {
+    setTemplates(prev => prev.filter((_,j) => j !== i));
   }
 
   const approvedCount = Object.values(statuses).filter(s => s === 'APPROVED' || s === 'ACTIVE').length;
@@ -1477,7 +1525,7 @@ function WaTemplateManager({ qs, t, token }) {
                 className="flex items-center gap-1 px-2.5 py-1.5 bg-surfaceAlt border border-border text-textDim text-xs rounded-lg hover:text-text transition-colors disabled:opacity-50">
                 <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> {t('flow.tpl_refresh')}
               </button>
-              <button onClick={handleCreate} disabled={creating || !templates}
+              <button onClick={handleCreateAll} disabled={creating || !templates}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green to-teal text-bg text-xs font-bold rounded-lg hover:brightness-105 transition-all disabled:opacity-50">
                 {creating ? <><RefreshCw size={11} className="animate-spin" /> {t('flow.tpl_creating')}</>
                   : <><Send size={11} /> {t('flow.tpl_create_btn')}</>}
@@ -1508,19 +1556,44 @@ function WaTemplateManager({ qs, t, token }) {
                 return (
                   <div key={tpl.name} className="border border-border rounded-xl overflow-hidden">
                     {/* Başlık */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-surfaceAlt/60">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono font-bold text-text">{tpl.name}</code>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${tpl.category === 'UTILITY' ? 'text-blue border-blue/20 bg-blue/10' : 'text-purple-500 border-purple-500/20 bg-purple-500/10'}`}>
+                    <div className="flex items-center justify-between px-3 py-2 bg-surfaceAlt/60 gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {tpl._custom
+                          ? <input value={tpl.name} placeholder="sablon_adi (küçük harf, alt tire)"
+                              onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, name: e.target.value.toLowerCase().replace(/\s+/g,'_')} : t))}
+                              className="bg-transparent border-b border-dashed border-textMute text-xs font-mono font-bold text-text focus:outline-none focus:border-green w-40" />
+                          : <code className="text-xs font-mono font-bold text-text truncate">{tpl.name}</code>
+                        }
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${tpl.category === 'UTILITY' ? 'text-blue border-blue/20 bg-blue/10' : 'text-purple-500 border-purple-500/20 bg-purple-500/10'}`}>
                           {tpl.category || 'MARKETING'}
                         </span>
                       </div>
-                      <div className="flex gap-1.5">
-                        {[['tr', stTR], ['en_US', stEN]].map(([lang, st]) => (
-                          <span key={lang} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${STATUS_BADGE[st] || STATUS_BADGE.UNKNOWN}`}>
-                            {lang === 'tr' ? 'TR' : 'EN'} {STATUS_LABEL[st] || '?'}
-                          </span>
-                        ))}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* TR gönder */}
+                        <button onClick={() => submitOne(tpl, 'tr')}
+                          disabled={tplLoading[`${tpl.name}_tr`]}
+                          title="Türkçe şablonu Meta'ya gönder"
+                          className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded border transition-colors disabled:opacity-50
+                            ${['APPROVED','ACTIVE'].includes(stTR) ? 'text-green border-green/20 bg-greenSoft cursor-default' : 'text-amber-500 border-amber-400/20 bg-amber-400/10 hover:bg-amber-400/20 cursor-pointer'}`}>
+                          {tplLoading[`${tpl.name}_tr`] ? <RefreshCw size={9} className="animate-spin" /> : null}
+                          TR {['APPROVED','ACTIVE'].includes(stTR) ? '✓' : '↑'}
+                        </button>
+                        {/* EN gönder */}
+                        <button onClick={() => submitOne(tpl, 'en')}
+                          disabled={tplLoading[`${tpl.name}_en`]}
+                          title="İngilizce şablonu Meta'ya gönder"
+                          className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded border transition-colors disabled:opacity-50
+                            ${['APPROVED','ACTIVE'].includes(stEN) ? 'text-green border-green/20 bg-greenSoft cursor-default' : 'text-amber-500 border-amber-400/20 bg-amber-400/10 hover:bg-amber-400/20 cursor-pointer'}`}>
+                          {tplLoading[`${tpl.name}_en`] ? <RefreshCw size={9} className="animate-spin" /> : null}
+                          EN {['APPROVED','ACTIVE'].includes(stEN) ? '✓' : '↑'}
+                        </button>
+                        {/* Özel şablonları sil */}
+                        {tpl._custom && (
+                          <button onClick={() => removeTemplate(i)}
+                            className="p-1 text-rose hover:bg-roseSoft rounded transition-colors">
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
                     </div>
                     {/* Şablon editörü */}
@@ -1583,6 +1656,12 @@ function WaTemplateManager({ qs, t, token }) {
                   </div>
                 );
               })}
+              {/* Yeni şablon ekle */}
+              <button onClick={addNewTemplate}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-border rounded-xl text-xs text-textMute hover:text-text hover:border-green/40 transition-colors">
+                <Plus size={13} /> {t('flow.tpl_add_new')}
+              </button>
+
               <p className="text-[10px] text-textMute">{t('flow.tpl_approval_note')}</p>
             </div>
           )}
