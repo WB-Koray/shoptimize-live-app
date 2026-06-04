@@ -1406,16 +1406,18 @@ function WaTemplateManager({ qs, t, token }) {
       if (dd.ok) {
         const metaDetails = sd.details || [];
         const merged = dd.templates.map(tpl => {
-          const metaTR = metaDetails.find(d => d.name === tpl.name && d.language === 'tr');
-          const metaEN = metaDetails.find(d => d.name === tpl.name && (d.language === 'en_US' || d.language === 'en'));
+          const metaTR  = metaDetails.find(d => d.name === tpl.name && d.language === 'tr');
+          const metaEN  = metaDetails.find(d => d.name === tpl.name && (d.language === 'en_US' || d.language === 'en'));
+          const metaBtn = metaTR?.buttons?.[0] || metaEN?.buttons?.[0];
           return {
             ...tpl,
-            body_tr:   metaTR?.body  || tpl.body_tr,
-            body_en:   metaEN?.body  || tpl.body_en,
-            header_tr: metaTR?.header || '',
-            header_en: metaEN?.header || '',
-            buttons_tr: metaTR?.buttons || [],
-            category:  metaTR?.category || metaEN?.category || tpl.category || 'MARKETING',
+            body_tr:     metaTR?.body    || tpl.body_tr,
+            body_en:     metaEN?.body    || tpl.body_en,
+            header_tr:   metaTR?.header  || tpl.header_tr || '',
+            header_en:   metaEN?.header  || tpl.header_en || '',
+            button_text: metaBtn?.text   || tpl.button_text || '',
+            button_url:  metaBtn?.url    || tpl.button_url  || '',
+            category:    metaTR?.category || metaEN?.category || tpl.category || 'MARKETING',
           };
         });
         setTemplates(merged);
@@ -1521,34 +1523,62 @@ function WaTemplateManager({ qs, t, token }) {
                         ))}
                       </div>
                     </div>
-                    {/* Metin alanları */}
-                    <div className="p-3 space-y-2">
-                      <div>
-                        <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇹🇷 Türkçe</label>
-                        {tpl.header_tr && (
-                          <div className="mt-1 px-3 py-1.5 bg-surfaceAlt border border-border rounded-lg text-xs text-textDim font-semibold">
-                            📌 {tpl.header_tr}
-                          </div>
-                        )}
-                        <textarea value={tpl.body_tr} rows={3}
-                          onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_tr: e.target.value} : t))}
-                          className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
-                        {tpl.buttons_tr?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {tpl.buttons_tr.map((btn, bi) => (
-                              <span key={bi} className="px-2 py-1 bg-blue/10 border border-blue/20 text-blue text-[10px] rounded-lg">
-                                🔗 {btn.text}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                    {/* Şablon editörü */}
+                    <div className="p-3 space-y-3">
+
+                      {/* Header */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">📌 Başlık TR</label>
+                          <input value={tpl.header_tr || ''} placeholder="Sepetinde bekleyen ürün var!"
+                            onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, header_tr: e.target.value} : t))}
+                            className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text focus:outline-none focus:border-green/60 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">📌 Header EN</label>
+                          <input value={tpl.header_en || ''} placeholder="Items waiting in your cart!"
+                            onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, header_en: e.target.value} : t))}
+                            className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text focus:outline-none focus:border-green/60 transition-colors" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇬🇧 English</label>
-                        <textarea value={tpl.body_en} rows={3}
-                          onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_en: e.target.value} : t))}
-                          className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+
+                      {/* Body */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇹🇷 Metin TR</label>
+                          <textarea value={tpl.body_tr} rows={3}
+                            onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_tr: e.target.value} : t))}
+                            className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇬🇧 Body EN</label>
+                          <textarea value={tpl.body_en} rows={3}
+                            onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_en: e.target.value} : t))}
+                            className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+                        </div>
                       </div>
+
+                      {/* CTA Button */}
+                      {tpl.category === 'MARKETING' && (
+                        <div className="bg-blue/5 border border-blue/15 rounded-lg p-2.5 space-y-2">
+                          <label className="text-[10px] text-blue uppercase tracking-wide font-semibold">🔗 CTA Butonu (isteğe bağlı)</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-[10px] text-textMute">Buton metni</label>
+                              <input value={tpl.button_text || ''} placeholder="Sepete git"
+                                onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, button_text: e.target.value} : t))}
+                                className="w-full mt-0.5 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text focus:outline-none focus:border-blue/60 transition-colors" />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-[10px] text-textMute">URL (mağaza sepet adresi)</label>
+                              <input value={tpl.button_url || ''} placeholder="https://maazaniz.com/cart"
+                                onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, button_url: e.target.value} : t))}
+                                className="w-full mt-0.5 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text focus:outline-none focus:border-blue/60 transition-colors" />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-textMute">&#123;&#123;1&#125;&#125; = müşteri adı, &#123;&#123;2&#125;&#125; = ürün adı</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -18,38 +18,62 @@ _DEFAULT_TEMPLATES = [
     {
         "name": "sepet_hatirlatma",
         "category": "MARKETING",
-        "body_tr": "Merhaba {{1}}, sepetinizde {{2}} bıraktınız! Hâlâ sizi bekliyor 🛒",
-        "body_en": "Hi {{1}}, you left {{2}} in your cart! It's still waiting for you 🛒",
+        "header_tr": "Sepetinde bekleyen ürün var!",
+        "header_en": "You have items waiting in your cart!",
+        "body_tr": "Merhaba {{1}}! 😍\nSepetinde {{2}}, seni bekliyor.\nSiparişini tamamlamak için sepeti ziyaret edebilirsin. 🛒",
+        "body_en": "Hi {{1}}! 😍\n{{2}} is waiting in your cart.\nVisit your cart to complete your order. 🛒",
+        "button_text": "Sepete git",
+        "button_url": "https://yourdomain.com/cart",
     },
     {
         "name": "sepet_hatirlatma_2",
         "category": "MARKETING",
-        "body_tr": "{{1}}, sepetinizdeki ürünler hâlâ duruyor. Stoklar sınırlı olabilir! ⏰",
-        "body_en": "{{1}}, the items in your cart are still there. Stocks may be limited! ⏰",
+        "header_tr": "Sepetini unuttun mu? ⏰",
+        "header_en": "Did you forget your cart? ⏰",
+        "body_tr": "{{1}}, sepetindeki ürünler hâlâ duruyor.\nStoklar sınırlı olabilir, geç kalma!",
+        "body_en": "{{1}}, the items in your cart are still there.\nStocks may be limited, don't wait!",
+        "button_text": "Sepete git",
+        "button_url": "https://yourdomain.com/cart",
     },
     {
         "name": "sepet_hatirlatma_3",
         "category": "MARKETING",
-        "body_tr": "Son hatırlatma: {{1}}, sepetinizdeki {{2}} için fırsatı kaçırmayın! 🎯",
-        "body_en": "Last reminder: {{1}}, don't miss out on {{2}} still in your cart! 🎯",
+        "header_tr": "Son hatırlatma! 🎯",
+        "header_en": "Last reminder! 🎯",
+        "body_tr": "{{1}}, sepetindeki {{2}} için son şansın!\nHemen tamamla.",
+        "body_en": "{{1}}, last chance for {{2}} in your cart!\nComplete it now.",
+        "button_text": "Sepete git",
+        "button_url": "https://yourdomain.com/cart",
     },
     {
         "name": "siparis_onay",
         "category": "UTILITY",
-        "body_tr": "Teşekkürler {{1}}! {{2}} siparişiniz alındı ve hazırlanıyor. 📦",
-        "body_en": "Thank you {{1}}! Your order for {{2}} has been received and is being prepared. 📦",
+        "header_tr": "",
+        "header_en": "",
+        "body_tr": "Teşekkürler {{1}}! 📦\n{{2}} siparişiniz alındı ve hazırlanıyor.",
+        "body_en": "Thank you {{1}}! 📦\nYour order for {{2}} has been received and is being prepared.",
+        "button_text": "",
+        "button_url": "",
     },
     {
         "name": "optout_onay",
         "category": "UTILITY",
+        "header_tr": "",
+        "header_en": "",
         "body_tr": "Talebiniz alındı. Bildirim gönderme servisimiz sizin için devre dışı bırakıldı. Tekrar almak isterseniz 'BAŞLAT' yazabilirsiniz.",
         "body_en": "Your request has been received. Our notification service has been disabled for you. Reply 'START' anytime to re-enable it.",
+        "button_text": "",
+        "button_url": "",
     },
     {
         "name": "optin_onay",
         "category": "UTILITY",
-        "body_tr": "Tekrar hoş geldiniz! Bildirim servisimiz yeniden aktif edildi. Sepet hatırlatmaları ve sipariş bildirimlerinizi almaya başlayacaksınız. 🎉",
-        "body_en": "Welcome back! Our notification service has been re-enabled for you. You will start receiving cart reminders and order notifications again. 🎉",
+        "header_tr": "",
+        "header_en": "",
+        "body_tr": "Tekrar hoş geldiniz! 🎉 Bildirim servisimiz yeniden aktif edildi.",
+        "body_en": "Welcome back! 🎉 Our notification service has been re-enabled for you.",
+        "button_text": "",
+        "button_url": "",
     },
 ]
 
@@ -89,13 +113,23 @@ def _get_waba_id(phone_number_id: str, token: str) -> str | None:
     return None
 
 
-def _create_template(waba_id: str, token: str, name: str, body: str, language: str, category: str = "MARKETING") -> dict:
+def _create_template(waba_id: str, token: str, name: str, body: str, language: str,
+                     category: str = "MARKETING", header: str = "", button_text: str = "", button_url: str = "") -> dict:
     """Tek bir WhatsApp template oluşturur ve Meta'ya onaya gönderir."""
+    components = []
+    if header:
+        components.append({"type": "HEADER", "format": "TEXT", "text": header})
+    components.append({"type": "BODY", "text": body})
+    if button_text and button_url:
+        components.append({
+            "type": "BUTTONS",
+            "buttons": [{"type": "URL", "text": button_text, "url": button_url}]
+        })
     payload = {
         "name": name,
         "language": language,
         "category": category,
-        "components": [{"type": "BODY", "text": body}],
+        "components": components,
     }
     r = _requests.post(
         f"{META_GRAPH}/{waba_id}/message_templates",
@@ -434,13 +468,18 @@ async def create_templates(
         body_en  = tpl.get("body_en", "")
         tpl_result = {"name": name, "tr": None, "en": None}
 
-        category = tpl.get("category", "MARKETING")
+        category   = tpl.get("category", "MARKETING")
+        header_tr  = tpl.get("header_tr", "")
+        header_en  = tpl.get("header_en", "")
+        btn_text   = tpl.get("button_text", "")
+        btn_url    = tpl.get("button_url", "")
+
         if body_tr:
-            res = _create_template(waba_id, token, name, body_tr, "tr", category)
+            res = _create_template(waba_id, token, name, body_tr, "tr", category, header_tr, btn_text, btn_url)
             tpl_result["tr"] = res.get("status") or res.get("error", {}).get("message") or str(res)
 
         if body_en:
-            res = _create_template(waba_id, token, name, body_en, "en_US", category)
+            res = _create_template(waba_id, token, name, body_en, "en_US", category, header_en, btn_text, btn_url)
             tpl_result["en"] = res.get("status") or res.get("error", {}).get("message") or str(res)
 
         results.append(tpl_result)
