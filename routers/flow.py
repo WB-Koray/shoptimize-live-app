@@ -226,6 +226,10 @@ async def get_flow_settings(
         settings["wa_token"] = ""
     if "sequence" not in settings:
         settings["sequence"] = DEFAULT_SEQUENCE
+    # Her açılışta phone_id → merchant mapping'ini yenile (opt-out routing için)
+    phone_number_id = settings.get("phone_number_id", "")
+    if phone_number_id:
+        await store.set_merchant_phone_id(phone_number_id, username, brand)
     return {"ok": True, "settings": settings}
 
 

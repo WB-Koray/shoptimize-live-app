@@ -84,27 +84,37 @@ def _build_components(
     return [{"type": "body", "parameters": body_params}] if body_params else []
 
 
-async def _send_optout_confirmation(token_phone: str, to_phone: str, language: str = "tr") -> None:
-    """Opt-out onay mesajı gönderir (UTILITY şablonu)."""
+async def _send_optout_confirmation(token_phone: str, to_phone: str,
+                                    language: str = "tr", owner=None) -> None:
+    """Opt-out onay mesajı gönderir (UTILITY şablonu).
+    owner: (username, brand) tuple — verilirse Redis lookup atlanır.
+    NOT: Bu fonksiyon opt-out listesine eklemeden ÖNCE çağrılmalı,
+         aksi halde send_wa_template is_optout kontrolünde bloklanır."""
     try:
         from services.redis_store import store
-        owner = await store.find_merchant_by_phone_id(token_phone)
+        if owner is None:
+            owner = await store.find_merchant_by_phone_id(token_phone)
         if not owner:
+            logger.warning("[WA] Opt-out onay: merchant bulunamadı phone_id=%s", token_phone[-6:])
             return
         username, brand = owner
         settings = await store.get_flow_settings(username, brand)
         wa_token = settings.get("wa_token", "")
         if not wa_token:
+            logger.warning("[WA] Opt-out onay: wa_token yok (merchant=%s)", username)
             return
-        await send_wa_template(
+        result = await send_wa_template(
             wa_token, token_phone, to_phone,
             template_name="optout_onay",
             language=language,
             username=username, brand=brand,
         )
-        logger.info("[WA] Opt-out onay mesajı gönderildi: %s", to_phone[-4:])
+        if result.get("ok"):
+            logger.info("[WA] Opt-out onay mesajı gönderildi: %s", to_phone[-4:])
+        else:
+            logger.warning("[WA] Opt-out onay gönderilemedi: %s", result.get("error"))
     except Exception as e:
-        logger.warning("[WA] Opt-out onay gönderilemedi: %s", e)
+        logger.warning("[WA] Opt-out onay exception: %s", e)
 
 
 async def handle_incoming_message(token_phone: str, from_phone: str, body: str) -> bool:
@@ -116,6 +126,10 @@ async def handle_incoming_message(token_phone: str, from_phone: str, body: str) 
     for kw in OPTOUT_KEYWORDS:
         if kw in clean:
             owner = await store.find_merchant_by_phone_id(token_phone)
+            # Önce onay mesajı gönder (opt-out listesine EKLENMEDEN önce,
+            # aksi halde send_wa_template is_optout kontrolünde bloklanır)
+            await _send_optout_confirmation(token_phone, from_phone, owner=owner)
+            # Sonra opt-out listesine ekle
             if owner:
                 username, brand = owner
                 await store.add_optout(from_phone, username, brand)
@@ -123,8 +137,6 @@ async def handle_incoming_message(token_phone: str, from_phone: str, body: str) 
             else:
                 await store.add_optout(from_phone)
                 logger.info("[WA] Opt-out kaydedildi (global): %s", from_phone[-4:])
-            # Onay mesajı gönder
-            await _send_optout_confirmation(token_phone, from_phone)
             return True
 
     # Opt-in (yeniden abone)
