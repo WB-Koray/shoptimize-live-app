@@ -137,7 +137,11 @@ def _create_template(waba_id: str, token: str, name: str, body: str, language: s
         headers={"Authorization": f"Bearer {token}"},
         timeout=15,
     )
-    return r.json()
+    data = r.json()
+    if r.status_code != 200:
+        logger.warning("[WA Templates] Meta hata: name=%s lang=%s status=%d body=%s",
+                       name, language, r.status_code, str(data)[:300])
+    return data
 
 
 def _get_template_statuses(waba_id: str, token: str, names: list[str]) -> dict:
@@ -476,14 +480,19 @@ async def create_templates(
 
         if body_tr:
             res = _create_template(waba_id, token, name, body_tr, "tr", category, header_tr, btn_text, btn_url)
-            tpl_result["tr"] = res.get("status") or res.get("error", {}).get("message") or str(res)
+            status_tr = res.get("status") or res.get("error", {}).get("message") or str(res)
+            tpl_id_tr = res.get("id", "")
+            tpl_result["tr"] = status_tr
+            logger.info("[WA Templates] %-30s TR → status=%s id=%s", name, status_tr, tpl_id_tr)
 
         if body_en:
             res = _create_template(waba_id, token, name, body_en, "en_US", category, header_en, btn_text, btn_url)
-            tpl_result["en"] = res.get("status") or res.get("error", {}).get("message") or str(res)
+            status_en = res.get("status") or res.get("error", {}).get("message") or str(res)
+            tpl_id_en = res.get("id", "")
+            tpl_result["en"] = status_en
+            logger.info("[WA Templates] %-30s EN → status=%s id=%s", name, status_en, tpl_id_en)
 
         results.append(tpl_result)
-        logger.info("[WA Templates] %s: tr=%s en=%s", name, tpl_result["tr"], tpl_result["en"])
 
     return {"ok": True, "waba_id": waba_id, "results": results}
 
