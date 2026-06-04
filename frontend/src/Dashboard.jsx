@@ -1365,6 +1365,451 @@ function fmtRevenue(amount) {
   return `₺${amount.toFixed(0)}`;
 }
 
+// ── WhatsApp Kurulum Rehberi ─────────────────────────────────────────────────
+
+const GUIDE_CONTENT = {
+  tr: {
+    title: '📋 WhatsApp Kurulum Rehberi — Adım Adım',
+    intro: 'Bu rehberi takip ederek WhatsApp otomasyonunuzu yaklaşık 30-45 dakikada kurabilirsiniz. Her adımı sırasıyla tamamlayın.',
+    steps: [
+      {
+        num: 1, icon: '🏢',
+        title: 'Meta Business Hesabı Oluşturun',
+        desc: 'WhatsApp Business API kullanmak için önce Meta Business Suite hesabı gereklidir.',
+        subs: [
+          'Tarayıcınızda yeni bir sekme açın ve business.facebook.com adresine gidin',
+          'Sayfanın sağ üstündeki mavi "Hesap Oluştur" butonuna tıklayın',
+          '"İşletme adınız" alanına mağazanızın adını yazın (ör: "Welcome Baby") — müşteriler bu ismi görecek',
+          '"Adınız" alanına kendi adınızı yazın (işletme sahibi)',
+          '"İş e-postası" alanına kurumsal veya kişisel e-postanızı girin',
+          '"Gönder" butonuna tıklayın',
+          'Meta\'nın gönderdiği e-postayı açın → "Hesabı Doğrula" linkine tıklayın',
+          'Doğrulama sonrası Meta Business Suite ana sayfasına yönlendirileceksiniz ✅',
+          'ÖNEMLİ: Eğer halihazırda bir Facebook/Instagram hesabınız varsa, o hesapla giriş yapıp sol üstteki ☰ menüden "Business Suite\'e Geç" seçeneğini kullanabilirsiniz',
+        ],
+        link: { text: 'business.facebook.com\'a git', url: 'https://business.facebook.com' },
+      },
+      {
+        num: 2, icon: '⚙️',
+        title: 'Meta Developer Uygulaması Oluşturun',
+        desc: 'WhatsApp API\'sine erişmek için bir geliştirici uygulaması oluşturmanız gerekiyor.',
+        subs: [
+          'Yeni bir sekmede developers.facebook.com adresine gidin',
+          'Sağ üstteki "Oturum Aç" ile Facebook hesabınıza giriş yapın',
+          'Üst menüdeki "My Apps" (Uygulamalarım) seçeneğine tıklayın',
+          'Sağ üstteki "Create App" (Uygulama Oluştur) butonuna tıklayın',
+          'Uygulama türü seçin: "Business" (İş) seçeneğini seçin — diğerlerini seçmeyin',
+          '"Next" (İleri) butonuna tıklayın',
+          '"Display Name" (Görünen Ad): Uygulamaya bir isim verin (ör: "Mağazam Mesajlaşma") — bu isim sadece size özel, müşteriler görmez',
+          '"App Contact Email": E-posta adresinizi girin',
+          '"Business Account" açılır menüsünden 1. adımda oluşturduğunuz Business hesabını seçin',
+          '"Create App" butonuna tıklayın → Facebook şifrenizi girmenizi isteyebilir',
+          'Uygulama panosuna yönlendirildiniz — sayfayı aşağı kaydırın',
+          'Ürünler listesinde "WhatsApp" kartını bulun → "Set Up" (Kur) butonuna tıklayın',
+          'Sol menüde "WhatsApp" bölümü açılacak ✅',
+        ],
+        link: { text: 'developers.facebook.com/apps\'a git', url: 'https://developers.facebook.com/apps' },
+      },
+      {
+        num: 3, icon: '📱',
+        title: 'WhatsApp İş Telefon Numaranızı Ekleyin',
+        desc: 'Müşterilerinizin mesaj alacağı gerçek WhatsApp numarasını sisteme bağlayın.',
+        subs: [
+          'Sol menüde WhatsApp → "API Setup" (API Kurulumu) sayfasına gidin',
+          '"Step 1: Select phone numbers" bölümünü göreceksiniz — burada ücretsiz bir test numarası var',
+          'Test numarası yalnızca geliştirme amaçlıdır, gerçek müşterilere mesaj atmak için kendi numaranızı eklemeniz şart',
+          '"Add phone number" (Telefon numarası ekle) butonuna tıklayın',
+          '"Display Name" (Görünen Ad): Müşterilerin mesajın gönderenini nasıl göreceği (ör: "Welcome Baby") — bu isim onay gerektirir',
+          '"Phone Number" alanına eklemek istediğiniz numarayı girin',
+          '⚠️ UYARI: Bu numara kişisel WhatsApp uygulamasında KAYITLI OLMAMALIDIR! Kişisel WA silinecektir',
+          'İş telefonu, ofis hattı veya yeni bir SIM kartı kullanın',
+          'Doğrulama yöntemi seçin: "SMS" veya "Sesli arama"',
+          'Gelen 6 haneli kodu ilgili alana girin ve doğrulayın',
+          '"Display Name" (Görünen ad) Meta tarafından incelenir — bu süreç 1-2 iş günü sürebilir',
+          'Onay beklerken diğer adımları tamamlamaya devam edebilirsiniz ✅',
+        ],
+        note: '⏱ Görünen ad (Display Name) onayı 1-2 iş günü sürebilir. Bu süreçte diğer adımlara devam edebilirsiniz.',
+      },
+      {
+        num: 4, icon: '🔑',
+        title: 'Kalıcı Erişim Tokenı, Phone Number ID ve WABA ID Alın',
+        desc: 'Uygulamanın Meta API\'sine bağlanması için 3 ayrı bilgiye ihtiyacınız var.',
+        subsections: [
+          {
+            label: 'A) Kalıcı Erişim Tokenı (Access Token)',
+            color: 'blue',
+            items: [
+              'business.facebook.com\'a gidin',
+              'Sol alt köşedeki ⚙️ Ayarlar simgesine tıklayın',
+              'Açılan menüde "Kullanıcılar" → "Sistem kullanıcıları" seçeneğine tıklayın',
+              '"Ekle" butonuna tıklayın',
+              '"Sistem kullanıcısı adı": İstediğiniz bir isim yazın (ör: "WA Otomasyon")',
+              '"Rol": "Yönetici" seçin',
+              '"Sistem kullanıcısı oluştur" butonuna tıklayın',
+              'Listede oluşturulan kullanıcıya tıklayın',
+              '"Öğe ekle" butonuna tıklayın → "Uygulamalar" sekmesini seçin',
+              '2. adımda oluşturduğunuz uygulamayı listede bulun',
+              'Uygulamanın karşısındaki "Tam kontrol" toggle\'ını açın',
+              '"Değişiklikleri Kaydet" butonuna tıklayın',
+              'Kullanıcı sayfasına geri dönün → "Yeni Token Oluştur" butonuna tıklayın',
+              'Açılan pencerede uygulamanızı seçin',
+              'İzinler listesinde şu ikisini işaretleyin: ✅ whatsapp_business_messaging ve ✅ whatsapp_business_management',
+              '"Token Oluştur" butonuna tıklayın',
+              '"EAA..." ile başlayan uzun kodu görüyorsunuz — HEMEN KOPYALAYIN!',
+              'Bu kodu güvenli bir yere (not defteri, şifre yöneticisi) yapıştırın',
+            ],
+          },
+          {
+            label: 'B) Phone Number ID',
+            color: 'purple',
+            items: [
+              'developers.facebook.com\'a dönün',
+              'Sol menüde WhatsApp → "API Setup" sayfasını açın',
+              '"From" (Kimden) açılır listesinden numaranızı seçin',
+              '"Phone Number ID" yazan satırın sağındaki 📋 simgesine tıklayarak kopyalayın',
+              'Bu numara genellikle 15-16 haneli bir sayıdır (ör: 513385117106438)',
+            ],
+          },
+          {
+            label: 'C) WhatsApp Business Account ID (WABA ID)',
+            color: 'green',
+            items: [
+              'business.facebook.com\'a gidin',
+              '⚙️ Ayarlar → "Hesaplar" → "WhatsApp Hesapları" bölümüne gidin',
+              'Listede WhatsApp hesabınıza tıklayın',
+              'Sağdaki panelde "Kod:" yazan numarayı kopyalayın',
+              'Bu sizin WABA ID\'niz (ör: 106388568722083)',
+              'Alternatif: WhatsApp Manager URL\'sindeki business_id parametresinden de bulabilirsiniz',
+            ],
+          },
+        ],
+        warning: '🔐 Erişim Tokenı son derece hassastır! Kimseyle paylaşmayın, e-postaya yazmayın, ekran görüntüsü almayın. Token ifşa olursa hemen silin ve yenisini oluşturun.',
+      },
+      {
+        num: 5, icon: '📝',
+        title: 'WhatsApp Mesaj Şablonları Oluşturun',
+        desc: 'WhatsApp Business API sadece önceden onaylanmış şablonlarla mesaj gönderebilir. Her mesaj türü için ayrı şablon oluşturmanız gerekiyor.',
+        subs: [
+          'business.facebook.com\'a gidin',
+          'Sol menüde "WhatsApp Manager"ı bulun ve tıklayın',
+          'Açılan sayfada "Şablon Oluştur" butonuna tıklayın',
+          'KATEGORİ seçimi (ÖNEMLİ): Sepet hatırlatma için "Pazarlama", sipariş onayı/opt-out için "Bilgilendirme"',
+          'ŞABLON ADI: Aşağıdaki listeden birebir aynı şekilde yazın — büyük harf yok, boşluk yok, Türkçe karakter yok',
+          'DİL: "Turkish" (Türkçe) seçin',
+          'BAŞLIK (isteğe bağlı): Mesajın üstünde kalın yazıyla görünecek başlık (ör: "Sepetinde bekleyen ürün var!")',
+          'METİN: Mesaj içeriğini yazın. {{1}} müşteri adı, {{2}} ürün adı ile otomatik değiştirilir',
+          'DEĞİŞKEN ÖRNEKLERİ: Meta inceleme için örnek değerler isteyecek — {{1}} için "Ahmet", {{2}} için "Ürün Adı" yazın',
+          'DÜĞME (isteğe bağlı): "Eylem Çağrısı" → "İnternet sitesini ziyaret et" → Buton metni "Sepete git", URL mağazanızın sepet adresi (ör: https://maazaniz.com/cart)',
+          '"Değerlendirmeye gönder" butonuna tıklayın',
+          'Onay genellikle birkaç dakika ile 24 saat arasında gelir',
+          'Aşağıdaki 6 şablon adı için bu işlemi tekrarlayın',
+        ],
+        templates: [
+          { name: 'sepet_hatirlatma',   cat: 'Pazarlama',     desc: 'İlk sepet hatırlatması (15 dk)' },
+          { name: 'sepet_hatirlatma_2', cat: 'Pazarlama',     desc: '24 saat sonra 2. hatırlatma' },
+          { name: 'sepet_hatirlatma_3', cat: 'Pazarlama',     desc: '48 saat sonra son hatırlatma' },
+          { name: 'siparis_onay',       cat: 'Bilgilendirme', desc: 'Sipariş tamamlandığında' },
+          { name: 'optout_onay',        cat: 'Bilgilendirme', desc: '"DUR" yazınca gönderilir' },
+          { name: 'optin_onay',         cat: 'Bilgilendirme', desc: '"BAŞLAT" yazınca gönderilir' },
+        ],
+        note: '⏱ Meta şablonları genellikle birkaç dakika - 24 saat içinde onaylar. "Aktif - Kalite Beklemede" durumu onaylandı demektir.',
+      },
+      {
+        num: 6, icon: '✅',
+        title: 'Uygulamada Ayarları Girin ve Doğrulayın',
+        desc: '4. adımda aldığınız bilgileri uygulamaya girin ve sisteminiz hazır olsun.',
+        subs: [
+          'Bu sayfada aşağıdaki "CONNECTION" (Bağlantı) bölümünü açın',
+          '"WhatsApp Token" alanına 4A\'da aldığınız "EAA..." ile başlayan kalıcı tokenı yapıştırın',
+          '"Phone Number ID" alanına 4B\'de kopyaladığınız numarayı girin',
+          '"WABA ID" alanına 4C\'de kopyaladığınız numarayı girin',
+          '"Kaydet" (Save) butonuna tıklayın → "Connected" yeşil badge görünmeli',
+          'Şimdi aşağıdaki "WhatsApp Mesaj Şablonları" bölümü otomatik açılacak',
+          '"Durumu Güncelle" butonuna tıklayarak onaylanan şablonları görün',
+          'Onaylanan şablonlar yeşil "✓ Approved" gösterir — onaylanmayanlar sarı "Pending" gösterir',
+          'Tüm şablonlar onaylandıktan sonra "SEPET HATIRLATMA DİZİSİ" bölümünden otomasyonu aktif edin',
+          '"WA Automation" toggle\'ını açın → Sistem artık çalışıyor! 🎉',
+        ],
+        tip: '💡 İPUCU: "Durumu Güncelle" butonuna birkaç dakikada bir basarak şablon onay durumunu takip edebilirsiniz.',
+      },
+    ],
+  },
+  en: {
+    title: '📋 WhatsApp Setup Guide — Step by Step',
+    intro: 'Follow this guide to set up your WhatsApp automation in about 30-45 minutes. Complete each step in order.',
+    steps: [
+      {
+        num: 1, icon: '🏢',
+        title: 'Create a Meta Business Account',
+        desc: 'A Meta Business Suite account is required to use WhatsApp Business API.',
+        subs: [
+          'Open a new tab and go to business.facebook.com',
+          'Click the blue "Create Account" button in the top right',
+          'Enter your store name in "Business name" (e.g., "My Store") — customers will see this',
+          'Enter your name in "Your name" (business owner)',
+          'Enter your email address',
+          'Click "Submit"',
+          'Open the email Meta sent and click "Verify Account"',
+          'After verification you\'ll be redirected to Meta Business Suite ✅',
+          'TIP: If you already have a Facebook/Instagram account, sign in and switch to Business Suite from the ☰ menu',
+        ],
+        link: { text: 'Go to business.facebook.com', url: 'https://business.facebook.com' },
+      },
+      {
+        num: 2, icon: '⚙️',
+        title: 'Create a Meta Developer App',
+        desc: 'You need a developer app to access the WhatsApp API.',
+        subs: [
+          'Open a new tab and go to developers.facebook.com',
+          'Sign in with your Facebook account',
+          'Click "My Apps" in the top menu',
+          'Click the "Create App" button in the top right',
+          'Select app type: "Business" — do NOT select other types',
+          'Click "Next"',
+          '"Display Name": Enter any name (e.g., "My Store Messaging") — internal only, customers won\'t see it',
+          '"App Contact Email": Enter your email',
+          '"Business Account": Select the Business account you created in Step 1',
+          'Click "Create App" → it may ask for your Facebook password',
+          'You\'re on the app dashboard — scroll down',
+          'Find the "WhatsApp" product card → click "Set Up"',
+          '"WhatsApp" section will appear in the left menu ✅',
+        ],
+        link: { text: 'Go to developers.facebook.com/apps', url: 'https://developers.facebook.com/apps' },
+      },
+      {
+        num: 3, icon: '📱',
+        title: 'Add Your WhatsApp Business Phone Number',
+        desc: 'Connect the actual WhatsApp number your customers will receive messages from.',
+        subs: [
+          'In the left menu go to WhatsApp → "API Setup"',
+          'You\'ll see "Step 1: Select phone numbers" — there\'s a free test number here',
+          'The test number is for development only — you need your own number for real customers',
+          'Click "Add phone number"',
+          '"Display Name": What customers see as the sender (e.g., "My Store") — requires approval',
+          '"Phone Number": Enter the number you want to add',
+          '⚠️ WARNING: This number must NOT be registered on personal WhatsApp — it will be removed from personal WA',
+          'Use a business phone, office line, or a new SIM card',
+          'Select verification method: "SMS" or "Voice call"',
+          'Enter the 6-digit code you receive',
+          'The "Display Name" is reviewed by Meta — this takes 1-2 business days',
+          'You can continue with other steps while waiting ✅',
+        ],
+        note: '⏱ Display Name approval can take 1-2 business days. Continue with other steps in the meantime.',
+      },
+      {
+        num: 4, icon: '🔑',
+        title: 'Get Permanent Access Token, Phone Number ID & WABA ID',
+        desc: 'Your app needs 3 pieces of information to connect to Meta API.',
+        subsections: [
+          {
+            label: 'A) Permanent Access Token',
+            color: 'blue',
+            items: [
+              'Go to business.facebook.com',
+              'Click the ⚙️ Settings gear icon in the bottom left',
+              'Go to "Users" → "System Users"',
+              'Click "Add"',
+              '"System user name": Enter any name (e.g., "WA Automation Bot")',
+              '"Role": Select "Admin"',
+              'Click "Create System User"',
+              'Click on the created system user',
+              'Click "Add Assets" → select "Apps" tab',
+              'Find the app you created in Step 2',
+              'Toggle "Full Control" ON for that app',
+              'Click "Save Changes"',
+              'Go back to the system user → click "Generate New Token"',
+              'Select your app from the dropdown',
+              'Check both permissions: ✅ whatsapp_business_messaging and ✅ whatsapp_business_management',
+              'Click "Generate Token"',
+              'You\'ll see a long code starting with "EAA..." — COPY IT IMMEDIATELY!',
+              'Paste it somewhere safe (notes app, password manager)',
+            ],
+          },
+          {
+            label: 'B) Phone Number ID',
+            color: 'purple',
+            items: [
+              'Go back to developers.facebook.com',
+              'Open your app → WhatsApp → "API Setup" in the left menu',
+              'Select your number from the "From" dropdown',
+              'Click the 📋 copy icon next to "Phone Number ID"',
+              'This is a 15-16 digit number (e.g., 513385117106438)',
+            ],
+          },
+          {
+            label: 'C) WhatsApp Business Account ID (WABA ID)',
+            color: 'green',
+            items: [
+              'Go to business.facebook.com',
+              '⚙️ Settings → "Accounts" → "WhatsApp Accounts"',
+              'Click on your WhatsApp account in the list',
+              'Copy the number shown next to "ID:" in the right panel',
+              'This is your WABA ID (e.g., 106388568722083)',
+            ],
+          },
+        ],
+        warning: '🔐 Your Access Token is extremely sensitive! Never share it, email it, or screenshot it. If exposed, delete it immediately and create a new one.',
+      },
+      {
+        num: 5, icon: '📝',
+        title: 'Create WhatsApp Message Templates',
+        desc: 'WhatsApp Business API can only send pre-approved templates. You need to create one for each message type.',
+        subs: [
+          'Go to business.facebook.com',
+          'Find "WhatsApp Manager" in the left menu and click it',
+          'Click the "Create Template" button',
+          'CATEGORY (IMPORTANT): Select "Marketing" for cart reminders, "Utility" for confirmations',
+          'TEMPLATE NAME: Enter exactly as shown in the list below — no uppercase, no spaces, no special characters',
+          'LANGUAGE: Select "English (US)" or your store\'s language',
+          'HEADER (optional): Bold title shown above the message',
+          'BODY: Write your message. {{1}} = customer name, {{2}} = product name (auto-replaced)',
+          'VARIABLE EXAMPLES: Meta requires sample values — enter "John" for {{1}}, "Product Name" for {{2}}',
+          'BUTTON (optional): "Call to Action" → "Visit website" → Button text "View Cart", URL your cart URL (e.g., https://yourstore.com/cart)',
+          'Click "Submit for Review"',
+          'Approval is usually instant to 24 hours',
+          'Repeat this for all 6 template names below',
+        ],
+        templates: [
+          { name: 'sepet_hatirlatma',   cat: 'Marketing', desc: 'First cart reminder (15 min)' },
+          { name: 'sepet_hatirlatma_2', cat: 'Marketing', desc: 'Second reminder (24 hours)' },
+          { name: 'sepet_hatirlatma_3', cat: 'Marketing', desc: 'Final reminder (48 hours)' },
+          { name: 'siparis_onay',       cat: 'Utility',   desc: 'Order confirmation' },
+          { name: 'optout_onay',        cat: 'Utility',   desc: 'Sent when customer replies STOP' },
+          { name: 'optin_onay',         cat: 'Utility',   desc: 'Sent when customer replies START' },
+        ],
+        note: '⏱ Meta usually approves templates in minutes to 24 hours. "Active - Quality Pending" status means it\'s approved.',
+      },
+      {
+        num: 6, icon: '✅',
+        title: 'Enter Settings in the App & Verify',
+        desc: 'Enter the credentials from Step 4 and your automation is ready.',
+        subs: [
+          'On this page, expand the "CONNECTION" section below',
+          'Paste the "EAA..." permanent token from Step 4A into the "WhatsApp Token" field',
+          'Enter the Phone Number ID from Step 4B',
+          'Enter the WABA ID from Step 4C',
+          'Click "Save" → you should see a green "Connected" badge',
+          'The "WhatsApp Message Templates" section will appear',
+          'Click "Refresh Status" to check approved templates',
+          'Approved templates show green "✓ Approved" — pending ones show amber "Pending"',
+          'Once all templates are approved, enable automation in "CART REMINDER SEQUENCE"',
+          'Toggle "WA Automation" ON → Your system is now live! 🎉',
+        ],
+        tip: '💡 TIP: Click "Refresh Status" every few minutes to track template approval status.',
+      },
+    ],
+  },
+};
+
+function WaSetupGuide({ lang, guideOpen, setGuideOpen, t }) {
+  const g = GUIDE_CONTENT[lang] || GUIDE_CONTENT.tr;
+  const colorMap = { blue: 'text-blue bg-blue/10 border-blue/20', purple: 'text-purple-500 bg-purple-500/10 border-purple-500/20', green: 'text-green bg-greenSoft border-green/20' };
+
+  return (
+    <div className="bg-blue/5 border border-blue/20 rounded-2xl overflow-hidden">
+      <button onClick={() => setGuideOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-blue/10 transition-colors">
+        <FileText size={13} className="text-blue shrink-0" />
+        <span className="flex-1 text-left text-blue font-semibold text-xs uppercase tracking-wide">{g.title}</span>
+        {guideOpen ? <ChevronUp size={13} className="text-blue shrink-0" /> : <ChevronDown size={13} className="text-blue shrink-0" />}
+      </button>
+
+      {guideOpen && (
+        <div className="border-t border-blue/20 px-4 pt-4 pb-6 space-y-6 text-xs max-h-[70vh] overflow-y-auto">
+          <p className="text-textDim leading-relaxed bg-blue/5 rounded-lg px-3 py-2 border border-blue/10">{g.intro}</p>
+
+          {g.steps.map(step => (
+            <div key={step.num} className="flex gap-3">
+              <div className="flex flex-col items-center gap-1 shrink-0">
+                <span className="w-7 h-7 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center text-[11px]">{step.num}</span>
+                <div className="w-px flex-1 bg-blue/10 min-h-[20px]" />
+              </div>
+              <div className="space-y-2 pb-2 flex-1">
+                <div>
+                  <p className="font-bold text-text text-[13px]">{step.icon} {step.title}</p>
+                  <p className="text-textMute mt-0.5">{step.desc}</p>
+                </div>
+
+                {/* Regular substeps */}
+                {step.subs && (
+                  <ul className="space-y-1.5">
+                    {step.subs.map((s, i) => (
+                      <li key={i} className={`flex gap-2 leading-relaxed ${s.startsWith('⚠️') || s.startsWith('🔴') ? 'text-rose font-semibold' : s.startsWith('ÖNEMLİ') || s.startsWith('IMPORTANT') ? 'text-amber-500' : 'text-textDim'}`}>
+                        <span className="text-blue shrink-0 mt-0.5">{i + 1}.</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Subsections (A, B, C) */}
+                {step.subsections && (
+                  <div className="space-y-3">
+                    {step.subsections.map(sec => (
+                      <div key={sec.label} className={`border rounded-xl overflow-hidden ${colorMap[sec.color]}`}>
+                        <div className={`px-3 py-1.5 font-bold text-[11px] border-b ${colorMap[sec.color]}`}>{sec.label}</div>
+                        <ul className="px-3 py-2 space-y-1.5 bg-surface">
+                          {sec.items.map((item, i) => (
+                            <li key={i} className={`flex gap-2 leading-relaxed ${item.startsWith('⚠️') || item.startsWith('🔴') ? 'text-rose font-semibold' : 'text-textDim'}`}>
+                              <span className="text-textMute shrink-0 mt-0.5">{i + 1}.</span>
+                              <span>{item.includes('EAA...') ? <><span className="font-bold text-rose">{item}</span></> : item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Template list */}
+                {step.templates && (
+                  <div className="bg-surface border border-border rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-surfaceAlt border-b border-border">
+                      <p className="font-bold text-text text-[11px]">Oluşturulması gereken 6 şablon:</p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {step.templates.map(tpl => (
+                        <div key={tpl.name} className="px-3 py-2 flex items-center gap-3">
+                          <code className="font-mono font-bold text-[11px] text-text w-40 shrink-0">{tpl.name}</code>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${tpl.cat === 'Pazarlama' || tpl.cat === 'Marketing' ? 'text-purple-500 bg-purple-500/10 border-purple-500/20' : 'text-blue bg-blue/10 border-blue/20'}`}>{tpl.cat}</span>
+                          <span className="text-textMute text-[11px]">{tpl.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Link */}
+                {step.link && (
+                  <a href={step.link.url} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-blue hover:underline font-semibold">
+                    <ExternalLink size={11} /> {step.link.text}
+                  </a>
+                )}
+
+                {/* Note (amber) */}
+                {step.note && (
+                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2 text-amber-600 dark:text-amber-400 font-medium">{step.note}</div>
+                )}
+
+                {/* Warning (red) */}
+                {step.warning && (
+                  <div className="bg-rose/5 border border-rose/20 rounded-lg px-3 py-2 text-rose font-semibold">{step.warning}</div>
+                )}
+
+                {/* Tip (green) */}
+                {step.tip && (
+                  <div className="bg-greenSoft border border-green/20 rounded-lg px-3 py-2 text-green font-medium">{step.tip}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_BADGE = {
   APPROVED:      'bg-greenSoft border-green/20 text-green',
   ACTIVE:        'bg-greenSoft border-green/20 text-green',
@@ -2328,101 +2773,7 @@ function FlowPanel({ session, anonymized = false }) {
         <div className="max-w-2xl mx-auto space-y-4">
 
           {/* Setup Guide */}
-          {!maskedToken && (
-          <div className="bg-blue/5 border border-blue/20 rounded-2xl overflow-hidden">
-            <button onClick={() => setGuideOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-4 py-3 hover:bg-blue/10 transition-colors">
-              <FileText size={13} className="text-blue shrink-0" />
-              <span className="flex-1 text-left text-blue font-semibold text-xs uppercase tracking-wide">{t('flow.setup_guide')}</span>
-              {guideOpen ? <ChevronUp size={13} className="text-blue shrink-0" /> : <ChevronDown size={13} className="text-blue shrink-0" />}
-            </button>
-            {guideOpen && (
-              <div className="px-4 pb-5 border-t border-blue/20 pt-4 space-y-5 text-xs">
-
-                <p className="text-textDim leading-relaxed">{t('flow.guide_intro')}</p>
-
-                {/* Step 1 */}
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">1</span>
-                  <div className="space-y-1.5">
-                    <p className="font-bold text-text">{t('flow.guide_step1_title')}</p>
-                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
-                      {t('flow.guide_step1_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
-                    </ul>
-                    <a href="https://business.facebook.com" target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-blue hover:underline">
-                      <ExternalLink size={10} /> business.facebook.com
-                    </a>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">2</span>
-                  <div className="space-y-1.5">
-                    <p className="font-bold text-text">{t('flow.guide_step2_title')}</p>
-                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
-                      {t('flow.guide_step2_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
-                    </ul>
-                    <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-blue hover:underline">
-                      <ExternalLink size={10} /> developers.facebook.com/apps
-                    </a>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">3</span>
-                  <div className="space-y-1.5">
-                    <p className="font-bold text-text">{t('flow.guide_step3_title')}</p>
-                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
-                      {t('flow.guide_step3_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
-                    </ul>
-                    <div className="bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2 text-amber-600 dark:text-amber-400">
-                      {t('flow.guide_step3_note')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 4 */}
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">4</span>
-                  <div className="space-y-1.5">
-                    <p className="font-bold text-text">{t('flow.guide_step4_title')}</p>
-                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
-                      {t('flow.guide_step4_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
-                    </ul>
-                    <div className="bg-rose/5 border border-rose/20 rounded-lg px-3 py-2 text-rose">
-                      {t('flow.guide_step4_warning')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 5 */}
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue/15 text-blue font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">5</span>
-                  <div className="space-y-1.5">
-                    <p className="font-bold text-text">{t('flow.guide_step5_title')}</p>
-                    <ul className="space-y-1 text-textMute leading-relaxed list-none">
-                      {t('flow.guide_step5_subs').split('|').map((s,i) => <li key={i} className="flex gap-1.5"><span className="text-blue shrink-0">›</span>{s}</li>)}
-                    </ul>
-                    <div className="bg-surface border border-border rounded-lg px-3 py-2.5 space-y-1.5">
-                      <p className="font-semibold text-text">{t('flow.guide_templates_title')}</p>
-                      <p className="text-textMute">{t('flow.guide_templates_desc')}</p>
-                      <div className="grid grid-cols-2 gap-1 mt-1">
-                        {['sepet_hatirlatma','sepet_hatirlatma_2','sepet_hatirlatma_3','siparis_onay'].map(name => (
-                          <code key={name} className="bg-surfaceAlt border border-border rounded px-2 py-1 text-[10px] font-mono text-textDim">{name}</code>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-          </div>
-          )}
+          {!maskedToken && <WaSetupGuide lang={lang} guideOpen={guideOpen} setGuideOpen={setGuideOpen} t={t} />}
 
           {/* Bağlantı ayarları */}
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
