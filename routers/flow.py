@@ -112,7 +112,7 @@ def _get_template_statuses(waba_id: str, token: str, names: list[str]) -> dict:
     try:
         r = _requests.get(
             f"{META_GRAPH}/{waba_id}/message_templates",
-            params={"fields": "name,language,status", "limit": 100, "access_token": token},
+            params={"fields": "name,language,status", "limit": 200, "access_token": token},
             timeout=10,
         )
         for tpl in r.json().get("data", []):
@@ -121,6 +121,44 @@ def _get_template_statuses(waba_id: str, token: str, names: list[str]) -> dict:
     except Exception as e:
         logger.warning("[WA Templates] Durum alınamadı: %s", e)
     return result
+
+
+def _get_template_details(waba_id: str, token: str) -> list[dict]:
+    """Meta'dan tüm template'lerin tam içeriğini (components) çeker."""
+    try:
+        r = _requests.get(
+            f"{META_GRAPH}/{waba_id}/message_templates",
+            params={"fields": "name,language,status,components,category", "limit": 200, "access_token": token},
+            timeout=10,
+        )
+        data = r.json().get("data", [])
+        result = []
+        for tpl in data:
+            body_text = ""
+            header_text = ""
+            buttons = []
+            for comp in tpl.get("components", []):
+                ctype = comp.get("type", "").upper()
+                if ctype == "BODY":
+                    body_text = comp.get("text", "")
+                elif ctype == "HEADER" and comp.get("format") == "TEXT":
+                    header_text = comp.get("text", "")
+                elif ctype == "BUTTONS":
+                    buttons = [{"type": b.get("type"), "text": b.get("text"), "url": b.get("url", "")}
+                               for b in comp.get("buttons", [])]
+            result.append({
+                "name":     tpl.get("name"),
+                "language": tpl.get("language"),
+                "status":   tpl.get("status", "UNKNOWN"),
+                "category": tpl.get("category", "MARKETING"),
+                "header":   header_text,
+                "body":     body_text,
+                "buttons":  buttons,
+            })
+        return result
+    except Exception as e:
+        logger.warning("[WA Templates] İçerik alınamadı: %s", e)
+        return []
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -433,5 +471,6 @@ async def get_template_status(
 
     names = [t["name"] for t in _DEFAULT_TEMPLATES]
     statuses = _get_template_statuses(waba_id, token, names)
-    logger.info("[WA Templates] Durum alındı: waba=%s count=%d", waba_id, len(statuses))
-    return {"ok": True, "waba_id": waba_id, "statuses": statuses}
+    details  = _get_template_details(waba_id, token)
+    logger.info("[WA Templates] Durum alındı: waba=%s count=%d details=%d", waba_id, len(statuses), len(details))
+    return {"ok": True, "waba_id": waba_id, "statuses": statuses, "details": details}

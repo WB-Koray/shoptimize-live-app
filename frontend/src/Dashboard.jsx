@@ -1400,8 +1400,26 @@ function WaTemplateManager({ qs, t, token }) {
         fetch(`${API_URL}/api/flow/template-status?${qs}`,   { headers: authH }),
       ]);
       const [dd, sd] = await Promise.all([dr.json(), sr.json()]);
-      if (dd.ok) setTemplates(dd.templates);
       if (sd.ok) setStatuses(sd.statuses || {});
+
+      // Meta'dan gelen gerçek içeriklerle defaults'ı güncelle
+      if (dd.ok) {
+        const metaDetails = sd.details || [];
+        const merged = dd.templates.map(tpl => {
+          const metaTR = metaDetails.find(d => d.name === tpl.name && d.language === 'tr');
+          const metaEN = metaDetails.find(d => d.name === tpl.name && (d.language === 'en_US' || d.language === 'en'));
+          return {
+            ...tpl,
+            body_tr:   metaTR?.body  || tpl.body_tr,
+            body_en:   metaEN?.body  || tpl.body_en,
+            header_tr: metaTR?.header || '',
+            header_en: metaEN?.header || '',
+            buttons_tr: metaTR?.buttons || [],
+            category:  metaTR?.category || metaEN?.category || tpl.category || 'MARKETING',
+          };
+        });
+        setTemplates(merged);
+      }
     } finally {
       setLoading(false);
     }
@@ -1507,13 +1525,27 @@ function WaTemplateManager({ qs, t, token }) {
                     <div className="p-3 space-y-2">
                       <div>
                         <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇹🇷 Türkçe</label>
-                        <textarea value={tpl.body_tr} rows={2}
+                        {tpl.header_tr && (
+                          <div className="mt-1 px-3 py-1.5 bg-surfaceAlt border border-border rounded-lg text-xs text-textDim font-semibold">
+                            📌 {tpl.header_tr}
+                          </div>
+                        )}
+                        <textarea value={tpl.body_tr} rows={3}
                           onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_tr: e.target.value} : t))}
                           className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
+                        {tpl.buttons_tr?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {tpl.buttons_tr.map((btn, bi) => (
+                              <span key={bi} className="px-2 py-1 bg-blue/10 border border-blue/20 text-blue text-[10px] rounded-lg">
+                                🔗 {btn.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="text-[10px] text-textMute uppercase tracking-wide font-semibold">🇬🇧 English</label>
-                        <textarea value={tpl.body_en} rows={2}
+                        <textarea value={tpl.body_en} rows={3}
                           onChange={e => setTemplates(prev => prev.map((t,j) => j===i ? {...t, body_en: e.target.value} : t))}
                           className="w-full mt-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none focus:outline-none focus:border-green/60 transition-colors" />
                       </div>
