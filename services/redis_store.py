@@ -277,6 +277,14 @@ class RedisStore:
         """WA phone_number_id → merchant eşlemesini kaydeder (opt-out routing için)."""
         await self._redis.set(f"wa_phone_id:{phone_number_id}", f"{username}:{brand}")
 
+    async def set_online_token(self, username: str, brand: str, token: str, ttl: int = 82800) -> None:
+        """Shopify online (expiring) token'ı kaydeder. TTL: 23 saat (online token ~1 gün geçerli)."""
+        await self._redis.setex(f"shopify_online_token:{username}:{brand}", ttl, token)
+
+    async def get_online_token(self, username: str, brand: str) -> str | None:
+        """Kayıtlı Shopify online token'ı döner; süresi dolmuş veya yoksa None."""
+        return await self._redis.get(f"shopify_online_token:{username}:{brand}")
+
     async def find_merchant_by_phone_id(self, phone_number_id: str) -> tuple[str, str] | None:
         """WA phone_number_id'den (username, brand) döner."""
         val = await self._redis.get(f"wa_phone_id:{phone_number_id}")

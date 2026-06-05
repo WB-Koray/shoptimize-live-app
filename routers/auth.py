@@ -751,11 +751,18 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     username, brand = found
 
     # ── Token exchange: expiring offline token al, DB'yi güncelle ──────────
-    # OAuth'tan gelen token non-expiring olabilir; token exchange her zaman
-    # expiring format döndürür ve Admin API 403 sorununu çözer.
     new_access_token = _exchange_session_token_for_offline(shop, body.session_token)
     if new_access_token:
         set_connection_settings(username, brand, "shopify", {"admin_api_token": new_access_token})
+
+    # ── Online token'ı Redis'e kaydet (user-triggered API çağrıları için) ──
+    # Online token her zaman expiring → Admin API 403 hatasını önler.
+    import asyncio as _asyncio
+    online_tok = _exchange_session_token_for_online(shop, body.session_token)
+    if online_tok:
+        from services.redis_store import store as _store
+        if _asyncio.get_event_loop().is_running():
+            _asyncio.ensure_future(_store.set_online_token(username, brand, online_tok))
 
     _check_billing(username, brand)   # 402 fırlatır gerekirse
 

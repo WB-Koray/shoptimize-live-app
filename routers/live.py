@@ -753,7 +753,8 @@ async def get_shopify_customer(
     brand: str = Query("default"),
 ):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
-    token   = get_setting(username, brand, "shopify", "admin_api_token", "")
+    token   = await store.get_online_token(username, brand) \
+              or get_setting(username, brand, "shopify", "admin_api_token", "")
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
@@ -831,7 +832,9 @@ async def get_order_journey(
 ):
     """Shopify GraphQL CustomerJourneySummary — siparişin tam yolculuğunu döner."""
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
-    token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    # Online token önce dene (her zaman expiring → 403 hatasını önler)
+    token  = await store.get_online_token(username, brand) \
+             or get_setting(username, brand, "shopify", "admin_api_token", "")
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı"}, status_code=400)
 
