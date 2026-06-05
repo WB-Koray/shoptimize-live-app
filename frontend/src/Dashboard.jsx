@@ -747,7 +747,15 @@ function OrderJourneyModal({ orderId, session, onClose }) {
       .then(r => r.json())
       .then(d => {
         if (d.ok) setData(d.order);
-        else setErr(d.error || d.detail || 'Error');
+        else {
+          const msg = d.error || d.detail || 'Error';
+          // Protected Customer Data hatası — anlaşılır mesaj göster
+          if (msg.includes('not approved') || msg.includes('protected') || msg.includes('Protected')) {
+            setErr('__pcd__');
+          } else {
+            setErr(msg);
+          }
+        }
       })
       .catch(() => setErr('Network error'))
       .finally(() => setLoading(false));
@@ -831,9 +839,24 @@ function OrderJourneyModal({ orderId, session, onClose }) {
             </div>
           )}
           {!loading && err && (
-            <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 text-sm text-rose">
-              <AlertCircle size={13} className="shrink-0" /> {err}
-            </div>
+            err === '__pcd__' ? (
+              <div className="py-6 px-4 space-y-3 text-center">
+                <AlertCircle size={24} className="text-amber-400 mx-auto" />
+                <p className="text-text font-semibold text-sm">Ek Shopify İzni Gerekiyor</p>
+                <p className="text-textMute text-xs leading-relaxed">
+                  "Sipariş Yolculuğu" özelliği için Shopify <strong>Protected Customer Data</strong> erişimi gerekiyor.
+                  Partner Dashboard'dan bu izni talep etmeniz gerekiyor.
+                </p>
+                <a href="https://partners.shopify.com" target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400/10 border border-amber-400/20 text-amber-600 text-xs font-semibold rounded-lg hover:bg-amber-400/15 transition-colors no-underline">
+                  <ExternalLink size={11} /> Partner Dashboard → API Access → Protected Customer Data
+                </a>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 text-sm text-rose">
+                <AlertCircle size={13} className="shrink-0" /> {err}
+              </div>
+            )
           )}
           {!loading && !err && moments.length === 0 && (
             <div className="py-8 text-center space-y-3 px-4">
