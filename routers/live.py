@@ -911,7 +911,8 @@ async def get_rfm_segments(
     from datetime import datetime, timezone, timedelta
 
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
-    token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    token  = await store.get_online_token(username, brand) \
+             or get_setting(username, brand, "shopify", "admin_api_token", "")
     logger.info("[RFM] domain=%r token_set=%s user=%s brand=%s", domain or "(empty)", bool(token), username[:20], brand)
     if not domain or not token:
         # Diagnoz: raw payload'u logla
