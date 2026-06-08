@@ -135,6 +135,14 @@ const translations = {
     'analytics.no_collections':  'No collection views yet',
     'analytics.no_searches':     'No searches yet',
 
+    // Ad Product Grid
+    'adgrid.title':       'Ad → Product Performance',
+    'adgrid.campaigns':   'campaigns',
+    'adgrid.purchases':   'purchases',
+    'adgrid.hint':        'Click a campaign to expand product grid + live stock',
+    'adgrid.no_products': 'No product views from this campaign yet',
+    'adgrid.utm_tip':     'Tip: Add utm_content to your ad URLs to track creative names. fbclid/gclid auto-detected.',
+
     // Product card
     'product.views':     'Views',
     'product.cart':      'Add to Cart',
@@ -490,6 +498,14 @@ const translations = {
     'analytics.no_products':     'Henüz ürün görüntüleme yok',
     'analytics.no_collections':  'Henüz koleksiyon görüntüleme yok',
     'analytics.no_searches':     'Henüz arama yok',
+
+    // Reklam → Ürün Grid
+    'adgrid.title':       'Reklam → Ürün Performansı',
+    'adgrid.campaigns':   'kampanya',
+    'adgrid.purchases':   'satış',
+    'adgrid.hint':        'Kampanyaya tıkla: ürün grid\'i + anlık stok',
+    'adgrid.no_products': 'Bu kampanyadan henüz ürün görüntülemesi yok',
+    'adgrid.utm_tip':     'İpucu: Reklam URL\'lerine utm_content ekleyerek kreatif adını takip edebilirsin. fbclid/gclid otomatik tespit edilir.',
 
     // Ürün kartı
     'product.views':     'Görüntüleme',

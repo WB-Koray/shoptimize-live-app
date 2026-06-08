@@ -105,6 +105,13 @@ window._spt_loaded = true;
     ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(function(k) {
       var v = _usp.get(k); if (v) { UTM[k] = v; _hasNew = true; }
     });
+    // fbclid / gclid — UTM yoksa reklam platformunu otomatik tespit et
+    if (!UTM.utm_source) {
+      var _fbc = _usp.get('fbclid');
+      var _gc  = _usp.get('gclid');
+      if (_fbc) { UTM.utm_source = 'facebook'; UTM.utm_medium = 'paid'; UTM.utm_campaign = UTM.utm_campaign || 'Facebook Ads'; _hasNew = true; }
+      else if (_gc) { UTM.utm_source = 'google'; UTM.utm_medium = 'cpc'; UTM.utm_campaign = UTM.utm_campaign || 'Google Ads'; _hasNew = true; }
+    }
     if (_hasNew) sessionStorage.setItem('_spt_utm', JSON.stringify(UTM));
   } catch(e) {}
 
@@ -1054,6 +1061,74 @@ async def get_rfm_segments(
         "currency": currency,
         "days": days,
     }
+
+
+# ---------------------------------------------------------------------------
+# Ürün stok endpoint'i — AdProductGrid widget için
+# ---------------------------------------------------------------------------
+
+_PRODUCTS_STOCK_GQL = """
+query ProductsStock($query: String!) {
+  products(first: 30, query: $query) {
+    nodes {
+      handle
+      title
+      totalInventory
+      tracksInventory
+      featuredImage { url }
+      variants(first: 1) {
+        nodes { inventoryQuantity }
+      }
+    }
+  }
+}
+"""
+
+
+@router.get("/api/shopify/products/stock")
+async def get_products_stock(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    handles: str = Query(""),
+    current_user: dict = Depends(get_current_user),
+):
+    """Virgülle ayrılmış ürün handle listesi için stok bilgisi döner."""
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token  = await store.get_online_token(username, brand) \
+             or get_setting(username, brand, "shopify", "admin_api_token", "")
+    if not domain or not token:
+        return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
+
+    handle_list = [h.strip() for h in handles.split(",") if h.strip()][:30]
+    if not handle_list:
+        return {"ok": True, "products": {}}
+
+    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+    handle_filter = " OR ".join(f"handle:{h}" for h in handle_list)
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(gql_url, headers=headers,
+                                  json={"query": _PRODUCTS_STOCK_GQL, "variables": {"query": handle_filter}})
+            if r.status_code != 200:
+                return JSONResponse({"ok": False, "error": f"Shopify {r.status_code}"}, status_code=502)
+            data = r.json()
+            nodes = ((data.get("data") or {}).get("products") or {}).get("nodes", [])
+            products = {}
+            for node in nodes:
+                h = node.get("handle", "")
+                if not h:
+                    continue
+                products[h] = {
+                    "title": node.get("title", ""),
+                    "available": node.get("totalInventory") if node.get("tracksInventory") else None,
+                    "image": (node.get("featuredImage") or {}).get("url", ""),
+                }
+            return {"ok": True, "products": products}
+    except Exception as exc:
+        logger.exception("[STOCK] Shopify bağlantı hatası")
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
 # ---------------------------------------------------------------------------

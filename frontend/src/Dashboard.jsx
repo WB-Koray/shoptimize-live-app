@@ -1081,6 +1081,209 @@ function RFMWidget({ session, anonymized = false }) {
   );
 }
 
+// ── AdProductGrid — Reklam → Ürün Performansı ────────────────────────────────
+
+function AdProductGrid({ utmStats, session }) {
+  const { t } = useLang();
+  const { token, username, brand } = session;
+  const [expanded, setExpanded] = useState(null);
+  const [stockCache, setStockCache] = useState({});
+  const [loadingStock, setLoadingStock] = useState({});
+
+  if (!utmStats.length) return null;
+
+  async function loadStock(camp) {
+    if (stockCache[camp.campaign] !== undefined) return;
+    const handles = [...new Set(camp.products.map(p => p.handle).filter(Boolean))];
+    if (!handles.length) { setStockCache(s => ({ ...s, [camp.campaign]: {} })); return; }
+    setLoadingStock(s => ({ ...s, [camp.campaign]: true }));
+    try {
+      const r = await fetch(
+        `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}&handles=${handles.join(',')}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const d = await r.json();
+      if (d.ok) setStockCache(s => ({ ...s, [camp.campaign]: d.products }));
+      else setStockCache(s => ({ ...s, [camp.campaign]: {} }));
+    } catch { setStockCache(s => ({ ...s, [camp.campaign]: {} })); }
+    setLoadingStock(s => ({ ...s, [camp.campaign]: false }));
+  }
+
+  function toggle(camp) {
+    if (expanded === camp.campaign) { setExpanded(null); return; }
+    setExpanded(camp.campaign);
+    loadStock(camp);
+  }
+
+  const srcBadge = src => ({
+    facebook: 'bg-blue/10 text-blue border-blue/20',
+    instagram: 'bg-rose/10 text-rose border-rose/20',
+    google: 'bg-amber/10 text-amber border-amber/20',
+    tiktok: 'bg-textDim/10 text-textDim border-border',
+  })[src?.toLowerCase()] || 'bg-purpleSoft text-purple border-purple/20';
+
+  function StockBadge({ handle, stocks, loading }) {
+    if (loading) return <span className="text-[9px] text-textMute animate-pulse">stok...</span>;
+    if (!handle || !stocks) return null;
+    const s = stocks[handle];
+    if (!s) return null;
+    if (s.available === null) return <span className="text-[9px] text-textMute">takip yok</span>;
+    const n = s.available;
+    const cls = n === 0
+      ? 'bg-roseSoft text-rose border-rose/20'
+      : n <= 3
+      ? 'bg-amberSoft text-amber border-amber/20'
+      : 'bg-greenSoft text-green border-green/20';
+    return (
+      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${cls}`}>
+        {n === 0 ? '⚠ Stok yok' : `Stok: ${n}`}
+      </span>
+    );
+  }
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+        <BarChart2 size={14} className="text-purple" />
+        <span className="text-sm font-bold text-text">{t('adgrid.title')}</span>
+        <span className="text-[10px] bg-purpleSoft text-purple border border-purple/20 px-2 py-0.5 rounded-full ml-1">
+          {utmStats.length} {t('adgrid.campaigns')}
+        </span>
+        <span className="text-[10px] text-textMute ml-auto hidden sm:block">{t('adgrid.hint')}</span>
+      </div>
+
+      {/* Campaign rows */}
+      <div className="divide-y divide-border/60">
+        {utmStats.map(camp => {
+          const isOpen = expanded === camp.campaign;
+          const stocks = stockCache[camp.campaign] || {};
+          const stockLoading = !!loadingStock[camp.campaign];
+          const zeroStock = !stockLoading && Object.values(stocks).some(s => s.available === 0);
+
+          return (
+            <div key={camp.campaign}>
+              {/* Campaign header */}
+              <button
+                onClick={() => toggle(camp)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors text-left"
+              >
+                {isOpen
+                  ? <ChevronUp size={13} className="text-textMute shrink-0" />
+                  : <ChevronDown size={13} className="text-textMute shrink-0" />
+                }
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-text truncate max-w-[200px]">{camp.campaign}</span>
+                    {camp.source && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wide ${srcBadge(camp.source)}`}>
+                        {camp.source}{camp.medium ? ` · ${camp.medium}` : ''}
+                      </span>
+                    )}
+                    {camp.content && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-surfaceAlt border border-border text-textDim truncate max-w-[150px]" title={camp.content}>
+                        🎨 {camp.content}
+                      </span>
+                    )}
+                    {zeroStock && (
+                      <span className="text-[9px] font-bold text-rose animate-pulse">⚠ stok bitti</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="text-[10px] text-textMute tabular-nums">{camp.vids.size} {t('common.visitors')}</span>
+                    <span className="text-[10px] text-purple tabular-nums">{camp.views} {t('common.views')}</span>
+                    <span className="text-[10px] text-amber tabular-nums">{camp.carts} {t('common.cart')}</span>
+                    {camp.purchases > 0 && (
+                      <span className="text-[10px] text-green font-bold tabular-nums">{camp.purchases} {t('adgrid.purchases')}</span>
+                    )}
+                  </div>
+                </div>
+                {camp.products.length > 0 && (
+                  <span className="text-[10px] text-textMute shrink-0">{camp.products.length} ürün</span>
+                )}
+              </button>
+
+              {/* Product grid */}
+              {isOpen && camp.products.length > 0 && (
+                <div className="px-4 pb-4 pt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 bg-surfaceAlt/20">
+                  {camp.products.map(prod => {
+                    const stockInfo = stocks[prod.handle];
+                    const noStock = !stockLoading && stockInfo && stockInfo.available === 0;
+                    return (
+                      <div
+                        key={prod.title}
+                        className={`bg-surface border rounded-xl overflow-hidden flex flex-col transition-shadow hover:shadow-sm
+                          ${noStock ? 'border-rose/30 bg-roseSoft/10' : 'border-border'}`}
+                      >
+                        {/* Product image */}
+                        {prod.image ? (
+                          <div className="relative">
+                            <img
+                              src={prod.image}
+                              alt={prod.title}
+                              className={`w-full aspect-square object-cover ${noStock ? 'opacity-50' : ''}`}
+                            />
+                            {noStock && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <span className="text-[10px] font-bold text-white bg-rose/80 px-2 py-1 rounded">Stok Yok</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full aspect-square bg-surfaceAlt flex items-center justify-center">
+                            <Package size={20} className="text-textMute/40" />
+                          </div>
+                        )}
+
+                        {/* Product info */}
+                        <div className="p-2 flex-1 flex flex-col gap-1.5">
+                          <p className="text-[11px] font-semibold text-text leading-tight line-clamp-2" title={prod.title}>
+                            {prod.title}
+                          </p>
+                          {prod.price && (
+                            <p className="text-[10px] text-textMute">{prod.price} ₺</p>
+                          )}
+
+                          {/* Stats */}
+                          <div className="flex flex-wrap gap-1 mt-auto">
+                            <span className="flex items-center gap-0.5 text-[9px] text-purple bg-purpleSoft px-1 py-0.5 rounded">
+                              <Eye size={9} />{prod.views}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[9px] text-amber bg-amberSoft px-1 py-0.5 rounded">
+                              <ShoppingCart size={9} />{prod.carts}
+                            </span>
+                            {prod.purchases > 0 && (
+                              <span className="flex items-center gap-0.5 text-[9px] text-green bg-greenSoft px-1 py-0.5 rounded font-bold">
+                                <CheckCircle size={9} />{prod.purchases}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Stock */}
+                          <StockBadge handle={prod.handle} stocks={stocks} loading={stockLoading} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isOpen && camp.products.length === 0 && (
+                <p className="px-4 pb-4 text-xs text-textMute">{t('adgrid.no_products')}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* UTM yoksa ipucu */}
+      <div className="px-4 py-2 border-t border-border/40 bg-surfaceAlt/30">
+        <p className="text-[10px] text-textMute">{t('adgrid.utm_tip')}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── StockDemandWidget — #5 Stok-Talep Alarm ──────────────────────────────────
 // Aynı anda 2+ ziyaretçinin baktığı ürünleri gösterir
 
@@ -3595,19 +3798,35 @@ export default function Dashboard({ session, onLogout }) {
   const utmStats = useMemo(() => {
     const camps = {};
     const vidLastProd = {};
+    const vidToCamp = {};
     for (const ev of events) {
       const utm = ev.utm || {};
       const camp = utm.utm_campaign;
       if (!camp) continue;
-      if (!camps[camp]) camps[camp] = { campaign: camp, source: utm.utm_source || '', medium: utm.utm_medium || '', views: 0, carts: 0, vids: new Set(), products: {} };
+      if (!camps[camp]) camps[camp] = {
+        campaign: camp,
+        source: utm.utm_source || '',
+        medium: utm.utm_medium || '',
+        content: utm.utm_content || '',
+        views: 0, carts: 0, purchases: 0,
+        vids: new Set(), products: {},
+      };
       const c = camps[camp];
       c.vids.add(ev.vid);
+      if (!vidToCamp[ev.vid]) vidToCamp[ev.vid] = camp;
+      if (!c.content && utm.utm_content) c.content = utm.utm_content;
       if (ev.event_type === 'product_viewed') {
         const d = ev.data || {};
         const key = d.product_id || d.product_handle || d.product_title;
         if (key) {
           c.views++;
-          if (!c.products[key]) c.products[key] = { title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', views: 0, carts: 0 };
+          if (!c.products[key]) c.products[key] = {
+            title: d.product_title || key,
+            image: d.product_image || '',
+            price: d.product_price || '',
+            handle: d.product_handle || '',
+            views: 0, carts: 0, purchases: 0,
+          };
           c.products[key].views++;
           vidLastProd[ev.vid] = { key, camp };
         }
@@ -3615,6 +3834,17 @@ export default function Dashboard({ session, onLogout }) {
       if (ev.event_type === 'add_to_cart' && vidLastProd[ev.vid]) {
         const { key, camp: lc } = vidLastProd[ev.vid];
         if (camps[lc]) { camps[lc].carts++; if (camps[lc].products[key]) camps[lc].products[key].carts++; }
+      }
+    }
+    // checkout_completed — vid üzerinden kampanyaya bağla
+    for (const ev of events) {
+      if (ev.event_type !== 'checkout_completed') continue;
+      const lc = vidToCamp[ev.vid];
+      if (!lc || !camps[lc]) continue;
+      camps[lc].purchases++;
+      if (vidLastProd[ev.vid]) {
+        const { key } = vidLastProd[ev.vid];
+        if (camps[lc].products[key]) camps[lc].products[key].purchases++;
       }
     }
     return Object.values(camps)
@@ -4180,6 +4410,11 @@ export default function Dashboard({ session, onLogout }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* Reklam → Ürün Performansı — full width */}
+      {activeTab === 'live' && utmStats.length > 0 && (
+        <AdProductGrid utmStats={utmStats} session={session} />
       )}
 
       {/* Modals — always rendered regardless of tab */}
