@@ -4413,7 +4413,7 @@ export default function Dashboard({ session, onLogout }) {
       )}
 
       {/* Reklam → Ürün Performansı — full width */}
-      {activeTab === 'live' && utmStats.length > 0 && (
+      {activeView === 'live' && utmStats.length > 0 && (
         <AdProductGrid utmStats={utmStats} session={session} />
       )}
 
