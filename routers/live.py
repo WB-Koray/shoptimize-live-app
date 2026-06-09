@@ -245,10 +245,36 @@ window._spt_loaded = true;
     } catch(e) { send('cart_viewed', Object.assign({}, base, { page_type: 'cart' })); }
   }
 
+  function trackProductPage(base, meta) {
+    // /products/{handle}.js — Shopify storefront public API, auth gerektirmez
+    // ShopifyAnalytics.meta'da görsel gelmiyorsa buradan çekiyoruz
+    var handle = meta.product_handle || '';
+    if (!handle || meta.product_image) {
+      send('product_viewed', Object.assign({}, base, { page_type: 'product' }, meta));
+      return;
+    }
+    fetch('/products/' + handle + '.js', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(p) {
+        var img = '';
+        var fi = p.featured_image;
+        if (typeof fi === 'string' && fi) img = fi;
+        else if (fi && fi.src) img = fi.src;
+        if (!img && p.images && p.images.length) {
+          var i0 = p.images[0];
+          img = typeof i0 === 'string' ? i0 : (i0 && i0.src) || '';
+        }
+        send('product_viewed', Object.assign({}, base, { page_type: 'product' }, meta, { product_image: img }));
+      })
+      .catch(function() {
+        send('product_viewed', Object.assign({}, base, { page_type: 'product' }, meta));
+      });
+  }
+
   function trackPageView() {
     var path = location.pathname;
     var base = { title: document.title, path: path };
-    if      (path.indexOf('/products/')    !== -1) send('product_viewed',    Object.assign({}, base, { page_type:'product' },    getProductMeta()));
+    if      (path.indexOf('/products/')    !== -1) trackProductPage(base, getProductMeta());
     else if (path.indexOf('/collections/') !== -1) {
       var colHandle = path.split('/collections/')[1] || '';
       colHandle = colHandle.split('/')[0].split('?')[0];
