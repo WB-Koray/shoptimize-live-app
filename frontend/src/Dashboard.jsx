@@ -1193,6 +1193,9 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
                       {name || <span className="text-textMute font-normal">Ziyaretçi</span>}
                     </p>
                     <p className="text-[10px] text-textMute tabular-nums">{fmtTs(cl.ts)}</p>
+                    <p className="text-[9px] text-textMute/60 font-mono truncate" title={cl.vid}>
+                      #{cl.vid ? cl.vid.slice(-8) : '—'}
+                    </p>
                   </div>
                 </div>
               );
