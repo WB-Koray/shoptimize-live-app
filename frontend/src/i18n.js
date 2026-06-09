@@ -48,6 +48,7 @@ const translations = {
     // Navigation
     'nav.live':       'Live',
     'nav.wa':         'WA Automation',
+    'nav.plan':       'Plan',
     'nav.logout':     'Logout',
     'nav.realtime':   'Live',
     'nav.analytics':  'Analytics',
@@ -363,6 +364,37 @@ const translations = {
     'flow.tab_dashboard':   'Dashboard',
     'flow.tab_settings':    'Settings',
     'flow.tab_optout':      'Opt-out',
+
+    // Plan tab
+    'plan.per_30_days':    '/ 30 days',
+    'plan.status_active':  'Active',
+    'plan.status_declined':'Declined',
+    'plan.status_trial':   'Trial Period',
+    'plan.installed':      'Installed:',
+    'plan.trial_ends':     'Trial ends:',
+    'plan.days_left':      '{n} days left',
+    'plan.trial_expired':  'Trial expired',
+    'plan.trial_notice':   '{days}-day free trial, then ${price}/mo',
+    'plan.active_msg':     'Subscription active. Manage from Shopify admin.',
+    'plan.declined_msg':   'Subscription declined. Restart to continue.',
+    'plan.start_sub':      'Start Subscription',
+    'plan.scope_title':    'Plan Includes',
+    'plan.feature1':       'Real-time visitor tracking',
+    'plan.feature2':       'Conversion funnel analysis',
+    'plan.feature3':       'Purchase intent score',
+    'plan.feature4':       'RFM customer segmentation',
+    'plan.feature5':       'WhatsApp abandoned cart automation',
+    'plan.feature6':       'Ad & UTM performance analytics',
+
+    // Billing error overlay & banners
+    'billing.trial_expired': 'Your Trial Has Expired',
+    'billing.required':      'Subscription Required',
+    'billing.activate':      'Activate Subscription',
+    'billing.trial_banner':  'Your trial expires in {n} day(s). Activate your subscription to continue.',
+
+    // Click history panel
+    'clicks.visitor':  'Visitor',
+    'clicks.summary':  '{n} clicks · last 7 days',
   },
 
   tr: {
@@ -412,6 +444,7 @@ const translations = {
     // Navigasyon
     'nav.live':       'Canlı',
     'nav.wa':         'WA Otomasyonu',
+    'nav.plan':       'Plan',
     'nav.logout':     'Çıkış',
     'nav.realtime':   'Canlı',
     'nav.analytics':  'Analiz',
@@ -727,6 +760,37 @@ const translations = {
     'flow.tab_dashboard':   'Dashboard',
     'flow.tab_settings':    'Ayarlar',
     'flow.tab_optout':      'Opt-out',
+
+    // Plan sekmesi
+    'plan.per_30_days':    '/ 30 gün',
+    'plan.status_active':  'Aktif',
+    'plan.status_declined':'Reddedildi',
+    'plan.status_trial':   'Deneme Süresi',
+    'plan.installed':      'Kurulum:',
+    'plan.trial_ends':     'Deneme bitiş:',
+    'plan.days_left':      '{n} gün kaldı',
+    'plan.trial_expired':  'Deneme süreniz doldu',
+    'plan.trial_notice':   '{days} günlük ücretsiz deneme sonrası ${price}/ay olarak faturalandırılırsınız.',
+    'plan.active_msg':     'Aboneliğiniz aktif. Shopify admin panelinden yönetebilirsiniz.',
+    'plan.declined_msg':   'Abonelik reddedildi. Devam etmek için yeniden başlatın.',
+    'plan.start_sub':      'Aboneliği Başlat',
+    'plan.scope_title':    'Plan Kapsamı',
+    'plan.feature1':       'Gerçek zamanlı ziyaretçi takibi',
+    'plan.feature2':       'Dönüşüm hunisi analizi',
+    'plan.feature3':       'Purchase intent skoru',
+    'plan.feature4':       'RFM müşteri segmentasyonu',
+    'plan.feature5':       'WhatsApp terk edilmiş sepet otomasyonu',
+    'plan.feature6':       'Reklam & UTM performans analizi',
+
+    // Billing hata ekranı & banner
+    'billing.trial_expired': 'Deneme Süreniz Doldu',
+    'billing.required':      'Abonelik Gerekli',
+    'billing.activate':      'Aboneliği Aktive Et',
+    'billing.trial_banner':  'Deneme sürenizin bitmesine {n} gün kaldı. Devam etmek için aboneliğinizi aktive edin.',
+
+    // Tıklama geçmişi paneli
+    'clicks.visitor':  'Ziyaretçi',
+    'clicks.summary':  '{n} tıklama · son 7 gün',
   },
 };
 
