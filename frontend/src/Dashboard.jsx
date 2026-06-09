@@ -217,14 +217,15 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
-function ProductCard({ product, flash }) {
+function ProductCard({ product, flash, imageCache }) {
   const { t } = useLang();
+  const img = sanitizeImg(product.image) || (imageCache && imageCache[product.handle]) || '';
   return (
     <div className={`bg-surfaceSoft border rounded-xl overflow-hidden transition-all duration-300
       ${flash ? 'border-purple/50 shadow-lg' : 'border-border'}`}>
       <div className="relative aspect-square bg-surface overflow-hidden">
-        {product.image
-          ? <img src={product.image} alt={product.title} className="w-full h-full object-contain p-2"
+        {img
+          ? <img src={img} alt={product.title} className="w-full h-full object-contain p-2"
               onError={e => { e.target.style.display = 'none'; }} />
           : <div className="w-full h-full flex items-center justify-center">
               <Package size={24} className="text-textMute" />
@@ -3372,6 +3373,7 @@ export default function Dashboard({ session, onLogout }) {
 
   const [pixelStatus, setPixelStatus]   = useState(null);
   const [pixelLoading, setPixelLoading] = useState(true);
+  const [productImageCache, setProductImageCache] = useState({});
   const [installing, setInstalling]     = useState(false);
   const [effectiveTid, setEffectiveTid] = useState(tid);
   const [webhookStatus, setWebhookStatus]   = useState(null);
@@ -3723,6 +3725,31 @@ export default function Dashboard({ session, onLogout }) {
     }
     return Object.values(map).sort((a, b) => b.views - a.views).slice(0, 12);
   }, [events]);
+
+  // Eksik ürün görsellerini Shopify Admin API'den tamamla
+  useEffect(() => {
+    const handles = [...new Set(
+      productStats
+        .filter(p => !sanitizeImg(p.image) && p.handle && !productImageCache[p.handle])
+        .map(p => p.handle)
+    )].slice(0, 30);
+    if (!handles.length || !token) return;
+    fetch(
+      `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}&handles=${handles.join(',')}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) return;
+        const patch = {};
+        Object.entries(d.products).forEach(([h, p]) => {
+          const img = sanitizeImg(p.image);
+          if (img) patch[h] = img;
+        });
+        if (Object.keys(patch).length) setProductImageCache(prev => ({ ...prev, ...patch }));
+      })
+      .catch(() => {});
+  }, [productStats]);
 
   const searchStats = useMemo(() => {
     const map = {};
@@ -4207,7 +4234,7 @@ export default function Dashboard({ session, onLogout }) {
               {prodOpen && (
                 productStats.length > 0
                   ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
-                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
+                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} imageCache={productImageCache} />)}
                     </div>
                   : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_products')}</p>
               )}
