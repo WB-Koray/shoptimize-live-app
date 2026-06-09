@@ -99,6 +99,15 @@ function srcColor(source) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function sanitizeImg(url) {
+  if (!url || typeof url !== 'string') return '';
+  // [object Object] veya bozuk değerleri filtrele
+  if (url.includes('[object') || url.includes('undefined')) return '';
+  // Protocol-relative URL'leri https'e çevir
+  if (url.startsWith('//')) return 'https:' + url;
+  return url;
+}
+
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -3697,7 +3706,7 @@ export default function Dashboard({ session, onLogout }) {
       const d = ev.data || {};
       if (ev.event_type === 'product_viewed' && (d.product_title || d.product_handle)) {
         const key = d.product_id || d.product_handle || d.product_title;
-        if (!map[key]) map[key] = { key, title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
+        if (!map[key]) map[key] = { key, title: d.product_title || key, image: sanitizeImg(d.product_image), price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
         map[key].views++;
         if (ev.ts > map[key].lastTs) map[key].lastTs = ev.ts;
       }
@@ -3789,7 +3798,7 @@ export default function Dashboard({ session, onLogout }) {
       if (!key) continue;
       const src = vidSrc[ev.vid];
       if (!result[src]) result[src] = {};
-      if (!result[src][key]) result[src][key] = { title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', views: 0, carts: 0 };
+      if (!result[src][key]) result[src][key] = { title: d.product_title || key, image: sanitizeImg(d.product_image), price: d.product_price || '', views: 0, carts: 0 };
       result[src][key].views++;
     }
     return result;
@@ -3822,7 +3831,7 @@ export default function Dashboard({ session, onLogout }) {
           c.views++;
           if (!c.products[key]) c.products[key] = {
             title: d.product_title || key,
-            image: d.product_image || '',
+            image: sanitizeImg(d.product_image),
             price: d.product_price || '',
             handle: d.product_handle || '',
             views: 0, carts: 0, purchases: 0,

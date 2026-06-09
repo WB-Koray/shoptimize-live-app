@@ -153,15 +153,25 @@ window._spt_loaded = true;
   function getProductMeta() {
     try {
       var m = window.ShopifyAnalytics && window.ShopifyAnalytics.meta;
-      if (m && m.product && m.product.title) return {
-        product_id:     String(m.product.id || ''),
-        product_title:  m.product.title,
-        product_handle: m.product.handle || '',
-        product_price:  m.product.price ? (m.product.price / 100).toFixed(2) : null,
-        product_vendor: m.product.vendor || '',
-        product_type:   m.product.type   || '',
-        product_image:  m.product.featured_image || ''
-      };
+      if (m && m.product && m.product.title) {
+        // featured_image: eski temalarda string, yeni OS2.0 temalarında {src, width, height} objesi
+        var _fi = m.product.featured_image;
+        var _img = typeof _fi === 'string' ? _fi : (_fi && typeof _fi === 'object' ? (_fi.src || '') : '');
+        // images array'i dene (daha güvenilir)
+        if (!_img && m.product.images && m.product.images.length) {
+          var _i0 = m.product.images[0];
+          _img = typeof _i0 === 'string' ? _i0 : (_i0 && _i0.src) || '';
+        }
+        return {
+          product_id:     String(m.product.id || ''),
+          product_title:  m.product.title,
+          product_handle: m.product.handle || '',
+          product_price:  m.product.price ? (m.product.price / 100).toFixed(2) : null,
+          product_vendor: m.product.vendor || '',
+          product_type:   m.product.type   || '',
+          product_image:  _img
+        };
+      }
     } catch (e) {}
     try {
       var scripts = document.querySelectorAll('script[type="application/ld+json"]');
