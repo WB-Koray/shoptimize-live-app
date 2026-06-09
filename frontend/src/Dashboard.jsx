@@ -7,6 +7,7 @@ import {
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
   ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings, ExternalLink,
+  User,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -1083,12 +1084,13 @@ function RFMWidget({ session, anonymized = false }) {
 
 // ── AdProductGrid — Reklam → Ürün Performansı ────────────────────────────────
 
-function AdProductGrid({ utmStats, session }) {
+function AdProductGrid({ utmStats, session, customerNames = {} }) {
   const { t } = useLang();
   const { token, username, brand } = session;
   const [expanded, setExpanded] = useState(null);
   const [stockCache, setStockCache] = useState({});
   const [loadingStock, setLoadingStock] = useState({});
+  const [clickDetail, setClickDetail] = useState(null); // { prod, campName }
 
   if (!utmStats.length) return null;
 
@@ -1141,7 +1143,70 @@ function AdProductGrid({ utmStats, session }) {
     );
   }
 
+  function fmtTs(ts) {
+    if (!ts) return '';
+    const d = new Date(ts * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   return (
+    <>
+    {/* Tıklama detay drawer */}
+    {clickDetail && (
+      <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setClickDetail(null)}>
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+        <div
+          className="relative bg-surface border-l border-border w-full max-w-xs h-full overflow-y-auto flex flex-col shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Drawer header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border sticky top-0 bg-surface z-10">
+            {clickDetail.prod.image ? (
+              <img src={clickDetail.prod.image} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+            ) : (
+              <div className="w-8 h-8 rounded bg-surfaceAlt flex items-center justify-center shrink-0">
+                <Package size={14} className="text-textMute" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-text truncate">{clickDetail.prod.title}</p>
+              <p className="text-[10px] text-textMute truncate">{clickDetail.campName}</p>
+            </div>
+            <button onClick={() => setClickDetail(null)} className="text-textMute hover:text-text p-1">
+              <X size={14} />
+            </button>
+          </div>
+          {/* Click list */}
+          <div className="flex-1 divide-y divide-border/60">
+            {[...clickDetail.prod.clicks].sort((a,b) => b.ts - a.ts).map((cl, i) => {
+              const name = cl.customer_id && customerNames[cl.customer_id]
+                ? customerNames[cl.customer_id]
+                : null;
+              return (
+                <div key={i} className="px-4 py-2.5 flex items-start gap-2.5">
+                  <div className="mt-0.5 w-5 h-5 rounded-full bg-purpleSoft border border-purple/20 flex items-center justify-center shrink-0">
+                    <User size={10} className="text-purple" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-text truncate">
+                      {name || <span className="text-textMute font-normal">Ziyaretçi</span>}
+                    </p>
+                    <p className="text-[10px] text-textMute tabular-nums">{fmtTs(cl.ts)}</p>
+                  </div>
+                </div>
+              );
+            })}
+            {clickDetail.prod.clicks.length === 0 && (
+              <p className="px-4 py-6 text-xs text-textMute text-center">Tıklama verisi yok</p>
+            )}
+          </div>
+          <div className="px-4 py-2 border-t border-border">
+            <p className="text-[10px] text-textMute text-center">{clickDetail.prod.clicks.length} tıklama · son 7 gün</p>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
@@ -1212,7 +1277,8 @@ function AdProductGrid({ utmStats, session }) {
                     return (
                       <div
                         key={prod.title}
-                        className={`bg-surface border rounded-xl overflow-hidden flex flex-col transition-shadow hover:shadow-sm
+                        onClick={() => setClickDetail({ prod, campName: camp.campaign })}
+                        className={`bg-surface border rounded-xl overflow-hidden flex flex-col transition-shadow hover:shadow-md cursor-pointer
                           ${noStock ? 'border-rose/30 bg-roseSoft/10' : 'border-border'}`}
                       >
                         {/* Product image */}
@@ -1281,6 +1347,7 @@ function AdProductGrid({ utmStats, session }) {
         <p className="text-[10px] text-textMute">{t('adgrid.utm_tip')}</p>
       </div>
     </div>
+    </>
   );
 }
 
@@ -3826,8 +3893,10 @@ export default function Dashboard({ session, onLogout }) {
             price: d.product_price || '',
             handle: d.product_handle || '',
             views: 0, carts: 0, purchases: 0,
+            clicks: [],
           };
           c.products[key].views++;
+          c.products[key].clicks.push({ ts: ev.ts, vid: ev.vid, customer_id: ev.customer_id || '' });
           vidLastProd[ev.vid] = { key, camp };
         }
       }
@@ -4414,7 +4483,7 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* Reklam → Ürün Performansı — full width */}
       {activeView === 'live' && utmStats.length > 0 && (
-        <AdProductGrid utmStats={utmStats} session={session} />
+        <AdProductGrid utmStats={utmStats} session={session} customerNames={customerNames} />
       )}
 
       {/* Modals — always rendered regardless of tab */}
