@@ -189,7 +189,7 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
   const c = CM[color] || CM.blue;
   return (
     <div onClick={onClick}
-      className={`bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3 transition-colors
+      className={`bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3 transition-colors min-h-[110px]
         ${onClick ? 'cursor-pointer hover:border-borderStrong' : ''}`}>
       <div className="flex items-start justify-between">
         <div className={`p-2.5 rounded-xl ${c.bg} relative`}>
@@ -271,17 +271,17 @@ function VisitorCard({ profile, customerName, onClick, anonymized = false }) {
     <div onClick={onClick}
       className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-borderStrong transition-all space-y-2
         ${inactive ? 'border-border/40 opacity-50' : 'border-border'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <DevIcon size={11} className="text-textMute" />
-          <span className="text-[10px] text-textDim font-mono">{shortVid(profile.vid)}</span>
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+          <DevIcon size={11} className="text-textMute shrink-0" />
+          <span className="text-[10px] text-textDim font-mono truncate">{shortVid(profile.vid)}</span>
           {profile.isReturning && (
-            <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20">{t('visitors.returning')}</span>
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-amber/15 text-amber border border-amber/20 shrink-0">{t('visitors.returning')}</span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {profile.intentScore != null && (
-            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full tabular-nums border
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full tabular-nums border shrink-0
               ${profile.intentScore >= 70
                 ? 'bg-greenSoft text-green border-green/20'
                 : profile.intentScore >= 40
@@ -290,7 +290,7 @@ function VisitorCard({ profile, customerName, onClick, anonymized = false }) {
               {profile.intentScore === 100 ? '🛍' : profile.intentScore}
             </span>
           )}
-          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
+          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap shrink-0 ${c.bg} ${c.text}`}>{t('stage.' + (profile.stage || 'browsing'))}</span>
         </div>
       </div>
       {fullName
@@ -4164,7 +4164,7 @@ export default function Dashboard({ session, onLogout }) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap min-h-[36px]">
           {pixelStatus?.detected_via === 'events' ? (
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-greenSoft border border-green/20 text-green text-xs font-bold rounded-lg">
               <CheckCircle size={11} /> {t('pixel.active_via_shopify')}
@@ -4293,7 +4293,7 @@ export default function Dashboard({ session, onLogout }) {
             {visitorProfiles.length > 0 && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                 <SectionHead icon={Users} title={t('visitors.title')} badge={visitorProfiles.length} extra={t('visitors.extra')} />
-                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 min-h-[120px]">
                   {visitorProfiles.slice(0, 18).map(profile => (
                     <VisitorCard key={profile.vid} profile={profile}
                       customerName={customerNames[profile.customer_id]}
