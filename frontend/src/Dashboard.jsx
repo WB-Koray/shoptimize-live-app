@@ -3708,7 +3708,7 @@ export default function Dashboard({ session, onLogout }) {
       const d = ev.data || {};
       if (ev.event_type === 'product_viewed' && (d.product_title || d.product_handle)) {
         const key = d.product_id || d.product_handle || d.product_title;
-        if (!map[key]) map[key] = { key, title: d.product_title || key, image: sanitizeImg(d.product_image), price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
+        if (!map[key]) map[key] = { key, title: d.product_title || key, image: sanitizeImg(d.product_image), handle: d.product_handle || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
         map[key].views++;
         if (ev.ts > map[key].lastTs) map[key].lastTs = ev.ts;
       }
