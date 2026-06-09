@@ -3401,6 +3401,7 @@ export default function Dashboard({ session, onLogout }) {
   // Billing status
   const [billingError, setBillingError] = useState(null); // null | { error, message, retry_url }
   const [trialDays, setTrialDays]       = useState(null); // kalan deneme günü
+  const [billingInfo, setBillingInfo]   = useState(null); // plan detayları
 
   useEffect(() => {
     fetch(`${API_URL}/api/auth/status`, { headers: { Authorization: `Bearer ${token}` } })
@@ -3409,7 +3410,11 @@ export default function Dashboard({ session, onLogout }) {
         return r.json().then(d => { if (d.trial_remaining_days != null) setTrialDays(d.trial_remaining_days); });
       })
       .catch(() => {});
-  }, [token]);
+    fetch(`${API_URL}/billing/info?${qs}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.ok) setBillingInfo(d); })
+      .catch(() => {});
+  }, [token, qs]);
 
   const [anonymized, setAnonymized] = useState(false);
   const [activeView, setActiveView] = useState('live');
@@ -4004,6 +4009,15 @@ export default function Dashboard({ session, onLogout }) {
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'flow' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
               <MessageCircle size={11} /> {t('nav.wa')}
             </button>
+            <button onClick={() => setActiveView('plan')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'plan' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+              <CreditCard size={11} /> Plan
+              {billingInfo?.days_remaining != null && billingInfo.billing_status !== 'active' && (
+                <span className={`px-1 py-0 rounded text-[9px] font-bold leading-4 ${billingInfo.days_remaining <= 2 ? 'bg-rose/20 text-rose' : 'bg-amber/20 text-amber'}`}>
+                  {billingInfo.days_remaining}g
+                </span>
+              )}
+            </button>
           </div>
           <LangSwitch />
           <ThemeSwitch />
@@ -4025,6 +4039,115 @@ export default function Dashboard({ session, onLogout }) {
 
       {/* WA Otomasyon view */}
       {activeView === 'flow' && <FlowPanel session={session} anonymized={anonymized} />}
+
+      {/* Plan view */}
+      {activeView === 'plan' && (() => {
+        const bi = billingInfo;
+        function fmtPlanDate(iso) {
+          if (!iso) return '—';
+          const d = new Date(iso);
+          const pad = n => String(n).padStart(2, '0');
+          return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+        }
+        const isActive   = bi?.billing_status === 'active';
+        const isDeclined = bi?.billing_status === 'declined';
+        const isTrial    = !isActive && !isDeclined;
+        const daysLeft   = bi?.days_remaining ?? null;
+        const barPct     = (daysLeft != null && bi?.trial_days)
+          ? Math.max(0, Math.min(100, (daysLeft / bi.trial_days) * 100))
+          : 0;
+        const barColor   = daysLeft <= 1 ? 'bg-rose' : daysLeft <= 3 ? 'bg-amber' : 'bg-green';
+        return (
+          <div className="max-w-xl mx-auto space-y-4 pt-2">
+            <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+              {/* Başlık */}
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blueSoft border border-blue/20 shrink-0">
+                  <CreditCard size={20} className="text-blue" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-text font-bold text-base">{bi?.plan_name || 'Shoptimize Live'}</h2>
+                  <p className="text-textMute text-xs">${bi?.plan_price || '9.99'} / 30 gün</p>
+                </div>
+                <div className="shrink-0">
+                  {isActive ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1 bg-greenSoft border border-green/20 text-green text-xs font-bold rounded-full">
+                      <CheckCircle size={11} /> Aktif
+                    </span>
+                  ) : isDeclined ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1 bg-roseSoft border border-rose/20 text-rose text-xs font-bold rounded-full">
+                      <XCircle size={11} /> Reddedildi
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1 bg-amber/10 border border-amber/20 text-amber text-xs font-bold rounded-full">
+                      <Clock size={11} /> Deneme Süresi
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+
+              {/* Deneme geri sayımı */}
+              {isTrial && bi?.installed_at && (
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs text-textMute">
+                    <span>Kurulum: <span className="text-text font-semibold">{fmtPlanDate(bi.installed_at)}</span></span>
+                    <span>Deneme bitiş: <span className="text-text font-semibold">{fmtPlanDate(bi.trial_ends_at)}</span></span>
+                  </div>
+                  <div className="w-full h-2.5 bg-surfaceAlt rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${barPct}%` }} />
+                  </div>
+                  <p className="text-center font-bold text-text text-sm">
+                    {daysLeft > 0 ? `${daysLeft} gün kaldı` : 'Deneme süreniz doldu'}
+                  </p>
+                  <p className="text-center text-xs text-textMute">
+                    {bi.trial_days} günlük ücretsiz deneme sonrası <strong>${bi.plan_price}</strong>/ay olarak faturalandırılırsınız.
+                  </p>
+                </div>
+              )}
+
+              {/* Aktif abonelik */}
+              {isActive && (
+                <p className="text-sm text-textMute text-center">
+                  Aboneliğiniz aktif. Shopify admin panelinden yönetebilirsiniz.
+                </p>
+              )}
+
+              {/* Reddedildi */}
+              {isDeclined && bi && (
+                <div className="text-center space-y-2">
+                  <p className="text-sm text-textMute">Abonelik reddedildi. Devam etmek için yeniden başlatın.</p>
+                  {shopifyShop && (
+                    <a href={`https://${shopifyShop}/admin/apps/${encodeURIComponent('shoptimize-live')}`}
+                      target="_top" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity no-underline">
+                      <ExternalLink size={11} /> Aboneliği Başlat
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Kapsam bilgisi */}
+            <div className="rounded-xl border border-border bg-surface p-4 space-y-2">
+              <p className="text-xs font-bold text-text">Plan Kapsamı</p>
+              {[
+                'Gerçek zamanlı ziyaretçi takibi',
+                'Dönüşüm hunisi analizi',
+                'Purchase intent skoru',
+                'RFM müşteri segmentasyonu',
+                'WhatsApp terk edilmiş sepet otomasyonu',
+                'Reklam & UTM performans analizi',
+              ].map(f => (
+                <div key={f} className="flex items-center gap-2 text-xs text-textMute">
+                  <CheckCircle size={11} className="text-green shrink-0" /> {f}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {activeView === 'live' && <>
 

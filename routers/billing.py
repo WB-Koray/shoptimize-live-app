@@ -12,12 +12,15 @@ Akış:
 
 import logging
 import os
+import time
+from datetime import datetime, timezone
 
 import requests
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from services.db import get_setting, set_connection_settings
+from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing")
@@ -138,6 +141,38 @@ def create_charge(shop: str, access_token: str, username: str, brand: str) -> st
 
     logger.info("[BILLING] AppSubscription oluşturuldu: gid=%s numeric_id=%s shop=%s", gid, numeric_id, shop)
     return confirmation_url
+
+
+# ---------------------------------------------------------------------------
+# Plan bilgisi — dashboard Plan sekmesi için
+# ---------------------------------------------------------------------------
+@router.get("/info")
+async def billing_info_endpoint(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    _: dict = Depends(get_current_user),
+):
+    billing_status = get_setting(username, brand, "shopify", "billing_status", "") or "none"
+    installed_at_ts = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+    trial_ends_ts = (installed_at_ts + PLAN_TRIAL_DAYS * 86400) if installed_at_ts else None
+    now = time.time()
+    days_remaining = None
+    if trial_ends_ts:
+        days_remaining = max(0, int((trial_ends_ts - now) / 86400))
+
+    def _iso(ts):
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else None
+
+    return {
+        "ok": True,
+        "billing_status": billing_status,
+        "plan_name": PLAN_NAME,
+        "plan_price": PLAN_PRICE,
+        "trial_days": PLAN_TRIAL_DAYS,
+        "installed_at": _iso(installed_at_ts) if installed_at_ts else None,
+        "trial_ends_at": _iso(trial_ends_ts) if trial_ends_ts else None,
+        "days_remaining": days_remaining,
+    }
 
 
 # ---------------------------------------------------------------------------
