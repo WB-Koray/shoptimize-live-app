@@ -680,8 +680,8 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
                 logger.info("[PIXEL] TID reverse mapping'den kurtarıldı: %s", tid[:16])
         if tid:
             await store.register_tid_owner(tid, username, brand)
-            # Event gelip gelmediğini kontrol et
-            has_events = bool(await store.get_user_tid(username, brand))
+            # Event gelip gelmediğini kontrol et — TID varlığı değil, gerçek event sayısı
+            has_events = (await store.count_events(tid)) > 0
             return {
                 "ok": True,
                 "installed": True,
