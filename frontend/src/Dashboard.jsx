@@ -99,15 +99,6 @@ function srcColor(source) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function sanitizeImg(url) {
-  if (!url || typeof url !== 'string') return '';
-  // [object Object] veya bozuk değerleri filtrele
-  if (url.includes('[object') || url.includes('undefined')) return '';
-  // Protocol-relative URL'leri https'e çevir
-  if (url.startsWith('//')) return 'https:' + url;
-  return url;
-}
-
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -217,15 +208,14 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
-function ProductCard({ product, flash, imageCache }) {
+function ProductCard({ product, flash }) {
   const { t } = useLang();
-  const img = sanitizeImg(product.image) || (imageCache && imageCache[product.handle]) || '';
   return (
     <div className={`bg-surfaceSoft border rounded-xl overflow-hidden transition-all duration-300
       ${flash ? 'border-purple/50 shadow-lg' : 'border-border'}`}>
       <div className="relative aspect-square bg-surface overflow-hidden">
-        {img
-          ? <img src={img} alt={product.title} className="w-full h-full object-contain p-2"
+        {product.image
+          ? <img src={product.image} alt={product.title} className="w-full h-full object-contain p-2"
               onError={e => { e.target.style.display = 'none'; }} />
           : <div className="w-full h-full flex items-center justify-center">
               <Package size={24} className="text-textMute" />
@@ -3373,8 +3363,6 @@ export default function Dashboard({ session, onLogout }) {
 
   const [pixelStatus, setPixelStatus]   = useState(null);
   const [pixelLoading, setPixelLoading] = useState(true);
-  const [productImageCache, setProductImageCache] = useState({});
-  const productImageAttempted = useRef(new Set());
   const [installing, setInstalling]     = useState(false);
   const [effectiveTid, setEffectiveTid] = useState(tid);
   const [webhookStatus, setWebhookStatus]   = useState(null);
@@ -3709,7 +3697,7 @@ export default function Dashboard({ session, onLogout }) {
       const d = ev.data || {};
       if (ev.event_type === 'product_viewed' && (d.product_title || d.product_handle)) {
         const key = d.product_id || d.product_handle || d.product_title;
-        if (!map[key]) map[key] = { key, title: d.product_title || key, image: sanitizeImg(d.product_image), handle: d.product_handle || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
+        if (!map[key]) map[key] = { key, title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
         map[key].views++;
         if (ev.ts > map[key].lastTs) map[key].lastTs = ev.ts;
       }
@@ -3726,48 +3714,6 @@ export default function Dashboard({ session, onLogout }) {
     }
     return Object.values(map).sort((a, b) => b.views - a.views).slice(0, 12);
   }, [events]);
-
-  // Eksik ürün görsellerini Shopify storefront public API'den tamamla (read_products scope gerekmez)
-  useEffect(() => {
-    const shopDomain = sessionStorage.getItem('spt_shopify_shop');
-    if (!shopDomain) return;
-    const handles = [...new Set(
-      productStats
-        .filter(p => !sanitizeImg(p.image) && p.handle
-          && !productImageCache[p.handle]
-          && !productImageAttempted.current.has(p.handle))
-        .map(p => p.handle)
-    )].slice(0, 20);
-    if (!handles.length) return;
-    handles.forEach(h => productImageAttempted.current.add(h));
-    Promise.allSettled(
-      handles.map(h =>
-        fetch(`https://${shopDomain}/products/${encodeURIComponent(h)}.js`)
-          .then(r => r.json())
-          .then(p => {
-            let img = '';
-            const fi = p.featured_image;
-            if (typeof fi === 'string' && fi) img = fi;
-            else if (fi && fi.src) img = fi.src;
-            if (!img && p.images && p.images.length) {
-              const i0 = p.images[0];
-              img = typeof i0 === 'string' ? i0 : (i0 && i0.src) || '';
-            }
-            return { handle: h, image: img };
-          })
-          .catch(() => ({ handle: h, image: '' }))
-      )
-    ).then(results => {
-      const patch = {};
-      results.forEach(r => {
-        if (r.status === 'fulfilled') {
-          const img = sanitizeImg(r.value.image);
-          if (img) patch[r.value.handle] = img;
-        }
-      });
-      if (Object.keys(patch).length) setProductImageCache(prev => ({ ...prev, ...patch }));
-    });
-  }, [productStats]);
 
   const searchStats = useMemo(() => {
     const map = {};
@@ -3843,7 +3789,7 @@ export default function Dashboard({ session, onLogout }) {
       if (!key) continue;
       const src = vidSrc[ev.vid];
       if (!result[src]) result[src] = {};
-      if (!result[src][key]) result[src][key] = { title: d.product_title || key, image: sanitizeImg(d.product_image), price: d.product_price || '', views: 0, carts: 0 };
+      if (!result[src][key]) result[src][key] = { title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', views: 0, carts: 0 };
       result[src][key].views++;
     }
     return result;
@@ -3876,7 +3822,7 @@ export default function Dashboard({ session, onLogout }) {
           c.views++;
           if (!c.products[key]) c.products[key] = {
             title: d.product_title || key,
-            image: sanitizeImg(d.product_image),
+            image: d.product_image || '',
             price: d.product_price || '',
             handle: d.product_handle || '',
             views: 0, carts: 0, purchases: 0,
@@ -4252,7 +4198,7 @@ export default function Dashboard({ session, onLogout }) {
               {prodOpen && (
                 productStats.length > 0
                   ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
-                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} imageCache={productImageCache} />)}
+                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
                     </div>
                   : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_products')}</p>
               )}
