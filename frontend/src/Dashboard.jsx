@@ -1145,7 +1145,8 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
 
   function fmtTs(ts) {
     if (!ts) return '';
-    const d = new Date(ts * 1000);
+    const ms = ts > 1e10 ? ts : ts * 1000;
+    const d = new Date(ms);
     const pad = n => String(n).padStart(2, '0');
     return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
