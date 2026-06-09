@@ -3749,7 +3749,7 @@ export default function Dashboard({ session, onLogout }) {
         if (Object.keys(patch).length) setProductImageCache(prev => ({ ...prev, ...patch }));
       })
       .catch(() => {});
-  }, [productStats]);
+  }, [productStats, token]);
 
   const searchStats = useMemo(() => {
     const map = {};
