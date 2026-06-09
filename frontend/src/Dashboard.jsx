@@ -3374,6 +3374,7 @@ export default function Dashboard({ session, onLogout }) {
   const [pixelStatus, setPixelStatus]   = useState(null);
   const [pixelLoading, setPixelLoading] = useState(true);
   const [productImageCache, setProductImageCache] = useState({});
+  const productImageAttempted = useRef(new Set());
   const [installing, setInstalling]     = useState(false);
   const [effectiveTid, setEffectiveTid] = useState(tid);
   const [webhookStatus, setWebhookStatus]   = useState(null);
@@ -3726,30 +3727,47 @@ export default function Dashboard({ session, onLogout }) {
     return Object.values(map).sort((a, b) => b.views - a.views).slice(0, 12);
   }, [events]);
 
-  // Eksik ürün görsellerini Shopify Admin API'den tamamla
+  // Eksik ürün görsellerini Shopify storefront public API'den tamamla (read_products scope gerekmez)
   useEffect(() => {
+    const shopDomain = sessionStorage.getItem('spt_shopify_shop');
+    if (!shopDomain) return;
     const handles = [...new Set(
       productStats
-        .filter(p => !sanitizeImg(p.image) && p.handle && !productImageCache[p.handle])
+        .filter(p => !sanitizeImg(p.image) && p.handle
+          && !productImageCache[p.handle]
+          && !productImageAttempted.current.has(p.handle))
         .map(p => p.handle)
-    )].slice(0, 30);
-    if (!handles.length || !token) return;
-    fetch(
-      `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}&handles=${handles.join(',')}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => r.json())
-      .then(d => {
-        if (!d.ok) return;
-        const patch = {};
-        Object.entries(d.products).forEach(([h, p]) => {
-          const img = sanitizeImg(p.image);
-          if (img) patch[h] = img;
-        });
-        if (Object.keys(patch).length) setProductImageCache(prev => ({ ...prev, ...patch }));
-      })
-      .catch(() => {});
-  }, [productStats, token]);
+    )].slice(0, 20);
+    if (!handles.length) return;
+    handles.forEach(h => productImageAttempted.current.add(h));
+    Promise.allSettled(
+      handles.map(h =>
+        fetch(`https://${shopDomain}/products/${encodeURIComponent(h)}.js`)
+          .then(r => r.json())
+          .then(p => {
+            let img = '';
+            const fi = p.featured_image;
+            if (typeof fi === 'string' && fi) img = fi;
+            else if (fi && fi.src) img = fi.src;
+            if (!img && p.images && p.images.length) {
+              const i0 = p.images[0];
+              img = typeof i0 === 'string' ? i0 : (i0 && i0.src) || '';
+            }
+            return { handle: h, image: img };
+          })
+          .catch(() => ({ handle: h, image: '' }))
+      )
+    ).then(results => {
+      const patch = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled') {
+          const img = sanitizeImg(r.value.image);
+          if (img) patch[r.value.handle] = img;
+        }
+      });
+      if (Object.keys(patch).length) setProductImageCache(prev => ({ ...prev, ...patch }));
+    });
+  }, [productStats]);
 
   const searchStats = useMemo(() => {
     const map = {};
