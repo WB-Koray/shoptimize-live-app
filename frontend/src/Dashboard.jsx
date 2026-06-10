@@ -1181,9 +1181,8 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
           {/* Click list */}
           <div className="flex-1 divide-y divide-border/60">
             {[...clickDetail.prod.clicks].sort((a,b) => b.ts - a.ts).map((cl, i) => {
-              const name = cl.customer_id && customerNames[cl.customer_id]
-                ? customerNames[cl.customer_id]
-                : null;
+              const cust = cl.customer_id ? customerNames[cl.customer_id] : null;
+              const name = cust ? [cust.first_name, cust.last_name].filter(Boolean).join(' ') || null : null;
               return (
                 <div key={i} className="px-4 py-2.5 flex items-start gap-2.5">
                   <div className="mt-0.5 w-5 h-5 rounded-full bg-purpleSoft border border-purple/20 flex items-center justify-center shrink-0">
@@ -1428,7 +1427,8 @@ function HiddenCartPanel({ visitors, customerNames }) {
         <div className="divide-y divide-border/40">
           {visitors.slice(0, 8).map(p => {
             const minsAgo = Math.round((Date.now() - p.lastCartTs) / 60000);
-            const name = customerNames?.[p.customer_id] || '';
+            const _cn = customerNames?.[p.customer_id];
+            const name = _cn ? [_cn.first_name, _cn.last_name].filter(Boolean).join(' ') : '';
             return (
               <div key={p.vid} className="px-4 py-2.5 space-y-1">
                 <div className="flex items-center gap-2">
