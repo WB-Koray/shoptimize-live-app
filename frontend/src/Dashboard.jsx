@@ -612,7 +612,7 @@ function JourneyModal({ profile, customerName, onClose }) {
 
 // ── DrillDownModal ────────────────────────────────────────────────────────────
 
-function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
+function DrillDownModal({ title, subtitle, products, visitors, customerNames = {}, onClose }) {
   const { t, lang } = useLang();
   if (!title) return null;
   return (
@@ -663,7 +663,11 @@ function DrillDownModal({ title, subtitle, products, visitors, onClose }) {
                 const c2 = CM[sm2.color] || CM.slate;
                 return (
                   <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
-                    <span className="text-[10px] font-mono text-textMute w-16">{shortVid(v.vid)}</span>
+                    <span className="text-[10px] font-semibold text-text truncate w-28 shrink-0">
+                      {v.customer_id && customerNames[v.customer_id]
+                        ? [customerNames[v.customer_id].first_name, customerNames[v.customer_id].last_name].filter(Boolean).join(' ') || shortVid(v.vid)
+                        : shortVid(v.vid)}
+                    </span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c2.bg} ${c2.text} shrink-0`}>{t('stage.' + (v.stage || 'browsing'))}</span>
                     {v.lastProduct && <span className="text-[10px] text-text/60 flex-1 truncate">{v.lastProduct}</span>}
                     <span className="text-[10px] text-textMute shrink-0">{timeAgo(v.lastTs, lang)}</span>
@@ -4611,6 +4615,7 @@ export default function Dashboard({ session, onLogout }) {
         onClose={() => setSelectedVisitor(null)} />
       <DrillDownModal title={drillDown?.title} subtitle={drillDown?.subtitle}
         products={drillDown?.products} visitors={drillDown?.visitors}
+        customerNames={customerNames}
         onClose={() => setDrillDown(null)} />
 
       </>}
