@@ -39,6 +39,26 @@ function detectShopifyContext() {
   return !!(sessionStorage.getItem('spt_shopify_shop') && sessionStorage.getItem('spt_shopify_host'));
 }
 
+/**
+ * Embedded iframe içinden üst frame'i güvenli yönlendir.
+ * `window.top.location.href` cross-origin (admin.shopify.com ↔ live.shoptimize.com.tr)
+ * olduğu için tarayıcı tarafından bloklanır:
+ *   "Failed to set a named property 'href' on 'Location'..."
+ * App Bridge v4, `window.open(url, '_top')` çağrısını patch'leyerek iframe'den
+ * top-level redirect yapar. Embedded olmayan bağlamda da `_top` native çalışır.
+ */
+function topRedirect(url) {
+  try {
+    window.open(url, '_top');
+    return;
+  } catch { /* App Bridge yok / patch başarısız → fallback */ }
+  try {
+    window.top.location.href = url;
+    return;
+  } catch { /* cross-origin engeli → son çare */ }
+  window.location.href = url;
+}
+
 /** App Bridge v4 CDN hazır olana kadar bekle (max 3sn) */
 async function waitForAppBridge(maxMs = 3000) {
   const step = 100;
@@ -166,7 +186,7 @@ export default function App() {
         // window.top kullanılmalı: embedded app iframe içinde çalışıyor,
         // OAuth top-level window'da olmalı (iframe'de OAuth çalışmaz).
         const shop = sessionStorage.getItem('spt_shopify_shop') || '';
-        window.top.location.href = `${API_URL}/auth/shopify/install?shop=${encodeURIComponent(shop)}`;
+        topRedirect(`${API_URL}/auth/shopify/install?shop=${encodeURIComponent(shop)}`);
         return;
       }
 
@@ -182,7 +202,7 @@ export default function App() {
 
       // Billing onayı gerekiyorsa Shopify onay sayfasına yönlendir
       if (data.billing_url) {
-        window.top.location.href = data.billing_url;
+        topRedirect(data.billing_url);
         return;
       }
 
