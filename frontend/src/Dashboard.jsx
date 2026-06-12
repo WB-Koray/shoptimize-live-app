@@ -2525,7 +2525,8 @@ function FlowPanel({ session, anonymized = false }) {
     try {
       const r = await fetch(`${base}/api/flow/optouts`, { headers: authH });
       const d = await r.json();
-      if (d.ok) setOptouts(d.phones || []);
+      // Yeni format: items=[{phone, name}]. Eski format fallback: phones=[...]
+      if (d.ok) setOptouts(d.items || (d.phones || []).map(p => ({ phone: p, name: '' })));
     } catch { /* ignore */ }
   }, []);
 
@@ -3352,12 +3353,19 @@ function FlowPanel({ session, anonymized = false }) {
               {optouts.length === 0
                 ? <p className="text-textMute text-xs text-center py-3">{t('flow.empty_list')}</p>
                 : <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar">
-                    {optouts.map(phone => (
-                      <div key={phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
-                        <span className="text-xs text-rose flex-1 font-mono">{anonymized ? maskPhone(phone) : phone}</span>
-                        <button onClick={() => handleRemoveOptout(phone)} disabled={removingOptout === phone}
-                          className="text-textMute hover:text-rose transition-colors disabled:opacity-40">
-                          {removingOptout === phone ? <RefreshCw size={11} className="animate-spin" /> : <Minus size={12} />}
+                    {optouts.map(o => (
+                      <div key={o.phone} className="flex items-center gap-2 px-3 py-1.5 bg-roseSoft/50 border border-rose/15 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          {o.name && (
+                            <span className="block text-xs text-text font-semibold truncate">
+                              {anonymized ? maskName(o.name) : o.name}
+                            </span>
+                          )}
+                          <span className="block text-xs text-rose font-mono truncate">{anonymized ? maskPhone(o.phone) : o.phone}</span>
+                        </div>
+                        <button onClick={() => handleRemoveOptout(o.phone)} disabled={removingOptout === o.phone}
+                          className="text-textMute hover:text-rose transition-colors disabled:opacity-40 shrink-0">
+                          {removingOptout === o.phone ? <RefreshCw size={11} className="animate-spin" /> : <Minus size={12} />}
                         </button>
                       </div>
                     ))}

@@ -1365,6 +1365,8 @@ async def shopify_checkouts_webhook(
             "tid": pixel_tid or "",
             "ts": int(time.time() * 1000),
         })
+        if customer_name:
+            await store.set_phone_name(phone, customer_name)
         logger.info("[CHECKOUT] kaydedildi phone=***%s name=%s product=%s", phone[-4:], customer_name or "-", product[:30] or "-")
     else:
         logger.info("[CHECKOUT] token veya telefon eksik token=%s phone=%s", bool(checkout_token), bool(phone))

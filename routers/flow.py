@@ -408,12 +408,57 @@ async def get_wa_roi(
 
 # ── Opt-out yönetimi ─────────────────────────────────────────────────────────
 
+_CUSTOMER_BY_PHONE_GQL = """
+query($q: String!) {
+  customers(first: 1, query: $q) {
+    edges { node { firstName lastName } }
+  }
+}
+"""
+
+
+async def _resolve_name_by_phone(domain: str, token: str, phone: str) -> str:
+    """Shopify'da telefonla müşteri arar, 'Ad Soyad' döner (yoksa boş)."""
+    if not (domain and token and phone):
+        return ""
+    import asyncio
+    from routers.live import _shopify_graphql
+    try:
+        # Shopify telefonları E.164 ("+90...") formatında saklar
+        q = f"phone:{phone}"
+        body = await asyncio.to_thread(_shopify_graphql, domain, token, _CUSTOMER_BY_PHONE_GQL, {"q": q})
+        edges = (body.get("data", {}).get("customers", {}) or {}).get("edges", []) or []
+        if edges:
+            node = edges[0].get("node", {}) or {}
+            return " ".join(filter(None, [node.get("firstName"), node.get("lastName")])).strip()
+    except Exception as e:
+        logger.warning("[OPTOUT] isim çözümleme hatası phone=***%s err=%s", phone[-4:], e)
+    return ""
+
+
 @router.get("/api/flow/optouts")
 async def get_optouts(current_user: dict = Depends(get_current_user)):
     username = current_user.get("username", "")
     brand    = current_user.get("brand", "default")
     phones = await store.get_all_optouts(username, brand)
-    return {"ok": True, "phones": phones}
+
+    # Telefon → isim çöz: önce Redis cache, yoksa Shopify'da ara (read_customers scope)
+    from services.db import get_setting
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token  = await store.get_online_token(username, brand) \
+             or get_setting(username, brand, "shopify", "admin_api_token", "")
+
+    items = []
+    for phone in phones:
+        name = await store.get_phone_name(phone)
+        if not name and domain and token:
+            name = await _resolve_name_by_phone(domain, token, phone)
+            if name:
+                await store.set_phone_name(phone, name)
+        items.append({"phone": phone, "name": name})
+
+    # Geriye dönük uyumluluk: phones alanını da koru
+    return {"ok": True, "phones": phones, "items": items}
 
 
 @router.post("/api/flow/optout")

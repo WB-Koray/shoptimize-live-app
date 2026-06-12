@@ -273,6 +273,22 @@ class RedisStore:
                 return parts[1], parts[2]
         return None
 
+    # ── Telefon → müşteri ismi cache (opt-out listesinde isim göstermek için) ──
+    _PHONE_NAME_TTL = 86400 * 90  # 90 gün
+
+    async def set_phone_name(self, phone: str, name: str) -> None:
+        """Telefon → müşteri adı eşlemesini cache'ler (checkout/order webhook'unda dolu)."""
+        normalized = phone.strip().lstrip("+")
+        if normalized and name:
+            await self._redis.setex(f"wa_name:{normalized}", self._PHONE_NAME_TTL, name)
+
+    async def get_phone_name(self, phone: str) -> str:
+        """Cache'lenmiş telefon → müşteri adını döner, yoksa boş string."""
+        normalized = phone.strip().lstrip("+")
+        if not normalized:
+            return ""
+        return (await self._redis.get(f"wa_name:{normalized}")) or ""
+
     async def set_merchant_phone_id(self, phone_number_id: str, username: str, brand: str) -> None:
         """WA phone_number_id → merchant eşlemesini kaydeder (opt-out routing için)."""
         await self._redis.set(f"wa_phone_id:{phone_number_id}", f"{username}:{brand}")
