@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shop X-Ray WA Cart Recovery</title>
+    <!-- Fontlari erken ve paralel yukle: preconnect handshake'i hemen baslatir,
+         stylesheet link HTML parse sirasinda kesfedilir (CSS @import gibi gec degil).
+         Bu, FOUT penceresini daraltarak font-swap kaynakli layout shift'i (CLS) azaltir. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap" />
     <!-- Shopify App Bridge v4 — auto-initializes in Shopify admin iframe -->
     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
             data-api-key="%VITE_SHOPIFY_CLIENT_ID%"></script>
