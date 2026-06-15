@@ -15,6 +15,7 @@ ilgisiz herkese değil, sadece alışveriş yapmış (engaged) kitleye gönderim
 import base64
 import bisect
 import logging
+import re
 import secrets
 import time
 from datetime import datetime, timezone
@@ -242,6 +243,12 @@ def _first_name(full: str) -> str:
     return (full or "").strip().split(" ")[0] if full else ""
 
 
+def _clean_param(text: str) -> str:
+    """WhatsApp şablon değişkenleri newline/tab/4+ardışık boşluk içeremez.
+    Tüm boşluk dizilerini tek boşluğa indirger."""
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
 # ---------------------------------------------------------------------------
 # Endpoint: hazır şablon önerileri + mevcut onaylı görsel şablonlar
 # ---------------------------------------------------------------------------
@@ -459,14 +466,14 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
     tpl = campaign.get("template_name", "")
     lang = campaign.get("language", "tr")
     image_url = campaign.get("image_url", "")
-    message = campaign.get("message", "")
+    message = _clean_param(campaign.get("message", ""))
 
-    # Link varsa UTM ile etiketle ve mesaja ekle (tıklama/sipariş atfı için)
+    # Link varsa UTM ile etiketle ve mesaja ekle (boşlukla — newline WA param'da yasak)
     link = campaign.get("link", "").strip()
     if link:
         sep = "&" if "?" in link else "?"
         tagged = f"{link}{sep}utm_source=whatsapp&utm_medium=campaign&utm_campaign={campaign['id']}"
-        message = f"{message}\n\n{tagged}"
+        message = f"{message} {tagged}"
 
     seen = set()
     sent = failed = opted = 0
@@ -479,7 +486,7 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
             wa_token, phone_id, phone,
             template_name=tpl, language=lang,
             header_image_url=image_url,
-            body_text_params=[_first_name(t["name"]) or "Değerli müşterimiz", message],
+            body_text_params=[_clean_param(_first_name(t["name"])) or "Değerli müşterimiz", message],
             username=username, brand=brand,
         )
         if res.get("opted_out"):
@@ -560,7 +567,7 @@ async def send_test_campaign(
 ):
     """Kendi numarana test gönderir (toplu göndermeden önce kontrol)."""
     phone = _normalize_phone(body.get("phone", ""))
-    message = body.get("message", "").strip()
+    message = _clean_param(body.get("message", ""))
     image_url = body.get("image_url", "").strip()
     link = body.get("link", "").strip()
     template_name = body.get("template_name", "").strip()
@@ -568,7 +575,7 @@ async def send_test_campaign(
         raise HTTPException(400, "Telefon, mesaj ve şablon gerekli")
     if link:
         sep = "&" if "?" in link else "?"
-        message = f"{message}\n\n{link}{sep}utm_source=whatsapp&utm_medium=campaign&utm_campaign=test"
+        message = f"{message} {link}{sep}utm_source=whatsapp&utm_medium=campaign&utm_campaign=test"
 
     settings = await store.get_flow_settings(username, brand)
     wa_token = settings.get("wa_token", "")
