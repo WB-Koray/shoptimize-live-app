@@ -2473,6 +2473,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [scheduleAt, setScheduleAt] = useState('');
   const [members, setMembers]   = useState(null);   // segment kişi listesi (null = kapalı)
   const [membersLoading, setMembersLoading] = useState(false);
+  const [audienceDays, setAudienceDays] = useState(180); // hedef kitle zaman penceresi
   const [testPhone, setTestPhone]   = useState('');
   const [sending, setSending]   = useState(false);
   const [testing, setTesting]   = useState(false);
@@ -2501,11 +2502,11 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const loadAudience = useCallback(async () => {
     setLoadingAud(true);
     try {
-      const r = await fetch(`${base}/api/campaign/audience${qp}`, { headers: authH });
+      const r = await fetch(`${base}/api/campaign/audience${qp}&days=${audienceDays}`, { headers: authH });
       const d = await r.json();
       if (d.ok) setAudience(d);
     } catch { /* ignore */ } finally { setLoadingAud(false); }
-  }, []);
+  }, [audienceDays]);
 
   const loadCampaigns = useCallback(async () => {
     try {
@@ -2515,7 +2516,9 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadTemplates(); loadAudience(); loadCampaigns(); }, []);
+  useEffect(() => { loadTemplates(); loadCampaigns(); }, []);
+  // Zaman penceresi değişince (ve ilk açılışta) hedef kitleyi yükle
+  useEffect(() => { loadAudience(); }, [audienceDays]);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 4000); }
 
@@ -2523,7 +2526,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     if (members) { setMembers(null); return; }  // açıksa kapat (toggle)
     setMembersLoading(true);
     try {
-      const r = await fetch(`${base}/api/campaign/audience/members${qp}&segment=${encodeURIComponent(segment)}`, { headers: authH });
+      const r = await fetch(`${base}/api/campaign/audience/members${qp}&segment=${encodeURIComponent(segment)}&days=${audienceDays}`, { headers: authH });
       const d = await r.json();
       if (d.ok) setMembers(d.members || []);
     } catch { /* ignore */ } finally { setMembersLoading(false); }
@@ -2573,7 +2576,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
         method: 'POST', headers: authH,
         body: JSON.stringify({
           name: message.slice(0, 40), template_name: tplName, language: lang,
-          message, image_url: imageUrl, link, segment, scheduled_at,
+          message, image_url: imageUrl, link, segment, audience_days: audienceDays, scheduled_at,
         }),
       });
       const d = await r.json();
@@ -2731,7 +2734,15 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
         {/* Hedef kitle */}
         <div>
-          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.audience')}</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] font-bold text-textDim">{t('campaign.audience')}</label>
+            <select value={audienceDays} onChange={e => setAudienceDays(Number(e.target.value))}
+              className="bg-surfaceAlt border border-border rounded-md px-2 py-0.5 text-[10px] text-textDim">
+              <option value={90}>{t('campaign.win_3mo')}</option>
+              <option value={180}>{t('campaign.win_6mo')}</option>
+              <option value={365}>{t('campaign.win_12mo')}</option>
+            </select>
+          </div>
           <select value={segment} onChange={e => setSegment(e.target.value)}
             className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text">
             <option value="all">{t('campaign.aud_all')} {audience ? `(${audience.reachable})` : ''}</option>
