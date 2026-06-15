@@ -2788,15 +2788,21 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             {campaigns.map(c => {
               const s = c.stats || {};
               const hasStats = s.sent > 0 || s.failed > 0 || s.delivered > 0;
+              const segLabel = c.segment === 'all' ? t('campaign.aud_all')
+                : c.segment === 'high_value' ? t('campaign.high_value')
+                : c.segment ? t('rfm.seg.' + c.segment) : '';
+              // Dönüşüm oranı: sipariş / gönderilen
+              const convRate = (s.sent > 0 && s.orders > 0) ? ((s.orders / s.sent) * 100).toFixed(1) : null;
               return (
               <div key={c.id} className="px-3 py-2 bg-surfaceAlt/40 rounded-lg space-y-1.5">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-text font-medium truncate">{c.message?.slice(0, 50) || c.name}</p>
-                    <p className="text-[10px] text-textMute">
-                      {fmtCampaignDate(c.scheduled_at || c.sent_at || c.created_at)}
-                      {' · '}
-                      <span className={statusColor[c.status] || 'text-textMute'}>{t('campaign.st_' + c.status) || c.status}</span>
+                    <p className="text-[10px] text-textMute flex items-center gap-1.5 flex-wrap">
+                      <span>{fmtCampaignDate(c.scheduled_at || c.sent_at || c.created_at)}</span>
+                      <span className={statusColor[c.status] || 'text-textMute'}>· {t('campaign.st_' + c.status) || c.status}</span>
+                      {segLabel && <span className="px-1.5 py-px rounded-full bg-purpleSoft/60 text-purple font-semibold">🎯 {segLabel}</span>}
+                      {convRate && <span className="px-1.5 py-px rounded-full bg-greenSoft text-green font-bold">↑ %{convRate} {t('campaign.conv')}</span>}
                     </p>
                   </div>
                 </div>
