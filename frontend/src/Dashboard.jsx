@@ -2427,7 +2427,9 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const qp = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
   const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  const waReady = !!(waSettings?.wa_token && waSettings?.phone_number_id);
+  // Backend GET /settings güvenlik için wa_token'ı boşaltıp wa_token_masked döner.
+  // Kurulu olup olmadığını phone_number_id + (token veya masked token) ile anla.
+  const waReady = !!(waSettings?.phone_number_id && (waSettings?.wa_token || waSettings?.wa_token_masked));
 
   const [templates, setTemplates] = useState({ presets: [], approved: [] });
   const [audience, setAudience]   = useState(null);
