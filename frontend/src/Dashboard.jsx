@@ -7,7 +7,7 @@ import {
   MessageCircle, MessageSquare, Save, Send, ToggleLeft, ToggleRight, Key, Hash,
   Clock, Phone, FileText, XCircle, AlertCircle,
   ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings, ExternalLink,
-  User,
+  User, Megaphone, Image as ImageIcon, Calendar, Users as UsersIcon,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -2419,6 +2419,338 @@ function WaTemplateManager({ qs, t, token }) {
   );
 }
 
+// ── CampaignPanel (Toplu WhatsApp Kampanya) ─────────────────────────────────────
+function CampaignPanel({ session, waSettings, anonymized = false }) {
+  const { t, lang } = useLang();
+  const { token, username, brand } = session;
+  const base = API_URL;
+  const qp = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
+  const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const waReady = !!(waSettings?.wa_token && waSettings?.phone_number_id);
+
+  const [templates, setTemplates] = useState({ presets: [], approved: [] });
+  const [audience, setAudience]   = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
+  const [loadingAud, setLoadingAud] = useState(false);
+
+  // Compose form
+  const [tplName, setTplName]   = useState('');
+  const [message, setMessage]   = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [segment, setSegment]   = useState('all');
+  const [whenMode, setWhenMode] = useState('now'); // now | later
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [testPhone, setTestPhone]   = useState('');
+  const [sending, setSending]   = useState(false);
+  const [testing, setTesting]   = useState(false);
+  const [toast, setToast]       = useState('');
+
+  // Şablon oluşturma (görsel header)
+  const [showCreate, setShowCreate] = useState(false);
+  const [createPreset, setCreatePreset] = useState('kampanya_genel');
+  const [createSampleUrl, setCreateSampleUrl] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const SEG_KEYS = ['champions','loyal','promising','new','needs_attention','at_risk','lost'];
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const r = await fetch(`${base}/api/campaign/templates${qp}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) {
+        setTemplates({ presets: d.presets || [], approved: d.approved || [] });
+        const firstApproved = (d.approved || []).find(a => a.status === 'APPROVED');
+        if (firstApproved && !tplName) setTplName(firstApproved.name);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadAudience = useCallback(async () => {
+    setLoadingAud(true);
+    try {
+      const r = await fetch(`${base}/api/campaign/audience${qp}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setAudience(d);
+    } catch { /* ignore */ } finally { setLoadingAud(false); }
+  }, []);
+
+  const loadCampaigns = useCallback(async () => {
+    try {
+      const r = await fetch(`${base}/api/campaign/list${qp}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setCampaigns(d.campaigns || []);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadTemplates(); loadAudience(); loadCampaigns(); }, []);
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 4000); }
+
+  // Hedef kitle sayısı (seçili segmente göre)
+  const targetCount = !audience ? 0
+    : segment === 'all' ? audience.reachable
+    : (audience.segments?.[segment] || 0);
+
+  async function handleTest() {
+    if (!testPhone.trim() || !message.trim() || !tplName) return;
+    setTesting(true);
+    try {
+      const r = await fetch(`${base}/api/campaign/test${qp}`, {
+        method: 'POST', headers: authH,
+        body: JSON.stringify({ phone: testPhone.trim(), message, image_url: imageUrl, template_name: tplName, language: lang }),
+      });
+      const d = await r.json();
+      showToast(d.ok ? t('campaign.test_sent') : (t('campaign.test_fail') + ': ' + (d.result?.error || d.detail || '')));
+    } catch { showToast(t('campaign.test_fail')); } finally { setTesting(false); }
+  }
+
+  async function handleSend() {
+    if (!message.trim() || !tplName) { showToast(t('campaign.need_msg_tpl')); return; }
+    let scheduled_at = null;
+    if (whenMode === 'later') {
+      if (!scheduleAt) { showToast(t('campaign.need_time')); return; }
+      scheduled_at = new Date(scheduleAt).getTime();
+      if (scheduled_at < Date.now()) { showToast(t('campaign.time_past')); return; }
+    }
+    const confirmMsg = t('campaign.confirm_send').replace('{n}', targetCount);
+    if (!window.confirm(confirmMsg)) return;
+    setSending(true);
+    try {
+      const r = await fetch(`${base}/api/campaign/send${qp}`, {
+        method: 'POST', headers: authH,
+        body: JSON.stringify({
+          name: message.slice(0, 40), template_name: tplName, language: lang,
+          message, image_url: imageUrl, segment, scheduled_at,
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        showToast(d.status === 'scheduled' ? t('campaign.scheduled_ok') : t('campaign.sending_ok'));
+        setMessage(''); setImageUrl('');
+        setTimeout(loadCampaigns, 1500);
+      } else showToast(t('campaign.send_fail'));
+    } catch { showToast(t('campaign.send_fail')); } finally { setSending(false); }
+  }
+
+  async function handleCreateTemplate() {
+    if (!createSampleUrl.trim()) { showToast(t('campaign.need_sample')); return; }
+    setCreating(true);
+    try {
+      const r = await fetch(`${base}/api/campaign/template${qp}`, {
+        method: 'POST', headers: authH,
+        body: JSON.stringify({ preset: createPreset, language: lang, sample_image_url: createSampleUrl.trim() }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        showToast(d.status === 'ALREADY_EXISTS' ? t('campaign.tpl_exists') : t('campaign.tpl_submitted'));
+        setShowCreate(false);
+        setTimeout(loadTemplates, 1500);
+      } else showToast((d.detail || t('campaign.tpl_fail')));
+    } catch { showToast(t('campaign.tpl_fail')); } finally { setCreating(false); }
+  }
+
+  if (!waReady) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-amber/10 border border-amber/30 rounded-2xl p-6 text-center space-y-2">
+          <AlertCircle size={22} className="text-amber mx-auto" />
+          <p className="text-text font-bold text-sm">{t('campaign.wa_needed')}</p>
+          <p className="text-textMute text-xs">{t('campaign.wa_needed_sub')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const approvedList = templates.approved.filter(a => a.status === 'APPROVED');
+  const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute' };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-surface border border-borderStrong rounded-xl shadow-2xl text-xs font-semibold text-text">
+          {toast}
+        </div>
+      )}
+
+      {/* Compose */}
+      <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-xl bg-greenSoft border border-green/20"><Megaphone size={15} className="text-green" /></div>
+          <div>
+            <h3 className="text-text font-bold text-sm">{t('campaign.compose')}</h3>
+            <p className="text-textMute text-[11px]">{t('campaign.compose_sub')}</p>
+          </div>
+        </div>
+
+        {/* Şablon seçimi */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.template')}</label>
+          {approvedList.length > 0 ? (
+            <div className="flex gap-2">
+              <select value={tplName} onChange={e => setTplName(e.target.value)}
+                className="flex-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text">
+                {approvedList.map(a => <option key={a.name} value={a.name}>{a.name} ({a.language})</option>)}
+              </select>
+              <button onClick={() => setShowCreate(s => !s)}
+                className="px-3 py-2 bg-surfaceAlt border border-border rounded-lg text-xs text-textDim hover:text-text">
+                <Plus size={12} className="inline" /> {t('campaign.new_template')}
+              </button>
+            </div>
+          ) : (
+            <div className="bg-amber/10 border border-amber/20 rounded-lg p-3 text-xs text-textMute space-y-2">
+              <p>{t('campaign.no_approved')}</p>
+              <button onClick={() => setShowCreate(true)}
+                className="px-3 py-1.5 bg-green text-bg rounded-lg text-xs font-bold">
+                <Plus size={12} className="inline" /> {t('campaign.create_first')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Şablon oluşturma formu */}
+        {showCreate && (
+          <div className="bg-surfaceAlt/50 border border-border rounded-lg p-3 space-y-2">
+            <p className="text-[11px] font-bold text-textDim">{t('campaign.create_title')}</p>
+            <select value={createPreset} onChange={e => setCreatePreset(e.target.value)}
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text">
+              {templates.presets.map(p => <option key={p.name} value={p.name}>{p.title}</option>)}
+            </select>
+            <input value={createSampleUrl} onChange={e => setCreateSampleUrl(e.target.value)}
+              placeholder={t('campaign.sample_ph')}
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
+            <p className="text-[10px] text-textMute">{t('campaign.sample_hint')}</p>
+            <div className="flex gap-2">
+              <button onClick={handleCreateTemplate} disabled={creating}
+                className="px-3 py-1.5 bg-green text-bg rounded-lg text-xs font-bold disabled:opacity-50">
+                {creating ? <RefreshCw size={12} className="inline animate-spin" /> : <Send size={12} className="inline" />} {t('campaign.submit_meta')}
+              </button>
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-textMute text-xs">{t('ojrn.close')}</button>
+            </div>
+            <p className="text-[10px] text-textMute">{t('campaign.approval_note')}</p>
+          </div>
+        )}
+
+        {/* Mesaj */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.message')}</label>
+          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4}
+            placeholder={t('campaign.message_ph')}
+            className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none" />
+          <p className="text-[10px] text-textMute mt-1">{t('campaign.name_auto')}</p>
+        </div>
+
+        {/* Görsel URL */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.image')}</label>
+          <input value={imageUrl} onChange={e => setImageUrl(e.target.value)}
+            placeholder="https://cdn.shopify.com/...jpg"
+            className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
+          <p className="text-[10px] text-textMute mt-1">{t('campaign.image_hint')}</p>
+          {imageUrl && (
+            <img src={imageUrl} alt="preview" className="mt-2 max-h-40 rounded-lg border border-border object-contain"
+              onError={e => { e.target.style.display = 'none'; }} onLoad={e => { e.target.style.display = 'block'; }} />
+          )}
+        </div>
+
+        {/* Hedef kitle */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.audience')}</label>
+          <select value={segment} onChange={e => setSegment(e.target.value)}
+            className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text">
+            <option value="all">{t('campaign.aud_all')} {audience ? `(${audience.reachable})` : ''}</option>
+            {SEG_KEYS.filter(s => audience?.segments?.[s]).map(s => (
+              <option key={s} value={s}>{t('rfm.seg.' + s)} ({audience.segments[s]})</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1.5 mt-2 text-xs">
+            <UsersIcon size={12} className="text-green" />
+            <span className="text-textMute">{t('campaign.will_reach')}</span>
+            <span className="font-bold text-green">{loadingAud ? '…' : targetCount}</span>
+            <span className="text-textMute">{t('campaign.people')}</span>
+            {audience?.opted_out > 0 && segment === 'all' && (
+              <span className="text-textMute/60">({audience.opted_out} {t('campaign.excl_optout')})</span>
+            )}
+          </div>
+        </div>
+
+        {/* Zamanlama */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.when')}</label>
+          <div className="flex gap-2">
+            <button onClick={() => setWhenMode('now')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border ${whenMode === 'now' ? 'bg-greenSoft border-green/30 text-green' : 'bg-surfaceAlt border-border text-textMute'}`}>
+              {t('campaign.now')}
+            </button>
+            <button onClick={() => setWhenMode('later')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border ${whenMode === 'later' ? 'bg-amber/10 border-amber/30 text-amber' : 'bg-surfaceAlt border-border text-textMute'}`}>
+              <Calendar size={12} className="inline" /> {t('campaign.schedule')}
+            </button>
+          </div>
+          {whenMode === 'later' && (
+            <input type="datetime-local" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)}
+              className="w-full mt-2 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
+          )}
+        </div>
+
+        {/* Test + Gönder */}
+        <div className="border-t border-border pt-3 space-y-2">
+          <div className="flex gap-2">
+            <input value={testPhone} onChange={e => setTestPhone(e.target.value)}
+              placeholder="+905xxxxxxxxx"
+              className="flex-1 bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
+            <button onClick={handleTest} disabled={testing || !message.trim() || !tplName}
+              className="px-3 py-2 bg-surfaceAlt border border-border rounded-lg text-xs font-bold text-textDim hover:text-text disabled:opacity-50">
+              {testing ? <RefreshCw size={12} className="inline animate-spin" /> : <Send size={12} className="inline" />} {t('campaign.test')}
+            </button>
+          </div>
+          <button onClick={handleSend} disabled={sending || !message.trim() || !tplName || targetCount === 0}
+            className="w-full py-2.5 bg-gradient-to-r from-green to-teal text-bg rounded-lg text-sm font-bold disabled:opacity-50 shadow-lg">
+            {sending ? <><RefreshCw size={14} className="inline animate-spin" /> {t('campaign.sending')}</>
+              : whenMode === 'later' ? <><Calendar size={14} className="inline" /> {t('campaign.do_schedule')}</>
+              : <><Megaphone size={14} className="inline" /> {t('campaign.do_send').replace('{n}', targetCount)}</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Geçmiş */}
+      {campaigns.length > 0 && (
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-xs font-bold text-text mb-2">{t('campaign.history')}</p>
+          <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+            {campaigns.map(c => (
+              <div key={c.id} className="flex items-center gap-3 px-3 py-2 bg-surfaceAlt/40 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-text font-medium truncate">{c.message?.slice(0, 50) || c.name}</p>
+                  <p className="text-[10px] text-textMute">
+                    {fmtCampaignDate(c.scheduled_at || c.sent_at || c.created_at)}
+                    {' · '}
+                    <span className={statusColor[c.status] || 'text-textMute'}>{t('campaign.st_' + c.status) || c.status}</span>
+                  </p>
+                </div>
+                {c.stats && (c.stats.sent > 0 || c.stats.failed > 0) && (
+                  <div className="text-right shrink-0 text-[10px]">
+                    <span className="text-green font-bold">{c.stats.sent}</span>
+                    <span className="text-textMute"> / {c.stats.total}</span>
+                    {c.stats.failed > 0 && <span className="text-rose"> · {c.stats.failed} ✕</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmtCampaignDate(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function FlowPanel({ session, anonymized = false }) {
   const { t, lang } = useLang();
   const { token, username, brand } = session;
@@ -2678,6 +3010,7 @@ function FlowPanel({ session, anonymized = false }) {
           <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-xl p-1">
             {[
               { id: 'dashboard', label: t('flow.tab_dashboard'), icon: BarChart2 },
+              { id: 'kampanya',  label: t('flow.tab_campaign'),  icon: Megaphone },
               { id: 'settings',  label: t('flow.tab_settings'),  icon: Settings  },
               { id: 'optout',    label: t('flow.tab_optout'),    icon: Ban       },
             ].map(tab => (
@@ -3317,6 +3650,11 @@ function FlowPanel({ session, anonymized = false }) {
       </div>
 
         </div>
+      )}
+
+      {/* ── KAMPANYA TAB ── */}
+      {waTab === 'kampanya' && (
+        <CampaignPanel session={session} waSettings={settings} anonymized={anonymized} />
       )}
 
       {/* ── OPT-OUT TAB ── */}
