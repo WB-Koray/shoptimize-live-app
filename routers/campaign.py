@@ -226,6 +226,7 @@ async def _build_audience(domain: str, token: str, days: int = 180) -> list[dict
 
     r_q = quintiles([c["r_days"] for c in clist])
     f_q = quintiles([c["frequency"] for c in clist])
+    m_q = quintiles([c["monetary"] for c in clist])
 
     def score(val, quint, invert=False):
         sc = bisect.bisect_right(quint, val) + 1
@@ -234,9 +235,12 @@ async def _build_audience(domain: str, token: str, days: int = 180) -> list[dict
     for c in clist:
         r = score(c["r_days"], r_q, invert=True)
         f = score(c["frequency"], f_q)
+        m = score(c["monetary"], m_q)
         c["segment"] = _segment(r, f)
+        c["m_score"] = m  # parasal değer skoru (5 = en üst %20 harcayan)
 
-    return [{"phone": c["phone"], "name": c["name"], "segment": c["segment"]} for c in clist]
+    return [{"phone": c["phone"], "name": c["name"], "segment": c["segment"],
+             "monetary": round(c["monetary"], 2), "m_score": c["m_score"]} for c in clist]
 
 
 def _first_name(full: str) -> str:
@@ -409,15 +413,22 @@ async def get_audience(
     days: int = Query(180),
     current_user: dict = Depends(get_current_user),
 ):
-    """Segment bazlı kişi sayıları + opt-out sonrası ulaşılabilir sayı."""
+    """Segment bazlı kişi sayıları + potansiyel ciro + Yüksek Harcayanlar + ulaşılabilir."""
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token = await store.get_online_token(username, brand) \
             or get_setting(username, brand, "shopify", "admin_api_token", "")
     audience = await _build_audience(domain, token, days)
 
     seg_counts: dict[str, int] = {}
+    seg_revenue: dict[str, float] = {}   # segment → toplam harcama (potansiyel ciro göstergesi)
     for a in audience:
-        seg_counts[a["segment"]] = seg_counts.get(a["segment"], 0) + 1
+        s = a["segment"]
+        seg_counts[s] = seg_counts.get(s, 0) + 1
+        seg_revenue[s] = seg_revenue.get(s, 0) + a.get("monetary", 0)
+
+    # Yüksek Harcayanlar: en üst %20 harcama dilimi (RFM segmentinden bağımsız kesit)
+    high_value = [a for a in audience if a.get("m_score", 0) >= 4]
+    high_value_revenue = sum(a.get("monetary", 0) for a in high_value)
 
     # opt-out filtreli toplam (tümü için)
     reachable = 0
@@ -431,6 +442,9 @@ async def get_audience(
         "reachable": reachable,
         "opted_out": len(audience) - reachable,
         "segments": seg_counts,
+        "segment_revenue": {k: round(v, 2) for k, v in seg_revenue.items()},
+        "high_value": {"count": len(high_value), "revenue": round(high_value_revenue, 2)},
+        "total_revenue": round(sum(a.get("monetary", 0) for a in audience), 2),
         "days": days,
     }
 
@@ -457,7 +471,12 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
     audience = await _build_audience(domain, sh_token, campaign.get("audience_days", 180))
 
     seg = campaign.get("segment", "all")
-    targets = audience if seg == "all" else [a for a in audience if a["segment"] == seg]
+    if seg == "all":
+        targets = audience
+    elif seg == "high_value":
+        targets = [a for a in audience if a.get("m_score", 0) >= 4]
+    else:
+        targets = [a for a in audience if a["segment"] == seg]
 
     campaign["status"] = "sending"
     campaign["stats"] = {"total": len(targets), "sent": 0, "failed": 0, "opted_out": 0}

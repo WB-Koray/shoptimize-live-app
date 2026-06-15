@@ -2494,7 +2494,14 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   // Hedef kitle sayısı (seçili segmente göre)
   const targetCount = !audience ? 0
     : segment === 'all' ? audience.reachable
+    : segment === 'high_value' ? (audience.high_value?.count || 0)
     : (audience.segments?.[segment] || 0);
+
+  // Seçili segmentin potansiyel cirosu (toplam geçmiş harcama)
+  const segRevenue = !audience ? 0
+    : segment === 'all' ? (audience.total_revenue || 0)
+    : segment === 'high_value' ? (audience.high_value?.revenue || 0)
+    : (audience.segment_revenue?.[segment] || 0);
 
   async function handleTest() {
     if (!testPhone.trim() || !message.trim() || !tplName) return;
@@ -2680,17 +2687,23 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           <select value={segment} onChange={e => setSegment(e.target.value)}
             className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text">
             <option value="all">{t('campaign.aud_all')} {audience ? `(${audience.reachable})` : ''}</option>
+            {audience?.high_value?.count > 0 && (
+              <option value="high_value">💎 {t('campaign.high_value')} ({audience.high_value.count})</option>
+            )}
             {SEG_KEYS.filter(s => audience?.segments?.[s]).map(s => (
               <option key={s} value={s}>{t('rfm.seg.' + s)} ({audience.segments[s]})</option>
             ))}
           </select>
-          <div className="flex items-center gap-1.5 mt-2 text-xs">
+          <div className="flex items-center gap-1.5 mt-2 text-xs flex-wrap">
             <UsersIcon size={12} className="text-green" />
             <span className="text-textMute">{t('campaign.will_reach')}</span>
             <span className="font-bold text-green">{loadingAud ? '…' : targetCount}</span>
             <span className="text-textMute">{t('campaign.people')}</span>
             {audience?.opted_out > 0 && segment === 'all' && (
               <span className="text-textMute/60">({audience.opted_out} {t('campaign.excl_optout')})</span>
+            )}
+            {segRevenue > 0 && (
+              <span className="text-textMute">· {t('campaign.potential')} <span className="font-bold text-amber">₺{segRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span></span>
             )}
           </div>
         </div>
