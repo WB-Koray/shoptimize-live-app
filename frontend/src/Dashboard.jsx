@@ -2427,9 +2427,10 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const qp = `?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`;
   const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // Backend GET /settings güvenlik için wa_token'ı boşaltıp wa_token_masked döner.
-  // Kurulu olup olmadığını phone_number_id + (token veya masked token) ile anla.
-  const waReady = !!(waSettings?.phone_number_id && (waSettings?.wa_token || waSettings?.wa_token_masked));
+  // FlowPanel settings state'inde wa_token her zaman boş tutulur (maskeli token ayrı
+  // state'te). WA kurulu olduğunun güvenilir göstergesi phone_number_id'dir; backend
+  // kampanya endpoint'leri gerçek token'ı Redis'ten okur.
+  const waReady = !!waSettings?.phone_number_id;
 
   const [templates, setTemplates] = useState({ presets: [], approved: [] });
   const [audience, setAudience]   = useState(null);
