@@ -2650,6 +2650,14 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             placeholder="https://cdn.shopify.com/...jpg"
             className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
           <p className="text-[10px] text-textMute mt-1">{t('campaign.image_hint')}</p>
+          {/* WhatsApp görsel header kuralları bilgilendirmesi */}
+          <div className="mt-2 bg-blueSoft/40 border border-blue/20 rounded-lg p-2.5 text-[10px] text-textDim space-y-0.5">
+            <p className="font-bold text-blue flex items-center gap-1"><ImageIcon size={11} /> {t('campaign.img_rules_title')}</p>
+            <p>• {t('campaign.img_rule_format')}</p>
+            <p>• {t('campaign.img_rule_size')}</p>
+            <p>• {t('campaign.img_rule_dim')}</p>
+            <p>• {t('campaign.img_rule_src')}</p>
+          </div>
           {imageUrl && (
             <img src={imageUrl} alt="preview" className="mt-2 max-h-40 rounded-lg border border-border object-contain"
               onError={e => { e.target.style.display = 'none'; }} onLoad={e => { e.target.style.display = 'block'; }} />
@@ -2721,25 +2729,34 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
         <div className="bg-surface border border-border rounded-2xl p-4">
           <p className="text-xs font-bold text-text mb-2">{t('campaign.history')}</p>
           <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
-            {campaigns.map(c => (
-              <div key={c.id} className="flex items-center gap-3 px-3 py-2 bg-surfaceAlt/40 rounded-lg">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-text font-medium truncate">{c.message?.slice(0, 50) || c.name}</p>
-                  <p className="text-[10px] text-textMute">
-                    {fmtCampaignDate(c.scheduled_at || c.sent_at || c.created_at)}
-                    {' · '}
-                    <span className={statusColor[c.status] || 'text-textMute'}>{t('campaign.st_' + c.status) || c.status}</span>
-                  </p>
+            {campaigns.map(c => {
+              const s = c.stats || {};
+              const hasStats = s.sent > 0 || s.failed > 0 || s.delivered > 0;
+              return (
+              <div key={c.id} className="px-3 py-2 bg-surfaceAlt/40 rounded-lg space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-text font-medium truncate">{c.message?.slice(0, 50) || c.name}</p>
+                    <p className="text-[10px] text-textMute">
+                      {fmtCampaignDate(c.scheduled_at || c.sent_at || c.created_at)}
+                      {' · '}
+                      <span className={statusColor[c.status] || 'text-textMute'}>{t('campaign.st_' + c.status) || c.status}</span>
+                    </p>
+                  </div>
                 </div>
-                {c.stats && (c.stats.sent > 0 || c.stats.failed > 0) && (
-                  <div className="text-right shrink-0 text-[10px]">
-                    <span className="text-green font-bold">{c.stats.sent}</span>
-                    <span className="text-textMute"> / {c.stats.total}</span>
-                    {c.stats.failed > 0 && <span className="text-rose"> · {c.stats.failed} ✕</span>}
+                {hasStats && (
+                  <div className="flex items-center gap-3 flex-wrap text-[10px] pt-1 border-t border-border/40">
+                    <span title={t('campaign.m_sent')}><span className="text-text font-bold">{s.sent || 0}</span><span className="text-textMute">/{s.total || 0} {t('campaign.m_sent')}</span></span>
+                    <span title={t('campaign.m_delivered')}>📬 <span className="text-blue font-bold">{s.delivered || 0}</span> <span className="text-textMute">{t('campaign.m_delivered')}</span></span>
+                    <span title={t('campaign.m_read')}>👁 <span className="text-green font-bold">{s.read || 0}</span> <span className="text-textMute">{t('campaign.m_read')}</span></span>
+                    {s.clicks != null && <span title={t('campaign.m_clicks')}>🖱 <span className="text-purple font-bold">{s.clicks}</span> <span className="text-textMute">{t('campaign.m_clicks')}</span></span>}
+                    {s.orders != null && s.orders > 0 && <span title={t('campaign.m_orders')}>🛍 <span className="text-amber font-bold">{s.orders}</span> <span className="text-textMute">{t('campaign.m_orders')}</span></span>}
+                    {s.failed > 0 && <span className="text-rose">{s.failed} ✕</span>}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

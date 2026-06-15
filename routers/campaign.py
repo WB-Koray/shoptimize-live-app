@@ -479,6 +479,8 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
             opted += 1
         elif res.get("ok"):
             sent += 1
+            if res.get("message_id"):
+                await store.link_campaign_message(res["message_id"], username, brand, campaign["id"])
         else:
             failed += 1
         if (i + 1) % _BATCH_SIZE == 0:
@@ -578,8 +580,13 @@ async def list_campaigns(
     brand: str = Query("default"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Kampanya geçmişi + istatistikler."""
+    """Kampanya geçmişi + istatistikler (teslim/okundu dahil)."""
     campaigns = await store.list_campaigns(username, brand)
+    for c in campaigns:
+        delivery = await store.get_campaign_delivery(username, brand, c.get("id", ""))
+        c.setdefault("stats", {})
+        c["stats"]["delivered"] = delivery["delivered"]
+        c["stats"]["read"] = delivery["read"]
     return {"ok": True, "campaigns": campaigns}
 
 

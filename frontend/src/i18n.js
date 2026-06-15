@@ -416,6 +416,18 @@ const translations = {
     'campaign.tpl_exists':    'Template already exists',
     'campaign.tpl_submitted': '✅ Template submitted to Meta',
     'campaign.tpl_fail':      'Could not create template',
+    // Image header rules info box
+    'campaign.img_rules_title': 'WhatsApp image header rules',
+    'campaign.img_rule_format': 'Format: JPG or PNG',
+    'campaign.img_rule_size':   'Max size: 5 MB',
+    'campaign.img_rule_dim':    'Recommended: 1200 × 628 px (1.91:1 banner) or 1080 × 1080 square',
+    'campaign.img_rule_src':    'Must be a public HTTPS URL (Shopify CDN works perfectly)',
+    // Campaign report metrics
+    'campaign.m_sent':      'sent',
+    'campaign.m_delivered': 'delivered',
+    'campaign.m_read':      'read',
+    'campaign.m_clicks':    'clicks',
+    'campaign.m_orders':    'orders',
 
     // Plan tab
     'plan.per_30_days':    '/ 30 days',
@@ -864,6 +876,18 @@ const translations = {
     'campaign.tpl_exists':    'Şablon zaten mevcut',
     'campaign.tpl_submitted': "✅ Şablon Meta'ya gönderildi",
     'campaign.tpl_fail':      'Şablon oluşturulamadı',
+    // Görsel header kuralları bilgi kutusu
+    'campaign.img_rules_title': 'WhatsApp görsel header kuralları',
+    'campaign.img_rule_format': 'Format: JPG veya PNG',
+    'campaign.img_rule_size':   'Maksimum boyut: 5 MB',
+    'campaign.img_rule_dim':    'Önerilen: 1200 × 628 px (1.91:1 banner) veya 1080 × 1080 kare',
+    'campaign.img_rule_src':    'Public HTTPS URL olmalı (Shopify CDN birebir uygun)',
+    // Kampanya rapor metrikleri
+    'campaign.m_sent':      'gönderildi',
+    'campaign.m_delivered': 'iletildi',
+    'campaign.m_read':      'okundu',
+    'campaign.m_clicks':    'tıklama',
+    'campaign.m_orders':    'sipariş',
 
     // Plan sekmesi
     'plan.per_30_days':    '/ 30 gün',

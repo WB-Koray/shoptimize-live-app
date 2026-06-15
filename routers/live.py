@@ -1483,6 +1483,16 @@ async def wa_webhook_incoming(request: Request):
                     text_body  = (msg.get("text") or {}).get("body", "")
                     if from_phone and text_body:
                         await handle_incoming_message(phone_number_id, from_phone, text_body)
+                # Teslim/okundu durumları → kampanya istatistiği (iletildi/okundu)
+                for st in value.get("statuses", []):
+                    msg_id = st.get("id", "")
+                    status = st.get("status", "")  # sent | delivered | read | failed
+                    if not msg_id or status not in ("delivered", "read"):
+                        continue
+                    owner = await store.resolve_campaign_message(msg_id)
+                    if owner:
+                        u, b, cid = owner
+                        await store.mark_campaign_delivery(u, b, cid, msg_id, status)
     except Exception as e:
         logger.warning("[WA] Webhook işleme hatası: %s", e)
     return JSONResponse({"ok": True})

@@ -340,6 +340,39 @@ class RedisStore:
         out.sort(key=lambda c: c.get("created_at", 0), reverse=True)
         return out
 
+    # ── Kampanya teslim takibi (WhatsApp status webhook) ───────────────────────
+    _CAMP_MSG_TTL = 86400 * 14  # 14 gün
+
+    async def link_campaign_message(self, message_id: str, username: str, brand: str, cid: str) -> None:
+        """Gönderilen WA mesaj id'sini kampanyaya bağlar (status webhook eşleştirmesi için)."""
+        if message_id:
+            await self._redis.setex(f"camp_msg:{message_id}", self._CAMP_MSG_TTL, f"{username}:{brand}:{cid}")
+
+    async def resolve_campaign_message(self, message_id: str):
+        """message_id → (username, brand, cid) veya None."""
+        val = await self._redis.get(f"camp_msg:{message_id}")
+        if not val:
+            return None
+        try:
+            u, b, c = val.split(":", 2)
+            return u, b, c
+        except ValueError:
+            return None
+
+    async def mark_campaign_delivery(self, username: str, brand: str, cid: str, message_id: str, status: str) -> None:
+        """Teslim/okundu durumunu SET'e ekler (otomatik tekilleştirme — çift saymaz)."""
+        if status not in ("delivered", "read"):
+            return
+        key = f"camp_{status}:{username}:{brand}:{cid}"
+        await self._redis.sadd(key, message_id)
+        await self._redis.expire(key, self._CAMP_MSG_TTL)
+
+    async def get_campaign_delivery(self, username: str, brand: str, cid: str) -> dict:
+        """{delivered, read} benzersiz sayıları döner."""
+        delivered = await self._redis.scard(f"camp_delivered:{username}:{brand}:{cid}")
+        read = await self._redis.scard(f"camp_read:{username}:{brand}:{cid}")
+        return {"delivered": delivered or 0, "read": read or 0}
+
     async def schedule_campaign(self, username: str, brand: str, cid: str, send_at_ms: int) -> None:
         """Planlı gönderim kuyruğuna ekler (sorted set, score=zaman)."""
         await self._redis.zadd("campaign_schedule", {f"{username}:{brand}:{cid}": send_at_ms})
