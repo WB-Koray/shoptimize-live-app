@@ -612,7 +612,7 @@ function JourneyModal({ profile, customerName, onClose }) {
 
 // ── DrillDownModal ────────────────────────────────────────────────────────────
 
-function DrillDownModal({ title, subtitle, products, visitors, customerNames = {}, onClose }) {
+function DrillDownModal({ title, subtitle, products, visitors, orders, customerNames = {}, anonymized = false, onClose }) {
   const { t, lang } = useLang();
   if (!title) return null;
   return (
@@ -676,7 +676,29 @@ function DrillDownModal({ title, subtitle, products, visitors, customerNames = {
               })}
             </div>
           )}
-          {!products?.length && !visitors?.length && (
+          {orders?.length > 0 && (
+            <div>
+              <p className="text-[10px] text-textMute uppercase font-bold px-2 mb-1">{t('modal.orders')} ({orders.length})</p>
+              {orders.slice(0, 50).map((o, i) => (
+                <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surfaceAlt/40 transition-colors">
+                  <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-text font-medium truncate">
+                      {o.customer_name ? (anonymized ? maskName(o.customer_name) : o.customer_name) : (o.order_number ? `#${o.order_number}` : t('clicks.visitor'))}
+                    </p>
+                    <p className="text-[10px] text-textMute truncate">
+                      {o.order_number ? `#${o.order_number} · ` : ''}{(o.line_items || []).map(li => li.title).filter(Boolean).slice(0, 2).join(', ') || o.product || ''}
+                    </p>
+                  </div>
+                  {o.wa_attributed && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-greenSoft text-green shrink-0">WA</span>}
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-bold text-green tabular-nums">{parseFloat(o.total_price || 0).toLocaleString('tr-TR')} ₺</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!products?.length && !visitors?.length && !orders?.length && (
             <div className="py-8 text-center text-textMute text-sm">{t('modal.no_data')}</div>
           )}
         </div>
@@ -4119,6 +4141,15 @@ export default function Dashboard({ session, onLogout }) {
     return fromEvents + fromOrders;
   }, [events, convertedOrders]);
 
+  // Bugün tamamlanan siparişler (kart sayısı ve drill-down birebir aynı kaynak)
+  const ordersToday = useMemo(() => {
+    const nowTR = Date.now() + 3 * 3_600_000;
+    const startMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
+    return convertedOrders
+      .filter(o => (o.ts || 0) >= startMs)
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  }, [convertedOrders]);
+
   const uniqueVisitorCount = useMemo(() => new Set(events.map(e => e.vid)).size, [events]);
 
   const visitorProfiles = useMemo(() => {
@@ -4736,12 +4767,12 @@ export default function Dashboard({ session, onLogout }) {
                 onClick={() => setDrillDown({ title: t('drill.checkout_visitors'), subtitle: `${evStats['checkout_started'] || 0} ${t('stat.checkout_sub')}`,
                   products: productStats.slice(0, 20),
                   visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
-              <StatCard label={t('stat.orders')} sub={t('stat.orders_sub')} value={Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} icon={CheckCircle} color="emerald"
-                onClick={() => setDrillDown({ title: t('drill.orders'), subtitle: `${Math.max(evStats['checkout_completed'] || 0, convertedOrders.length)} ${t('stat.orders')}`,
-                  products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
+              <StatCard label={t('stat.orders')} sub={t('stat.orders_sub')} value={ordersToday.length} icon={CheckCircle} color="emerald"
+                onClick={() => setDrillDown({ title: t('drill.orders'), subtitle: `${ordersToday.length} ${t('stat.orders')}`,
+                  orders: ordersToday })} />
               <StatCard label={t('stat.revenue')} sub={t('stat.revenue_sub')} value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
                 onClick={() => setDrillDown({ title: t('drill.revenue'), subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
-                  products: [], visitors: visitorProfiles.filter(v => v.stage === 'converted') })} />
+                  orders: ordersToday })} />
               <StatCard label={t('stat.abandoned')} sub={t('stat.abandoned_sub')} value={abandonedVisitors.length} icon={CreditCard} color="orange"
                 onClick={() => setDrillDown({ title: t('drill.abandoned'), subtitle: t('drill.abandoned_sub'),
                   products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
@@ -5089,8 +5120,8 @@ export default function Dashboard({ session, onLogout }) {
         customerName={selectedVisitor && customerNames[selectedVisitor.customer_id]}
         onClose={() => setSelectedVisitor(null)} />
       <DrillDownModal title={drillDown?.title} subtitle={drillDown?.subtitle}
-        products={drillDown?.products} visitors={drillDown?.visitors}
-        customerNames={customerNames}
+        products={drillDown?.products} visitors={drillDown?.visitors} orders={drillDown?.orders}
+        customerNames={customerNames} anonymized={anonymized}
         onClose={() => setDrillDown(null)} />
 
       </>}

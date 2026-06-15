@@ -251,6 +251,7 @@ const translations = {
 
     // Drill-down modal body
     'modal.viewed_products': 'Viewed Products',
+    'modal.orders':          'Orders',
     'modal.visitors':        'Visitors',
     'modal.views':           'views',
     'modal.cart':            'cart',
@@ -722,6 +723,7 @@ const translations = {
 
     // Detay modal gövdesi
     'modal.viewed_products': 'Görüntülenen Ürünler',
+    'modal.orders':          'Siparişler',
     'modal.visitors':        'Ziyaretçiler',
     'modal.views':           'görüntüleme',
     'modal.cart':            'sepet',
