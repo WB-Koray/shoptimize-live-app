@@ -1324,8 +1324,20 @@ async def shopify_checkouts_webhook(
     last_name   = str(customer.get("last_name")  or checkout.get("billing_address", {}).get("last_name")  or "").strip()
     customer_name = f"{first_name} {last_name}".strip()
 
+    # Analitik indeksi — TÜM checkout'lar (telefonsuz dahil) CHECKOUT/ABANDONED kartları için.
+    # Telefon kontrolünden ÖNCE yapılır ki gerçek checkout sayısı eksiksiz olsun.
+    _co_token = str(checkout.get("token") or checkout.get("id") or "").strip()
+    if _co_token:
+        _co_lines = checkout.get("line_items") or []
+        await store.index_checkout(username, brand, _co_token, int(time.time() * 1000), {
+            "customer_name": customer_name,
+            "product": _co_lines[0].get("title", "") if _co_lines else "",
+            "line_items": [{"title": li.get("title", ""), "quantity": li.get("quantity", 1)} for li in _co_lines[:5]],
+            "total_price": str(checkout.get("total_price") or checkout.get("subtotal_price") or "0"),
+        })
+
     if not phone:
-        logger.info("[CHECKOUT] telefon yok — atlandı email=%s", email or "-")
+        logger.info("[CHECKOUT] telefon yok — indekslendi, WA atlandı email=%s", email or "-")
         return JSONResponse({"ok": True, "matched": False, "reason": "no_phone"})
 
     if not phone.startswith("+"):
@@ -1447,6 +1459,22 @@ async def get_webhook_status(username: str = Query(""), brand: str = Query("defa
     except Exception:
         pass
     return {"ok": False, "webhooks": []}
+
+
+# ── Checkout istatistikleri (CHECKOUT/ABANDONED kartları — gerçek webhook verisi) ──
+
+@router.get("/api/live/checkout-stats")
+async def checkout_stats_endpoint(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Bugün başlatılan/tamamlanan/terk edilen checkout sayıları + listeler."""
+    now_tr = time.time() + 3 * 3600
+    start_of_day_tr = now_tr - (now_tr % 86400)
+    start_ms = int((start_of_day_tr - 3 * 3600) * 1000)
+    stats = await store.get_checkout_stats(username, brand, start_ms)
+    return {"ok": True, **stats}
 
 
 # ── Meta WA gelen mesaj webhook'u (opt-out) ───────────────────────────────────

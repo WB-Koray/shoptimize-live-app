@@ -3945,6 +3945,7 @@ export default function Dashboard({ session, onLogout }) {
   const [webhookStatus, setWebhookStatus]   = useState(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [convertedOrders, setConvertedOrders] = useState([]);
+  const [checkoutStats, setCheckoutStats]     = useState(null);
 
   const esRef        = useRef(null);
   const pausedRef    = useRef(false);
@@ -4053,6 +4054,22 @@ export default function Dashboard({ session, onLogout }) {
 
   useEffect(() => { fetchOrdersRef.current = fetchConvertedOrders; }, [fetchConvertedOrders]);
   useEffect(() => { fetchConvertedOrders(); }, [fetchConvertedOrders]);
+
+  const fetchCheckoutStats = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_URL}/api/live/checkout-stats?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (d.ok) setCheckoutStats(d);
+    } catch {}
+  }, [qs, token]);
+
+  useEffect(() => {
+    fetchCheckoutStats();
+    const id = setInterval(fetchCheckoutStats, 120000); // checkout'lar webhook'la geldiği için periyodik tazele
+    return () => clearInterval(id);
+  }, [fetchCheckoutStats]);
 
   const fetchWebhookStatus = useCallback(async () => {
     try {
@@ -4763,20 +4780,18 @@ export default function Dashboard({ session, onLogout }) {
                 onClick={() => setDrillDown({ title: t('drill.cart_products'), subtitle: `${evStats['add_to_cart'] || 0} ${t('stat.cart_sub')}`,
                   products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
                   visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-              <StatCard label={t('stat.checkout')} sub={t('stat.checkout_sub')} value={evStats['checkout_started'] || 0} icon={CreditCard} color="yellow"
-                onClick={() => setDrillDown({ title: t('drill.checkout_visitors'), subtitle: `${evStats['checkout_started'] || 0} ${t('stat.checkout_sub')}`,
-                  products: productStats.slice(0, 20),
-                  visitors: visitorProfiles.filter(v => ['checkout','converted'].includes(v.stage)) })} />
+              <StatCard label={t('stat.checkout')} sub={t('stat.checkout_sub')} value={checkoutStats?.started_count ?? 0} icon={CreditCard} color="yellow"
+                onClick={() => setDrillDown({ title: t('drill.checkout_visitors'), subtitle: `${checkoutStats?.started_count ?? 0} ${t('stat.checkout_sub')}`,
+                  orders: checkoutStats?.started || [] })} />
               <StatCard label={t('stat.orders')} sub={t('stat.orders_sub')} value={ordersToday.length} icon={CheckCircle} color="emerald"
                 onClick={() => setDrillDown({ title: t('drill.orders'), subtitle: `${ordersToday.length} ${t('stat.orders')}`,
                   orders: ordersToday })} />
               <StatCard label={t('stat.revenue')} sub={t('stat.revenue_sub')} value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
                 onClick={() => setDrillDown({ title: t('drill.revenue'), subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
                   orders: ordersToday })} />
-              <StatCard label={t('stat.abandoned')} sub={t('stat.abandoned_sub')} value={abandonedVisitors.length} icon={CreditCard} color="orange"
+              <StatCard label={t('stat.abandoned')} sub={t('stat.abandoned_sub')} value={checkoutStats?.abandoned_count ?? 0} icon={CreditCard} color="orange"
                 onClick={() => setDrillDown({ title: t('drill.abandoned'), subtitle: t('drill.abandoned_sub'),
-                  products: productStats.filter(p => abandonedVisitors.some(v => v.events.some(ev => ev.event_type === 'product_viewed' && (ev.data?.product_id === p.key || ev.data?.product_title === p.key)))),
-                  visitors: abandonedVisitors })} />
+                  orders: checkoutStats?.abandoned || [] })} />
             </div>
 
             {/* Abandonment Intelligence Panel */}

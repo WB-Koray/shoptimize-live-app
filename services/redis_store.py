@@ -186,6 +186,54 @@ class RedisStore:
         await self._redis.setex(f"checkout_done:{checkout_token}", self._CHECKOUT_TTL, "1")
         await self._redis.zrem("pending_checkouts", checkout_token)
 
+    # ── Checkout analitik indeksi (CHECKOUT/ABANDONED kartlari icin — TUM checkout'lar) ──
+    async def index_checkout(self, username: str, brand: str, token: str, ts: int, meta: dict | None = None) -> None:
+        """Her checkout'u merchant bazli indekse ekler (telefon sart degil). Tamamlanma
+        checkout_done:{token} ile ayri izlenir. Drill-down icin minimal meta saklar."""
+        if not token:
+            return
+        key = f"co_idx:{username}:{brand}"
+        await self._redis.zadd(key, {token: ts})
+        await self._redis.zremrangebyscore(key, 0, ts - 7 * 86400 * 1000)  # 7 gunden eski temizle
+        await self._redis.expire(key, 86400 * 8)
+        if meta:
+            await self._redis.setex(f"co_meta:{token}", 86400 * 2, json.dumps(meta, ensure_ascii=False))
+
+    async def get_checkout_stats(self, username: str, brand: str, since_ms: int,
+                                 abandon_after_ms: int = 15 * 60 * 1000) -> dict:
+        """since_ms'ten bu yana checkout istatistikleri: baslatilan/tamamlanan/terk edilen + listeler."""
+        import time as _t
+        now_ms = int(_t.time() * 1000)
+        key = f"co_idx:{username}:{brand}"
+        rows = await self._redis.zrangebyscore(key, since_ms, "+inf", withscores=True)
+        started, abandoned = [], []
+        completed_count = 0
+        for token, score in rows:
+            ts = int(score)
+            completed = await self.is_checkout_completed(token)
+            meta = {}
+            raw = await self._redis.get(f"co_meta:{token}")
+            if raw:
+                try:
+                    meta = json.loads(raw)
+                except Exception:
+                    pass
+            rec = {"token": token, "ts": ts, "completed": completed, **meta}
+            started.append(rec)
+            if completed:
+                completed_count += 1
+            elif (now_ms - ts) > abandon_after_ms:
+                abandoned.append(rec)
+        started.sort(key=lambda x: x["ts"], reverse=True)
+        abandoned.sort(key=lambda x: x["ts"], reverse=True)
+        return {
+            "started": started,
+            "abandoned": abandoned,
+            "started_count": len(started),
+            "completed_count": completed_count,
+            "abandoned_count": len(abandoned),
+        }
+
     async def is_checkout_completed(self, checkout_token: str) -> bool:
         return bool(await self._redis.exists(f"checkout_done:{checkout_token}"))
 
