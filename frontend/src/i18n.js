@@ -428,6 +428,8 @@ const translations = {
     'campaign.m_read':      'read',
     'campaign.m_clicks':    'clicks',
     'campaign.m_orders':    'orders',
+    'campaign.link':        'Link (optional)',
+    'campaign.link_hint':   'Add a target link to track clicks & orders. UTM tags are added automatically and shown in Ad/UTM Performance.',
 
     // Plan tab
     'plan.per_30_days':    '/ 30 days',
@@ -888,6 +890,8 @@ const translations = {
     'campaign.m_read':      'okundu',
     'campaign.m_clicks':    'tıklama',
     'campaign.m_orders':    'sipariş',
+    'campaign.link':        'Link (opsiyonel)',
+    'campaign.link_hint':   'Tıklama ve siparişleri izlemek için hedef link ekle. UTM etiketleri otomatik eklenir, Reklam/UTM Performansı\'nda da görünür.',
 
     // Plan sekmesi
     'plan.per_30_days':    '/ 30 gün',

@@ -2441,6 +2441,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [tplName, setTplName]   = useState('');
   const [message, setMessage]   = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [link, setLink]         = useState('');
   const [segment, setSegment]   = useState('all');
   const [whenMode, setWhenMode] = useState('now'); // now | later
   const [scheduleAt, setScheduleAt] = useState('');
@@ -2501,7 +2502,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     try {
       const r = await fetch(`${base}/api/campaign/test${qp}`, {
         method: 'POST', headers: authH,
-        body: JSON.stringify({ phone: testPhone.trim(), message, image_url: imageUrl, template_name: tplName, language: lang }),
+        body: JSON.stringify({ phone: testPhone.trim(), message, image_url: imageUrl, link, template_name: tplName, language: lang }),
       });
       const d = await r.json();
       showToast(d.ok ? t('campaign.test_sent') : (t('campaign.test_fail') + ': ' + (d.result?.error || d.detail || '')));
@@ -2524,13 +2525,13 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
         method: 'POST', headers: authH,
         body: JSON.stringify({
           name: message.slice(0, 40), template_name: tplName, language: lang,
-          message, image_url: imageUrl, segment, scheduled_at,
+          message, image_url: imageUrl, link, segment, scheduled_at,
         }),
       });
       const d = await r.json();
       if (d.ok) {
         showToast(d.status === 'scheduled' ? t('campaign.scheduled_ok') : t('campaign.sending_ok'));
-        setMessage(''); setImageUrl('');
+        setMessage(''); setImageUrl(''); setLink('');
         setTimeout(loadCampaigns, 1500);
       } else showToast(t('campaign.send_fail'));
     } catch { showToast(t('campaign.send_fail')); } finally { setSending(false); }
@@ -2664,6 +2665,15 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           )}
         </div>
 
+        {/* Link (opsiyonel) — tıklama/sipariş atfı için */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.link')}</label>
+          <input value={link} onChange={e => setLink(e.target.value)}
+            placeholder="https://welcomebaby.com.tr/collections/yeni"
+            className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
+          <p className="text-[10px] text-textMute mt-1">{t('campaign.link_hint')}</p>
+        </div>
+
         {/* Hedef kitle */}
         <div>
           <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.audience')}</label>
@@ -2751,6 +2761,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                     <span title={t('campaign.m_read')}>👁 <span className="text-green font-bold">{s.read || 0}</span> <span className="text-textMute">{t('campaign.m_read')}</span></span>
                     {s.clicks != null && <span title={t('campaign.m_clicks')}>🖱 <span className="text-purple font-bold">{s.clicks}</span> <span className="text-textMute">{t('campaign.m_clicks')}</span></span>}
                     {s.orders != null && s.orders > 0 && <span title={t('campaign.m_orders')}>🛍 <span className="text-amber font-bold">{s.orders}</span> <span className="text-textMute">{t('campaign.m_orders')}</span></span>}
+                    {s.revenue > 0 && <span className="text-green font-bold">₺{s.revenue.toLocaleString('tr-TR')}</span>}
                     {s.failed > 0 && <span className="text-rose">{s.failed} ✕</span>}
                   </div>
                 )}

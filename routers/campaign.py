@@ -461,6 +461,13 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
     image_url = campaign.get("image_url", "")
     message = campaign.get("message", "")
 
+    # Link varsa UTM ile etiketle ve mesaja ekle (tıklama/sipariş atfı için)
+    link = campaign.get("link", "").strip()
+    if link:
+        sep = "&" if "?" in link else "?"
+        tagged = f"{link}{sep}utm_source=whatsapp&utm_medium=campaign&utm_campaign={campaign['id']}"
+        message = f"{message}\n\n{tagged}"
+
     seen = set()
     sent = failed = opted = 0
     for i, t in enumerate(targets):
@@ -521,6 +528,7 @@ async def send_campaign(
         "language": body.get("language", "tr"),
         "message": message,
         "image_url": image_url,
+        "link": body.get("link", "").strip(),
         "segment": body.get("segment", "all"),
         "audience_days": int(body.get("audience_days", 180)),
         "created_at": int(time.time() * 1000),
@@ -554,9 +562,13 @@ async def send_test_campaign(
     phone = _normalize_phone(body.get("phone", ""))
     message = body.get("message", "").strip()
     image_url = body.get("image_url", "").strip()
+    link = body.get("link", "").strip()
     template_name = body.get("template_name", "").strip()
     if not phone or not message or not template_name:
         raise HTTPException(400, "Telefon, mesaj ve şablon gerekli")
+    if link:
+        sep = "&" if "?" in link else "?"
+        message = f"{message}\n\n{link}{sep}utm_source=whatsapp&utm_medium=campaign&utm_campaign=test"
 
     settings = await store.get_flow_settings(username, brand)
     wa_token = settings.get("wa_token", "")
@@ -580,13 +592,46 @@ async def list_campaigns(
     brand: str = Query("default"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Kampanya geçmişi + istatistikler (teslim/okundu dahil)."""
+    """Kampanya geçmişi + istatistikler (teslim/okundu + tıklama/sipariş atfı)."""
     campaigns = await store.list_campaigns(username, brand)
+
+    # Pixel event'lerinden tıklama/sipariş atfı (utm_campaign == kampanya id)
+    tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    click_vids: dict[str, set] = {}   # cid → tıklayan vid'ler
+    purchase_vids: set = set()        # satın alan vid'ler
+    rev_by_vid: dict[str, float] = {} # vid → ciro
+    if tid:
+        try:
+            events = await store.get_recent_events(tid, limit=5000)
+            for ev in events:
+                vid = ev.get("vid", "")
+                utm = ev.get("utm") or {}
+                camp = utm.get("utm_campaign", "")
+                if vid and camp:
+                    click_vids.setdefault(camp, set()).add(vid)
+                if ev.get("event_type") == "checkout_completed" and vid:
+                    purchase_vids.add(vid)
+                    d = ev.get("data") or {}
+                    val = d.get("value") or d.get("total") or d.get("total_price") or d.get("price") or 0
+                    try:
+                        rev_by_vid[vid] = float(val)
+                    except (TypeError, ValueError):
+                        pass
+        except Exception as e:
+            logger.warning("[CAMPAIGN] atıf hesabı hatası: %s", e)
+
     for c in campaigns:
-        delivery = await store.get_campaign_delivery(username, brand, c.get("id", ""))
+        cid = c.get("id", "")
+        delivery = await store.get_campaign_delivery(username, brand, cid)
         c.setdefault("stats", {})
         c["stats"]["delivered"] = delivery["delivered"]
         c["stats"]["read"] = delivery["read"]
+        clickers = click_vids.get(cid, set())
+        order_vids = clickers & purchase_vids
+        c["stats"]["clicks"] = len(clickers)
+        c["stats"]["orders"] = len(order_vids)
+        c["stats"]["revenue"] = round(sum(rev_by_vid.get(v, 0) for v in order_vids), 2)
+
     return {"ok": True, "campaigns": campaigns}
 
 
