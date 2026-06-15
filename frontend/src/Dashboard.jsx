@@ -2419,6 +2419,32 @@ function WaTemplateManager({ qs, t, token }) {
   );
 }
 
+// Segmente özel hazır kampanya metni önerileri (merchant düzenleyebilir)
+const CAMPAIGN_SUGGESTIONS = {
+  tr: {
+    all:             '☀️ Yeni kampanyamız başladı! Seçili ürünlerde %15 indirim fırsatını kaçırmayın. Hemen göz atın 👇',
+    high_value:      '💎 Size özel ayrıcalıklar! En sevdiğiniz ürünlerde premium fırsatlar ve öncelikli erişim sizi bekliyor. Hemen keşfedin 👇',
+    champions:       '🌟 Siz bizim en değerli müşterimizsiniz! Yeni sezon ürünlerini herkesten önce sizinle paylaşıyoruz. Size özel ayrıcalıklı fiyatlar 👇',
+    loyal:           '💚 Bize gösterdiğiniz güven için teşekkürler! Düzenli müşterilerimize özel %15 indirim sizi bekliyor. Fırsatı kaçırmayın 👇',
+    promising:       '✨ Sizi aramızda görmek harika! Bir sonraki alışverişinizde kullanabileceğiniz özel bir indiriminiz var. Hemen inceleyin 👇',
+    new:             '🎉 Aramıza hoş geldiniz! İlk alışverişiniz için teşekkürler. İkinci siparişinizde geçerli özel indiriminizi kaçırmayın 👇',
+    needs_attention: '👀 Sizi bir süredir göremedik! Yeni ürünlerimize göz atmak ister misiniz? Size özel bir teklifimiz var 👇',
+    at_risk:         '💛 Sizi özledik! Geri dönmeniz için size özel %20 indirim hazırladık. Fırsat sınırlı süreyle geçerli, acele edin 👇',
+    lost:            '🎁 Uzun zaman oldu! Sizi yeniden aramızda görmek için en özel teklifimizi hazırladık — %25 indirim + kargo bedava 👇',
+  },
+  en: {
+    all:             '☀️ Our new campaign is live! Up to 15% off selected items. Don’t miss out — take a look 👇',
+    high_value:      '💎 Exclusive perks just for you! Premium offers and early access on your favorites await. Discover now 👇',
+    champions:       '🌟 You’re one of our most valued customers! Get first access to the new season at special prices, just for you 👇',
+    loyal:           '💚 Thank you for your trust! A special 15% discount for our regulars is waiting. Don’t miss it 👇',
+    promising:       '✨ Great to have you! Here’s a special discount for your next purchase. Check it out 👇',
+    new:             '🎉 Welcome aboard! Thanks for your first order. Don’t miss your special discount on your second purchase 👇',
+    needs_attention: '👀 We haven’t seen you in a while! Want to check out our new arrivals? We have a special offer for you 👇',
+    at_risk:         '💛 We miss you! Here’s a special 20% discount to welcome you back. Limited time only, hurry 👇',
+    lost:            '🎁 It’s been a while! We’ve prepared our best offer to win you back — 25% off + free shipping 👇',
+  },
+};
+
 // ── CampaignPanel (Toplu WhatsApp Kampanya) ─────────────────────────────────────
 function CampaignPanel({ session, waSettings, anonymized = false }) {
   const { t, lang } = useLang();
@@ -2648,7 +2674,14 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4}
             placeholder={t('campaign.message_ph')}
             className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text resize-none" />
-          <p className="text-[10px] text-textMute mt-1">{t('campaign.name_auto')}</p>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            <p className="text-[10px] text-textMute">{t('campaign.name_auto')}</p>
+            <button type="button"
+              onClick={() => setMessage((CAMPAIGN_SUGGESTIONS[lang] || CAMPAIGN_SUGGESTIONS.tr)[segment] || (CAMPAIGN_SUGGESTIONS[lang] || CAMPAIGN_SUGGESTIONS.tr).all)}
+              className="shrink-0 text-[10px] font-bold text-blue hover:text-blue/80 flex items-center gap-1">
+              💡 {t('campaign.suggest')}
+            </button>
+          </div>
         </div>
 
         {/* Görsel URL */}
