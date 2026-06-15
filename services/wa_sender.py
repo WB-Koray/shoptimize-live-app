@@ -249,9 +249,12 @@ async def send_wa_template(
         error = err_obj.get("message", r.text[:300])
         err_code = err_obj.get("code", r.status_code)
         err_sub = err_obj.get("error_subcode", "")
-        logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | url=%s tpl=%s lang=%s | full_resp=%s",
-                       to, err_code, err_sub, error, url, template_name, language, r.text[:1000])
-        return {"ok": False, "error": error, "code": err_code}
+        # Meta'nın spesifik açıklaması — hangi parametre/component sorunlu (header mı body mi)
+        err_details = (err_obj.get("error_data") or {}).get("details", "")
+        error_full = f"{error}" + (f" — {err_details}" if err_details else "")
+        logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | details=%s | url=%s tpl=%s lang=%s | full_resp=%s",
+                       to, err_code, err_sub, error, err_details, url, template_name, language, r.text[:1000])
+        return {"ok": False, "error": error_full, "code": err_code, "details": err_details}
     except Exception as e:
         logger.error("[WA] İstek hatası: %s", e)
         return {"ok": False, "error": str(e)}
