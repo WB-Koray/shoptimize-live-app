@@ -177,11 +177,17 @@ async def send_wa_template(
     products: list | None = None,
     username: str = "",
     brand: str = "default",
+    header_image_url: str = "",
+    body_text_params: list | None = None,
 ) -> dict:
     """
     WhatsApp Cloud API üzerinden onaylı template mesajı gönderir.
     to: E.164 formatında numara (+905xxxxxxxxx)
     template_name: onaylı şablon adı (varsayılan: sepet_hatirlatma)
+
+    Kampanya modu (header_image_url veya body_text_params verilirse):
+      - header_image_url: IMAGE header'a geçilecek public görsel linki
+      - body_text_params: body değişkenleri ({{1}}, {{2}}, ...) için sıralı metin listesi
     """
     if not token or not phone_number_id or not to:
         return {"ok": False, "error": "missing_credentials"}
@@ -196,11 +202,25 @@ async def send_wa_template(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    # Şablona göre component listesini oluştur (body veya button)
-    components = _build_components(
-        template_name, name=name, product=product,
-        order_number=order_number, products=products,
-    )
+    # Kampanya modu: görsel header + serbest body parametreleri
+    if header_image_url or body_text_params is not None:
+        components = []
+        if header_image_url:
+            components.append({
+                "type": "header",
+                "parameters": [{"type": "image", "image": {"link": header_image_url}}],
+            })
+        if body_text_params:
+            components.append({
+                "type": "body",
+                "parameters": [{"type": "text", "text": str(p)} for p in body_text_params],
+            })
+    else:
+        # Şablona göre component listesini oluştur (body veya button)
+        components = _build_components(
+            template_name, name=name, product=product,
+            order_number=order_number, products=products,
+        )
 
     payload = {
         "messaging_product": "whatsapp",

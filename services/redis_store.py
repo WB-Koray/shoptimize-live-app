@@ -289,6 +289,68 @@ class RedisStore:
             return ""
         return (await self._redis.get(f"wa_name:{normalized}")) or ""
 
+    # ── Kampanya (toplu WA broadcast) ──────────────────────────────────────────
+    _CAMPAIGN_MEDIA_TTL = 86400 * 60  # 60 gün — görsel base64 olarak Redis'te (deploy'dan etkilenmez)
+
+    async def save_campaign_media(self, media_id: str, content_type: str, b64: str) -> None:
+        """Kampanya görselini base64 olarak Redis'e kaydeder (disk yerine — Coolify deploy'da silinmez)."""
+        await self._redis.setex(
+            f"campaign_media:{media_id}",
+            self._CAMPAIGN_MEDIA_TTL,
+            json.dumps({"ct": content_type, "b64": b64}),
+        )
+
+    async def get_campaign_media(self, media_id: str) -> Optional[dict]:
+        """{ct, b64} döner, yoksa None."""
+        raw = await self._redis.get(f"campaign_media:{media_id}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    async def save_campaign(self, username: str, brand: str, campaign: dict) -> None:
+        """Kampanya kaydını saklar (id campaign içinde)."""
+        cid = campaign.get("id", "")
+        if not cid:
+            return
+        await self._redis.set(f"campaign:{username}:{brand}:{cid}", json.dumps(campaign))
+
+    async def get_campaign(self, username: str, brand: str, cid: str) -> Optional[dict]:
+        raw = await self._redis.get(f"campaign:{username}:{brand}:{cid}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    async def list_campaigns(self, username: str, brand: str) -> list[dict]:
+        """Merchant'ın tüm kampanyalarını döner (en yeni önce)."""
+        out = []
+        prefix = f"campaign:{username}:{brand}:"
+        async for key in self._redis.scan_iter(f"{prefix}*"):
+            raw = await self._redis.get(key)
+            if raw:
+                try:
+                    out.append(json.loads(raw))
+                except Exception:
+                    pass
+        out.sort(key=lambda c: c.get("created_at", 0), reverse=True)
+        return out
+
+    async def schedule_campaign(self, username: str, brand: str, cid: str, send_at_ms: int) -> None:
+        """Planlı gönderim kuyruğuna ekler (sorted set, score=zaman)."""
+        await self._redis.zadd("campaign_schedule", {f"{username}:{brand}:{cid}": send_at_ms})
+
+    async def get_due_campaigns(self, now_ms: int) -> list[str]:
+        """Gönderim zamanı gelmiş kampanya member'larını döner: ['username:brand:cid', ...]"""
+        return await self._redis.zrangebyscore("campaign_schedule", 0, now_ms)
+
+    async def unschedule_campaign(self, member: str) -> None:
+        await self._redis.zrem("campaign_schedule", member)
+
     async def set_merchant_phone_id(self, phone_number_id: str, username: str, brand: str) -> None:
         """WA phone_number_id → merchant eşlemesini kaydeder (opt-out routing için)."""
         await self._redis.set(f"wa_phone_id:{phone_number_id}", f"{username}:{brand}")

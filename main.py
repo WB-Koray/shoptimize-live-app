@@ -19,6 +19,7 @@ from routers import gdpr
 from routers import billing
 from routers import flow
 from routers import admin
+from routers import campaign
 
 
 async def _abandoned_checkout_worker():
@@ -152,6 +153,33 @@ async def _abandoned_checkout_worker():
             logging.getLogger(__name__).error("[FLOW] Worker hatası: %s", e)
 
 
+async def _scheduled_campaign_worker():
+    """Planlı kampanyaları gönderim zamanı gelince gönderir."""
+    import asyncio
+    import logging
+    import time
+    from routers.campaign import execute_campaign
+    _log = logging.getLogger(__name__)
+    while True:
+        try:
+            await asyncio.sleep(30)
+            now_ms = int(time.time() * 1000)
+            due = await store.get_due_campaigns(now_ms)
+            for member in due:
+                await store.unschedule_campaign(member)
+                try:
+                    username, brand, cid = member.split(":", 2)
+                except ValueError:
+                    continue
+                campaign = await store.get_campaign(username, brand, cid)
+                if not campaign or campaign.get("status") != "scheduled":
+                    continue
+                _log.info("[CAMPAIGN] planlı gönderim başlıyor: %s", cid)
+                asyncio.ensure_future(execute_campaign(username, brand, campaign))
+        except Exception as e:
+            _log.warning("[CAMPAIGN] worker hatası: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -159,6 +187,7 @@ async def lifespan(app: FastAPI):
     await store.warmup_tid_cache()
     import asyncio
     asyncio.create_task(_abandoned_checkout_worker())
+    asyncio.create_task(_scheduled_campaign_worker())
     yield
     # Shutdown
     await store.disconnect()
@@ -185,6 +214,8 @@ app.include_router(gdpr.router)
 app.include_router(billing.router)
 app.include_router(flow.router)
 app.include_router(admin.router)
+app.include_router(campaign.router)
+app.include_router(campaign.media_router)
 
 
 @app.get("/health")
