@@ -2471,6 +2471,8 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [segment, setSegment]   = useState('all');
   const [whenMode, setWhenMode] = useState('now'); // now | later
   const [scheduleAt, setScheduleAt] = useState('');
+  const [members, setMembers]   = useState(null);   // segment kişi listesi (null = kapalı)
+  const [membersLoading, setMembersLoading] = useState(false);
   const [testPhone, setTestPhone]   = useState('');
   const [sending, setSending]   = useState(false);
   const [testing, setTesting]   = useState(false);
@@ -2516,6 +2518,19 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   useEffect(() => { loadTemplates(); loadAudience(); loadCampaigns(); }, []);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 4000); }
+
+  async function loadMembers() {
+    if (members) { setMembers(null); return; }  // açıksa kapat (toggle)
+    setMembersLoading(true);
+    try {
+      const r = await fetch(`${base}/api/campaign/audience/members${qp}&segment=${encodeURIComponent(segment)}`, { headers: authH });
+      const d = await r.json();
+      if (d.ok) setMembers(d.members || []);
+    } catch { /* ignore */ } finally { setMembersLoading(false); }
+  }
+
+  // Segment değişince açık listeyi kapat (yanlış segment gösterimini önle)
+  useEffect(() => { setMembers(null); }, [segment]);
 
   // Hedef kitle sayısı (seçili segmente göre)
   const targetCount = !audience ? 0
@@ -2738,7 +2753,27 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             {segRevenue > 0 && (
               <span className="text-textMute">· {t('campaign.potential')} <span className="font-bold text-amber">₺{segRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span></span>
             )}
+            <button type="button" onClick={loadMembers}
+              className="ml-auto text-[10px] font-bold text-blue hover:text-blue/80 flex items-center gap-1 shrink-0">
+              {membersLoading ? <RefreshCw size={10} className="animate-spin" /> : <UsersIcon size={10} />}
+              {members ? t('campaign.hide_members') : t('campaign.see_members')}
+            </button>
           </div>
+          {members && (
+            <div className="mt-2 border border-border rounded-lg max-h-48 overflow-y-auto custom-scrollbar divide-y divide-border/40">
+              {members.length === 0 && <p className="text-[10px] text-textMute text-center py-3">{t('modal.no_data')}</p>}
+              {members.map((m, i) => (
+                <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 text-[10px]">
+                  <span className="flex-1 min-w-0 truncate text-text">
+                    {m.name ? (anonymized ? maskName(m.name) : m.name) : <span className="text-textMute">{t('clicks.visitor')}</span>}
+                  </span>
+                  <span className="text-textMute font-mono shrink-0">{anonymized ? maskPhone(m.phone) : m.phone}</span>
+                  {m.monetary > 0 && <span className="text-amber font-semibold shrink-0">₺{m.monetary.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>}
+                  {m.opted_out && <span className="text-rose shrink-0" title="opt-out">🚫</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Zamanlama */}

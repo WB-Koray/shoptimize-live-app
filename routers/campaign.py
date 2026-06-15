@@ -449,6 +449,40 @@ async def get_audience(
     }
 
 
+@router.get("/audience/members")
+async def get_audience_members(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    segment: str = Query("all"),
+    days: int = Query(180),
+    current_user: dict = Depends(get_current_user),
+):
+    """Seçili segmentteki kişileri döner (isim, telefon, harcama, opt-out durumu)."""
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token = await store.get_online_token(username, brand) \
+            or get_setting(username, brand, "shopify", "admin_api_token", "")
+    audience = await _build_audience(domain, token, days)
+
+    if segment == "all":
+        members = audience
+    elif segment == "high_value":
+        members = [a for a in audience if a.get("m_score", 0) >= 4]
+    else:
+        members = [a for a in audience if a["segment"] == segment]
+
+    members = sorted(members, key=lambda x: -x.get("monetary", 0))[:500]
+    out = []
+    for m in members:
+        out.append({
+            "name": m.get("name", ""),
+            "phone": m["phone"],
+            "monetary": m.get("monetary", 0),
+            "segment": m.get("segment", ""),
+            "opted_out": await store.is_optout(m["phone"], username, brand),
+        })
+    return {"ok": True, "members": out, "count": len(out)}
+
+
 # ---------------------------------------------------------------------------
 # Gönderim motoru — şimdi gönder / planla / worker tarafından çağrılır
 # ---------------------------------------------------------------------------
