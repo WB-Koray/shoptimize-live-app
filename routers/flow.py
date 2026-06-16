@@ -4,6 +4,7 @@ Sequence ayarları, log görüntüleme, test gönderimi, opt-out yönetimi.
 """
 
 import logging
+import os
 import requests as _requests
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -12,6 +13,10 @@ from services.redis_store import store
 from services.wa_sender import send_wa_template
 
 META_GRAPH = "https://graph.facebook.com/v19.0"
+
+# WhatsApp Embedded Signup — bizim Meta app'imizin kimlik bilgileri (code→token exchange için)
+META_APP_ID     = os.getenv("META_APP_ID", "")
+META_APP_SECRET = os.getenv("META_APP_SECRET", "")
 
 # Varsayılan şablon tanımları — merchant düzenleyebilir
 _DEFAULT_TEMPLATES = [
@@ -342,6 +347,96 @@ async def wa_connect(
                 username, brand, waba_id, phone_number_id, phone_display)
 
     return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id, "phone": phone_display}
+
+
+@router.post("/api/flow/wa-embedded")
+async def wa_embedded_signup(
+    request_data: dict,
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    WhatsApp Embedded Signup tamamlama: frontend'den gelen code + waba_id + phone_number_id
+    ile token alır, app'i WABA webhook'larına abone eder, numarayı kaydeder ve saklar.
+    Merchant hiçbir teknik veri girmez — 3 tıkla bağlanır.
+    """
+    code = str(request_data.get("code", "")).strip()
+    waba_id = str(request_data.get("waba_id", "")).strip()
+    phone_number_id = str(request_data.get("phone_number_id", "")).strip()
+
+    if not META_APP_ID or not META_APP_SECRET:
+        return JSONResponse({"ok": False, "error": "not_configured",
+            "message": "Embedded Signup henüz yapılandırılmadı (META_APP_ID/SECRET)."}, status_code=400)
+    if not code:
+        return JSONResponse({"ok": False, "error": "code_required"}, status_code=400)
+
+    # 1. code → uzun ömürlü access token
+    token = ""
+    try:
+        r = _requests.get(f"{META_GRAPH}/oauth/access_token", params={
+            "client_id": META_APP_ID,
+            "client_secret": META_APP_SECRET,
+            "code": code,
+        }, timeout=15)
+        token = (r.json() or {}).get("access_token", "")
+        if not token:
+            logger.warning("[WA-ES] token alınamadı: %s", r.text[:300])
+    except Exception as e:
+        logger.warning("[WA-ES] token exchange hatası: %s", e)
+    if not token:
+        return JSONResponse({"ok": False, "error": "token_exchange_failed",
+            "message": "Meta ile bağlantı tamamlanamadı. Tekrar deneyin."}, status_code=400)
+
+    # 2. WABA ID / Phone Number ID eksikse token'dan tamamla (debug_token + phone_numbers)
+    if not waba_id:
+        try:
+            r = _requests.get(f"{META_GRAPH}/debug_token",
+                              params={"input_token": token, "access_token": token}, timeout=10)
+            data = (r.json() or {}).get("data", {})
+            for gs in data.get("granular_scopes", []) or []:
+                if gs.get("scope") in ("whatsapp_business_management", "whatsapp_business_messaging"):
+                    tids = gs.get("target_ids") or []
+                    if tids:
+                        waba_id = str(tids[0]); break
+        except Exception as e:
+            logger.warning("[WA-ES] waba çözümleme hatası: %s", e)
+    if waba_id and not phone_number_id:
+        try:
+            r = _requests.get(f"{META_GRAPH}/{waba_id}/phone_numbers",
+                              params={"access_token": token, "fields": "id,display_phone_number"}, timeout=10)
+            nums = (r.json() or {}).get("data", []) or []
+            if nums:
+                phone_number_id = str(nums[0].get("id", ""))
+        except Exception as e:
+            logger.warning("[WA-ES] phone çözümleme hatası: %s", e)
+    if not waba_id or not phone_number_id:
+        return JSONResponse({"ok": False, "error": "ids_not_found",
+            "message": "WhatsApp hesabı/numarası bulunamadı."}, status_code=400)
+
+    # 3. App'i WABA webhook'larına abone et (gelen mesaj + status için)
+    try:
+        _requests.post(f"{META_GRAPH}/{waba_id}/subscribed_apps",
+                       params={"access_token": token}, timeout=10)
+    except Exception as e:
+        logger.warning("[WA-ES] subscribed_apps hatası (devam): %s", e)
+
+    # 4. Numarayı Cloud API'ye kaydet (zaten kayıtlıysa hata yutulur)
+    try:
+        _requests.post(f"{META_GRAPH}/{phone_number_id}/register",
+                       json={"messaging_product": "whatsapp", "pin": "000000"},
+                       params={"access_token": token}, timeout=10)
+    except Exception as e:
+        logger.warning("[WA-ES] register hatası (devam): %s", e)
+
+    # 5. Kaydet
+    existing = await store.get_flow_settings(username, brand)
+    settings = {**existing, "wa_token": token, "waba_id": waba_id, "phone_number_id": phone_number_id}
+    await store.save_flow_settings(username, brand, settings)
+    await store.set_merchant_phone_id(phone_number_id, username, brand)
+    logger.info("[WA-ES] ✓ Embedded signup: %s:%s waba=%s phone_id=%s", username, brand, waba_id, phone_number_id)
+
+    return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id}
 
 
 @router.post("/api/flow/test")

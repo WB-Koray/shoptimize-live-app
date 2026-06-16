@@ -16,6 +16,27 @@ import OnboardingModal from './OnboardingModal';
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 const MAX_EVENTS = 2000;
 
+// ── WhatsApp Embedded Signup (Facebook Login for Business) ───────────────────
+const META_APP_ID       = import.meta.env.VITE_META_APP_ID || '';
+const META_ES_CONFIG_ID = import.meta.env.VITE_META_ES_CONFIG_ID || '';
+
+/** Facebook JS SDK'yı bir kez yükler ve init eder. */
+function loadFbSdk() {
+  return new Promise((resolve, reject) => {
+    if (window.FB) { resolve(window.FB); return; }
+    if (!META_APP_ID) { reject(new Error('no_app_id')); return; }
+    window.fbAsyncInit = function () {
+      window.FB.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+      resolve(window.FB);
+    };
+    const s = document.createElement('script');
+    s.src = 'https://connect.facebook.net/en_US/sdk.js';
+    s.async = true; s.defer = true; s.crossOrigin = 'anonymous';
+    s.onerror = () => reject(new Error('sdk_load_failed'));
+    document.body.appendChild(s);
+  });
+}
+
 // ── Anonymization helpers ─────────────────────────────────────────────────────
 function maskName(name) {
   if (!name) return name;
@@ -2926,6 +2947,8 @@ function FlowPanel({ session, anonymized = false }) {
   const [quickToken, setQuickToken]         = useState('');
   const [quickConnecting, setQuickConnecting] = useState(false);
   const [quickMsg, setQuickMsg]             = useState('');
+  const [esConnecting, setEsConnecting]     = useState(false);
+  const embeddedAvailable = !!(META_APP_ID && META_ES_CONFIG_ID);
 
   const [testPhone, setTestPhone]     = useState('');
   const [testTemplate, setTestTmpl]  = useState('sepet_hatirlatma');
@@ -2980,6 +3003,43 @@ function FlowPanel({ session, anonymized = false }) {
     } catch { /* ignore */ }
     setLoading(false);
   }, [username, brand]);
+
+  async function handleEmbeddedSignup() {
+    setEsConnecting(true); setQuickMsg('');
+    let sessionInfo = {};
+    const msgHandler = (e) => {
+      if (typeof e.origin !== 'string' || !e.origin.endsWith('facebook.com')) return;
+      try {
+        const d = JSON.parse(e.data);
+        if (d.type === 'WA_EMBEDDED_SIGNUP' && d.event === 'FINISH' && d.data) sessionInfo = d.data;
+      } catch { /* non-JSON message */ }
+    };
+    window.addEventListener('message', msgHandler);
+    try {
+      const FB = await loadFbSdk();
+      FB.login((response) => {
+        window.removeEventListener('message', msgHandler);
+        const code = response?.authResponse?.code;
+        if (!code) { setEsConnecting(false); setQuickMsg('err:' + t('flow.es_cancelled')); return; }
+        fetch(`${base}/api/flow/wa-embedded${qp}`, {
+          method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, waba_id: sessionInfo.waba_id || '', phone_number_id: sessionInfo.phone_number_id || '' }),
+        }).then(r => r.json()).then(async d => {
+          if (d.ok) { setQuickMsg('ok:' + (d.phone_number_id || '')); await fetchSettings(); }
+          else setQuickMsg('err:' + (d.message || ''));
+        }).catch(() => setQuickMsg('err:')).finally(() => setEsConnecting(false));
+      }, {
+        config_id: META_ES_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+      });
+    } catch {
+      window.removeEventListener('message', msgHandler);
+      setEsConnecting(false);
+      setQuickMsg('err:' + t('flow.es_sdk_fail'));
+    }
+  }
 
   async function handleQuickConnect() {
     if (!quickToken.trim()) return;
@@ -3598,9 +3658,33 @@ function FlowPanel({ session, anonymized = false }) {
             </button>
             {connOpen && (
               <div className="px-4 pb-4 space-y-3 border-t border-border/60">
+                {/* Embedded Signup — tek tıkla Facebook/Meta ile bağlan (token bile gerekmez) */}
+                {!maskedToken && !anonymized && embeddedAvailable && (
+                  <div className="pt-3 space-y-2">
+                    <button onClick={handleEmbeddedSignup} disabled={esConnecting}
+                      className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                      style={{ background: '#1877F2' }}>
+                      {esConnecting ? <RefreshCw size={15} className="animate-spin" /> : <MessageCircle size={15} />}
+                      {t('flow.es_connect')}
+                    </button>
+                    <p className="text-[10px] text-textMute text-center">{t('flow.es_hint')}</p>
+                    {quickMsg.startsWith('ok:') && (
+                      <p className="text-[10px] text-green font-semibold text-center">✅ {t('flow.connected')}</p>
+                    )}
+                    {quickMsg.startsWith('err:') && (
+                      <p className="text-[10px] text-rose text-center">⚠️ {quickMsg.slice(4) || t('flow.qc_fail')}</p>
+                    )}
+                    <div className="flex items-center gap-2 py-1">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-[10px] text-textMute">{t('flow.es_or_token')}</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  </div>
+                )}
+
                 {/* Hızlı Bağlan — sadece token, Phone ID + WABA ID otomatik */}
                 {!maskedToken && !anonymized && (
-                  <div className="pt-3">
+                  <div className={embeddedAvailable ? '' : 'pt-3'}>
                     <div className="bg-greenSoft/40 border border-green/25 rounded-xl p-3 space-y-2">
                       <p className="text-xs font-bold text-green flex items-center gap-1.5"><Zap size={12} /> {t('flow.quick_connect')}</p>
                       <p className="text-[10px] text-textMute">{t('flow.quick_connect_hint')}</p>
