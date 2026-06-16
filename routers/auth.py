@@ -72,12 +72,14 @@ def _check_billing(username: str, brand: str) -> None:
 
     billing_status = get_setting(username, brand, "shopify", "billing_status", "")
 
-    # Kayıt yoksa → izin ver (doğrudan kurulum / self-hosted)
-    if not billing_status:
-        return
-
     # Aktif abonelik → izin ver
     if billing_status == "active":
+        return
+
+    installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+
+    # Shopify kaydı yok (password-login / self-hosted) → izin ver
+    if not installed_at:
         return
 
     shop = get_setting(username, brand, "shopify", "shop_domain", "")
@@ -94,19 +96,19 @@ def _check_billing(username: str, brand: str) -> None:
             },
         )
 
-    # Beklemede / iptal / dondurulmuş → deneme süresi içindeyse izin ver
-    if billing_status in ("pending", "cancelled", "frozen"):
-        installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
-        if installed_at and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400):
-            return  # Deneme süresi dolmamış
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "error": "trial_expired",
-                "message": f"Deneme süreniz doldu. Shoptimize Live'ı kullanmaya devam etmek için aboneliğinizi aktive edin.",
-                "retry_url": retry_url,
-            },
-        )
+    # Aktif DEĞİL + Shopify merchant (none/needs_billing/pending/cancelled/frozen):
+    # deneme süresi içindeyse izin ver, dolduysa engelle. Onaylamayan herkes deneme
+    # bitince engellenir (önceki bug: yalnızca pending/cancelled/frozen engelleniyordu).
+    if installed_at and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400):
+        return  # Deneme süresi dolmamış
+    raise HTTPException(
+        status_code=402,
+        detail={
+            "error": "trial_expired",
+            "message": "Deneme süreniz doldu. Shoptimize Live'ı kullanmaya devam etmek için aboneliğinizi aktive edin.",
+            "retry_url": retry_url,
+        },
+    )
 
 
 def _verify_hmac(params: dict, hmac_value: str) -> bool:
@@ -769,34 +771,40 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         if _asyncio.get_event_loop().is_running():
             _asyncio.ensure_future(_store.set_online_token(username, brand, online_tok))
 
-    _check_billing(username, brand)   # 402 fırlatır gerekirse
-
     from services.auth import create_access_token
     token = create_access_token(username, brand)
     tid   = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
 
-    # ── Billing: "needs_billing" durumunda charge oluştur ───────────────────
+    # ── Billing zorlaması ───────────────────────────────────────────────────
+    # Aktif → izin. Deneme sürüyor (ve reddetmemiş) → izin. Aksi halde (deneme bitti /
+    # needs_billing / reddedildi) → Shopify onay sayfasına yönlendir (billing_url).
+    # Onay URL'i üretilemezse bile 402 ile engelle — deneme bitince bedava erişim olmasın.
     billing_url = None
     if BILLING_ENABLED:
         billing_status = get_setting(username, brand, "shopify", "billing_status", "")
-        if billing_status in ("needs_billing", ""):
-            # Online token her zaman "expiring" — non-expiring token 403 hatasını önler
-            online_token = _exchange_session_token_for_online(shop, body.session_token)
+        installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+        trial_active = bool(installed_at) and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400)
+        allow = (billing_status == "active") or (not installed_at) or (trial_active and billing_status != "declined")
+        if not allow:
             access_token_for_billing = (
-                online_token
+                online_tok
                 or new_access_token
                 or get_setting(username, brand, "shopify", "admin_api_token", "")
             )
-            logger.warning("[SessTok] Billing için token: online=%s offline=%s",
-                           "evet" if online_token else "yok",
-                           "evet" if new_access_token else "yok")
             if access_token_for_billing:
                 try:
                     from routers.billing import create_charge
                     billing_url = create_charge(shop, access_token_for_billing, username, brand)
-                    logger.info("[SessTok] Billing charge oluşturuldu: shop=%s", shop)
+                    logger.info("[SessTok] Billing onay URL'i oluşturuldu: shop=%s", shop)
                 except Exception as e:
                     logger.warning("[SessTok] Billing charge oluşturulamadı: %s", e)
+            if not billing_url:
+                # Onaya yönlendirilemedi → erişimi engelle (bedava kullanımı önle)
+                raise HTTPException(status_code=402, detail={
+                    "error": "trial_expired",
+                    "message": "Deneme süreniz doldu. Devam etmek için aboneliğinizi aktive edin.",
+                    "retry_url": f"{APP_URL}/auth/shopify/install?shop={shop}",
+                })
 
     logger.info("[SessTok] ✓ Embedded giriş: shop=%s username=%s billing_url=%s",
                 shop, username, "yes" if billing_url else "no")
