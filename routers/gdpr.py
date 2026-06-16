@@ -20,13 +20,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
 
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
+SHOPIFY_CLIENT_SECRET_LEGACY = os.getenv("SHOPIFY_CLIENT_SECRET_LEGACY", "")
 
 
 def _verify_hmac(body: bytes, header_value: str) -> bool:
-    expected = base64.b64encode(
-        hmac.new(SHOPIFY_CLIENT_SECRET.encode(), body, hashlib.sha256).digest()
-    ).decode()
-    return hmac.compare_digest(expected, header_value or "")
+    """HMAC doğrula — önce ana secret, sonra legacy (eski app sürümü) fallback.
+    Aksi halde eski secret'la imzalanmış webhook'lar (ör. app/uninstalled) reddedilir."""
+    for secret in [s for s in (SHOPIFY_CLIENT_SECRET, SHOPIFY_CLIENT_SECRET_LEGACY) if s]:
+        expected = base64.b64encode(
+            hmac.new(secret.encode(), body, hashlib.sha256).digest()
+        ).decode()
+        if hmac.compare_digest(expected, header_value or ""):
+            return True
+    return False
 
 
 async def _read_and_verify(request: Request) -> bytes:

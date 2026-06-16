@@ -90,7 +90,8 @@ async def list_merchants(admin_token: str = Query(...)):
         installed_at = int(settings.get("installed_at", 0) or 0)
         shop_domain = settings.get("shop_domain", "")
         granted_scopes = settings.get("granted_scopes", "")
-        admin_token_val = settings.get("admin_api_token", "")
+        # Token kök veya nested 'settings' altında olabilir (paylaşımlı DB)
+        admin_token_val = settings.get("admin_api_token") or (settings.get("settings") or {}).get("admin_api_token") or ""
 
         # Mağaza görünen adı — yoksa Shopify'dan çek (REST+GraphQL) ve kalıcı kaydet (cache)
         shop_name = settings.get("shop_name", "")
