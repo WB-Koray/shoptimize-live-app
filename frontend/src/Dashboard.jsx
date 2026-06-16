@@ -2923,6 +2923,9 @@ function FlowPanel({ session, anonymized = false }) {
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [saveErr, setSaveErr]   = useState('');
+  const [quickToken, setQuickToken]         = useState('');
+  const [quickConnecting, setQuickConnecting] = useState(false);
+  const [quickMsg, setQuickMsg]             = useState('');
 
   const [testPhone, setTestPhone]     = useState('');
   const [testTemplate, setTestTmpl]  = useState('sepet_hatirlatma');
@@ -2977,6 +2980,29 @@ function FlowPanel({ session, anonymized = false }) {
     } catch { /* ignore */ }
     setLoading(false);
   }, [username, brand]);
+
+  async function handleQuickConnect() {
+    if (!quickToken.trim()) return;
+    setQuickConnecting(true); setQuickMsg('');
+    try {
+      const r = await fetch(`${base}/api/flow/wa-connect${qp}`, {
+        method: 'POST', headers: { ...authH, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: quickToken.trim() }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        setQuickMsg('ok:' + (d.phone || d.phone_number_id));
+        setQuickToken('');
+        await fetchSettings();   // phone_number_id + waba_id otomatik dolar
+      } else {
+        setQuickMsg('err:' + (d.message || d.error || ''));
+      }
+    } catch {
+      setQuickMsg('err:');
+    } finally {
+      setQuickConnecting(false);
+    }
+  }
 
   const fetchLogs = useCallback(async () => {
     setLogsL(true);
@@ -3572,6 +3598,31 @@ function FlowPanel({ session, anonymized = false }) {
             </button>
             {connOpen && (
               <div className="px-4 pb-4 space-y-3 border-t border-border/60">
+                {/* Hızlı Bağlan — sadece token, Phone ID + WABA ID otomatik */}
+                {!maskedToken && !anonymized && (
+                  <div className="pt-3">
+                    <div className="bg-greenSoft/40 border border-green/25 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-green flex items-center gap-1.5"><Zap size={12} /> {t('flow.quick_connect')}</p>
+                      <p className="text-[10px] text-textMute">{t('flow.quick_connect_hint')}</p>
+                      <div className="flex gap-2">
+                        <input type="password" value={quickToken} onChange={e => setQuickToken(e.target.value)}
+                          placeholder="EAAxxxxxxx…"
+                          className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-textMute focus:outline-none focus:border-green/60" />
+                        <button onClick={handleQuickConnect} disabled={quickConnecting || !quickToken.trim()}
+                          className="px-4 py-2 bg-green text-bg rounded-lg text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shrink-0">
+                          {quickConnecting ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />} {t('flow.connect_btn')}
+                        </button>
+                      </div>
+                      {quickMsg.startsWith('ok:') && (
+                        <p className="text-[10px] text-green font-semibold">✅ {t('flow.qc_success').replace('{phone}', quickMsg.slice(3))}</p>
+                      )}
+                      {quickMsg.startsWith('err:') && (
+                        <p className="text-[10px] text-rose">⚠️ {quickMsg.slice(4) || t('flow.qc_fail')}</p>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-textMute text-center mt-2">{t('flow.or_manual')}</p>
+                  </div>
+                )}
                 <div className="space-y-1.5 pt-3">
                   <label className="text-[10px] font-semibold text-textMute uppercase tracking-wide">{t('flow.wa_token')}</label>
                   <div className="relative">

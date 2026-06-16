@@ -279,6 +279,71 @@ async def save_flow_settings(
     return {"ok": True}
 
 
+@router.post("/api/flow/wa-connect")
+async def wa_connect(
+    request_data: dict,
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Quick connect: merchant SADECE token yapıştırır → WABA ID + Phone Number ID
+    Meta API'sinden otomatik bulunur ve kaydedilir. 3 teknik alan yerine 1.
+    """
+    token = str(request_data.get("token", "")).strip()
+    if not token:
+        return JSONResponse({"ok": False, "error": "token_required",
+                             "message": "WhatsApp token gerekli."}, status_code=400)
+
+    # 1. Token'dan WABA ID'yi bul (debug_token → granular_scopes → target_ids)
+    waba_id = ""
+    try:
+        r = _requests.get(f"{META_GRAPH}/debug_token",
+                          params={"input_token": token, "access_token": token}, timeout=12)
+        data = (r.json() or {}).get("data", {})
+        for gs in data.get("granular_scopes", []) or []:
+            if gs.get("scope") in ("whatsapp_business_management", "whatsapp_business_messaging"):
+                tids = gs.get("target_ids") or []
+                if tids:
+                    waba_id = str(tids[0])
+                    break
+    except Exception as e:
+        logger.warning("[WA-CONNECT] debug_token hatası: %s", e)
+    if not waba_id:
+        return JSONResponse({"ok": False, "error": "waba_not_found",
+            "message": "Token'da WhatsApp Business hesabı bulunamadı. Token'ı "
+                       "whatsapp_business_management ve whatsapp_business_messaging "
+                       "izinleriyle oluşturduğunuzdan emin olun."}, status_code=400)
+
+    # 2. WABA'dan telefon numarasını ve ID'sini bul
+    phone_number_id = ""
+    phone_display = ""
+    try:
+        r = _requests.get(f"{META_GRAPH}/{waba_id}/phone_numbers",
+                          params={"access_token": token,
+                                  "fields": "id,display_phone_number,verified_name"}, timeout=12)
+        nums = (r.json() or {}).get("data", []) or []
+        if nums:
+            phone_number_id = str(nums[0].get("id", ""))
+            phone_display = nums[0].get("display_phone_number", "") or nums[0].get("verified_name", "")
+    except Exception as e:
+        logger.warning("[WA-CONNECT] phone_numbers hatası: %s", e)
+    if not phone_number_id:
+        return JSONResponse({"ok": False, "error": "phone_not_found",
+            "message": "Bu WhatsApp Business hesabında telefon numarası bulunamadı. "
+                       "Önce Meta'da numara ekleyin, sonra tekrar deneyin."}, status_code=400)
+
+    # 3. Mevcut ayarları koruyarak bağlantı bilgilerini kaydet
+    existing = await store.get_flow_settings(username, brand)
+    settings = {**existing, "wa_token": token, "waba_id": waba_id, "phone_number_id": phone_number_id}
+    await store.save_flow_settings(username, brand, settings)
+    await store.set_merchant_phone_id(phone_number_id, username, brand)
+    logger.info("[WA-CONNECT] ✓ %s:%s → waba=%s phone_id=%s (%s)",
+                username, brand, waba_id, phone_number_id, phone_display)
+
+    return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id, "phone": phone_display}
+
+
 @router.post("/api/flow/test")
 async def send_test_message(
     request_data: dict,
