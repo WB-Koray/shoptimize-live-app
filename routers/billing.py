@@ -11,6 +11,7 @@ Akış:
 """
 
 import logging
+import math
 import os
 import time
 from datetime import datetime, timezone
@@ -158,7 +159,8 @@ async def billing_info_endpoint(
     now = time.time()
     days_remaining = None
     if trial_ends_ts:
-        days_remaining = max(0, int((trial_ends_ts - now) / 86400))
+        # ceil: son kısmi gün de "1 gün kaldı" görünsün; "doldu" yalnızca gerçekten bitince
+        days_remaining = max(0, math.ceil((trial_ends_ts - now) / 86400))
 
     def _iso(ts):
         return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else None

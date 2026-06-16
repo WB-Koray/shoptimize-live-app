@@ -379,8 +379,9 @@ async def auth_status(current_user: dict = Depends(get_current_user_dep)):
     installed_at_ts = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
     trial_remaining = None
     if billing_status in ("pending", "cancelled", "frozen") and installed_at_ts:
+        import math
         remaining_sec = (installed_at_ts + PLAN_TRIAL_DAYS * 86400) - time.time()
-        trial_remaining = max(0, int(remaining_sec / 86400))
+        trial_remaining = max(0, math.ceil(remaining_sec / 86400))
     return {
         "ok": True,
         "username": username,
