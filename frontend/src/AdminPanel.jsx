@@ -5,24 +5,23 @@ import { ThemeSwitch } from './ThemeContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://live.shoptimize.com.tr';
 
+// Türetilmiş duruma göre (backend `status` alanı) — etiket/filtre/istatistik tutarlı
 const STATUS_COLORS = {
-  active:      'text-green bg-green/10 border-green/20',
-  pending:     'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  none:        'text-textMute bg-surfaceAlt border-border',
-  declined:    'text-rose bg-roseSoft border-rose/20',
-  uninstalled: 'text-textMute bg-surfaceAlt border-border',
-  frozen:      'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  cancelled:   'text-orange-400 bg-orange-400/10 border-orange-400/20',
+  active:        'text-green bg-green/10 border-green/20',
+  trialing:      'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  needs_billing: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  trial_ended:   'text-orange-400 bg-orange-400/10 border-orange-400/20',
+  declined:      'text-rose bg-roseSoft border-rose/20',
+  uninstalled:   'text-textMute bg-surfaceAlt border-border',
 };
 
 const STATUS_LABELS = {
-  active:      'Active',
-  pending:     'Trialing',
-  none:        'No Billing',
-  declined:    'Declined',
-  uninstalled: 'Uninstalled',
-  frozen:      'Frozen',
-  cancelled:   'Cancelled',
+  active:        'Active',
+  trialing:      'Trialing',
+  needs_billing: 'Awaiting approval',
+  trial_ended:   'Trial ended',
+  declined:      'Declined',
+  uninstalled:   'Uninstalled',
 };
 
 function StatCard({ icon: Icon, label, value, color = 'text-text' }) {
@@ -64,10 +63,12 @@ export default function AdminPanel({ adminToken, onExit }) {
   useEffect(() => { load(); }, [load]);
 
   const merchants = (data?.merchants || []).filter(m => {
-    if (filter !== 'all' && m.billing_status !== filter) return false;
+    if (filter !== 'all' && m.status !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return m.username.toLowerCase().includes(q) || m.shop_domain.toLowerCase().includes(q);
+      return m.username.toLowerCase().includes(q)
+        || (m.shop_domain || '').toLowerCase().includes(q)
+        || (m.shop_name || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -116,10 +117,10 @@ export default function AdminPanel({ adminToken, onExit }) {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard icon={CheckCircle} label="Active" value={stats.active ?? '—'} color="text-green" />
+          <StatCard icon={CheckCircle} label="Active (paying)" value={stats.active ?? '—'} color="text-green" />
           <StatCard icon={Clock} label="Trialing" value={stats.trialing ?? '—'} color="text-amber-400" />
-          <StatCard icon={XCircle} label="Declined" value={stats.declined ?? '—'} color="text-rose" />
-          <StatCard icon={Trash2} label="Uninstalled" value={stats.uninstalled ?? '—'} color="text-textMute" />
+          <StatCard icon={AlertCircle} label="Awaiting approval" value={stats.needs_billing ?? '—'} color="text-blue-400" />
+          <StatCard icon={XCircle} label="Trial ended" value={stats.trial_ended ?? '—'} color="text-orange-400" />
         </div>
 
         {/* Filters & Search */}
@@ -131,8 +132,8 @@ export default function AdminPanel({ adminToken, onExit }) {
             className="bg-surfaceAlt border border-border rounded-xl px-3 py-2 text-sm text-text placeholder:text-textMute
               focus:outline-none focus:border-green/60 focus:ring-1 focus:ring-green/30 w-64"
           />
-          <div className="flex gap-1">
-            {['all', 'active', 'pending', 'declined', 'uninstalled'].map(f => (
+          <div className="flex gap-1 flex-wrap">
+            {['all', 'active', 'trialing', 'needs_billing', 'trial_ended', 'declined'].map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -145,7 +146,7 @@ export default function AdminPanel({ adminToken, onExit }) {
                 {f === 'all' ? 'All' : STATUS_LABELS[f]}
                 {f !== 'all' && data && (
                   <span className="ml-1 opacity-60">
-                    {data.merchants.filter(m => m.billing_status === f).length}
+                    {data.merchants.filter(m => m.status === f).length}
                   </span>
                 )}
               </button>
@@ -160,9 +161,10 @@ export default function AdminPanel({ adminToken, onExit }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-surfaceAlt">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Merchant</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Shop</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Owner</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Billing</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">WA</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Events</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Online</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">Installed</th>
@@ -172,30 +174,43 @@ export default function AdminPanel({ adminToken, onExit }) {
               <tbody>
                 {loading && !data && (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-textMute text-sm">Loading…</td>
+                    <td colSpan={8} className="text-center py-12 text-textMute text-sm">Loading…</td>
                   </tr>
                 )}
                 {!loading && merchants.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-textMute text-sm">No merchants found</td>
+                    <td colSpan={8} className="text-center py-12 text-textMute text-sm">No merchants found</td>
                   </tr>
                 )}
                 {merchants.map((m, i) => (
-                  <tr key={`${m.username}:${m.brand}`} className={`border-b border-border last:border-0 hover:bg-surfaceAlt/50 transition-colors ${i % 2 === 0 ? '' : ''}`}>
+                  <tr key={`${m.username}:${m.brand}`} className="border-b border-border last:border-0 hover:bg-surfaceAlt/50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-text">{m.username}</div>
-                      {m.brand !== 'default' && <div className="text-[11px] text-textMute">{m.brand}</div>}
+                      <div className="font-medium text-text">
+                        {m.shop_name
+                          ? (m.shop_domain
+                              ? <a href={`https://${m.shop_domain}/admin`} target="_blank" rel="noopener noreferrer" className="hover:text-green transition-colors">{m.shop_name}</a>
+                              : m.shop_name)
+                          : <span className="text-textDim">{m.username}</span>}
+                      </div>
+                      <div className="text-[11px] text-textMute">
+                        {m.shop_domain ? m.shop_domain.replace('.myshopify.com', '') : m.username}
+                        {m.brand !== 'default' && ` · ${m.brand}`}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-textDim">
-                      {m.shop_domain
-                        ? <a href={`https://${m.shop_domain}/admin`} target="_blank" rel="noopener noreferrer" className="hover:text-green transition-colors">{m.shop_domain.replace('.myshopify.com', '')}</a>
-                        : <span className="text-textMute">—</span>
-                      }
+                    <td className="px-4 py-3 text-textDim text-xs">
+                      {m.owner_phone
+                        ? <a href={`https://wa.me/${m.owner_phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green transition-colors font-mono">{m.owner_phone}</a>
+                        : <span className="text-textMute">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${STATUS_COLORS[m.billing_status] || STATUS_COLORS.none}`}>
-                        {STATUS_LABELS[m.billing_status] || m.billing_status}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${STATUS_COLORS[m.status] || STATUS_COLORS.uninstalled}`}>
+                        {STATUS_LABELS[m.status] || m.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {m.wa_connected
+                        ? <span className="text-green" title="WhatsApp bağlı">✓</span>
+                        : <span className="text-textMute">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-textDim">
                       {m.event_count > 0 ? m.event_count.toLocaleString() : <span className="text-textMute">0</span>}

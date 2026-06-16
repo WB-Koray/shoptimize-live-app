@@ -51,6 +51,34 @@ async def list_merchants(admin_token: str = Query(...)):
         installed_at = int(settings.get("installed_at", 0) or 0)
         shop_domain = settings.get("shop_domain", "")
         granted_scopes = settings.get("granted_scopes", "")
+        admin_token_val = settings.get("admin_api_token", "")
+
+        # Mağaza görünen adı — yoksa Shopify'dan çek ve kalıcı kaydet (backfill, sonra cache)
+        shop_name = settings.get("shop_name", "")
+        if not shop_name and shop_domain and admin_token_val:
+            try:
+                from routers.live import _shopify_graphql
+                _r = _shopify_graphql(shop_domain, admin_token_val, "{ shop { name } }")
+                shop_name = (_r.get("data", {}).get("shop", {}) or {}).get("name", "") or ""
+                if shop_name:
+                    set_connection_settings(username, brand, "shopify", {"shop_name": shop_name})
+            except Exception:
+                pass
+
+        # Sahip telefonu (iletişim için)
+        owner_phone = ""
+        try:
+            owner_phone = await store.get_owner_phone(username, brand)
+        except Exception:
+            pass
+
+        # WhatsApp bağlı mı (flow ayarları)
+        wa_connected = False
+        try:
+            _fs = await store.get_flow_settings(username, brand)
+            wa_connected = bool(_fs.get("wa_token") and _fs.get("phone_number_id"))
+        except Exception:
+            pass
 
         # Event sayısı
         event_count = 0
@@ -71,15 +99,33 @@ async def list_merchants(admin_token: str = Query(...)):
         # Deneme süresi hesapla
         trial_ends_at = None
         trial_remaining_hours = None
-        if installed_at and billing_status in ("pending", "none"):
+        if installed_at and billing_status in ("pending", "none", "needs_billing", "cancelled", "frozen"):
             trial_ends_at = installed_at + PLAN_TRIAL_DAYS * 86400
             trial_remaining_hours = max(0, int((trial_ends_at - now) / 3600))
+
+        # Türetilmiş durum — etiket/filtre/istatistik tutarlı olsun diye tek kaynak
+        if billing_status == "active":
+            status = "active"
+        elif billing_status == "declined":
+            status = "declined"
+        elif billing_status == "uninstalled":
+            status = "uninstalled"
+        elif billing_status == "needs_billing":
+            status = "needs_billing"
+        elif (trial_remaining_hours or 0) > 0:
+            status = "trialing"
+        else:
+            status = "trial_ended"
 
         result.append({
             "username": username,
             "brand": brand,
             "shop_domain": shop_domain,
+            "shop_name": shop_name,
+            "owner_phone": owner_phone,
+            "wa_connected": wa_connected,
             "billing_status": billing_status,
+            "status": status,
             "installed_at": installed_at,
             "installed_days_ago": int((now - installed_at) / 86400) if installed_at else None,
             "trial_ends_at": trial_ends_at,
@@ -87,23 +133,26 @@ async def list_merchants(admin_token: str = Query(...)):
             "tid": tid,
             "event_count": event_count,
             "active_visitors": active_visitors,
-            "has_token": bool(settings.get("admin_api_token")),
+            "has_token": bool(admin_token_val),
             "granted_scopes": granted_scopes,
         })
 
-    # Billing durumuna göre sırala: active → pending → none → declined → uninstalled
-    STATUS_ORDER = {"active": 0, "pending": 1, "none": 2, "declined": 3, "uninstalled": 4, "frozen": 5, "cancelled": 6}
-    result.sort(key=lambda m: (STATUS_ORDER.get(m["billing_status"], 9), m["username"]))
+    # Türetilmiş duruma göre sırala (önce aktif, sonra ödeme bekleyen, deneme, bitmiş...)
+    STATUS_ORDER = {"active": 0, "needs_billing": 1, "trialing": 2, "trial_ended": 3,
+                    "declined": 4, "uninstalled": 5}
+    result.sort(key=lambda m: (STATUS_ORDER.get(m["status"], 9), m["username"]))
 
     return {
         "ok": True,
         "total": len(result),
         "merchants": result,
         "stats": {
-            "active": sum(1 for m in result if m["billing_status"] == "active"),
-            "trialing": sum(1 for m in result if m["billing_status"] in ("pending", "none") and (m.get("trial_remaining_hours") or 0) > 0),
-            "declined": sum(1 for m in result if m["billing_status"] == "declined"),
-            "uninstalled": sum(1 for m in result if m["billing_status"] == "uninstalled"),
+            "active":       sum(1 for m in result if m["status"] == "active"),
+            "trialing":     sum(1 for m in result if m["status"] == "trialing"),
+            "needs_billing":sum(1 for m in result if m["status"] == "needs_billing"),
+            "trial_ended":  sum(1 for m in result if m["status"] == "trial_ended"),
+            "declined":     sum(1 for m in result if m["status"] == "declined"),
+            "uninstalled":  sum(1 for m in result if m["status"] == "uninstalled"),
         },
     }
 

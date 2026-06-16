@@ -243,6 +243,10 @@ async def shopify_callback(
         billing   = shop_info.get("billingAddress") or {}
         owner_phone = str(shop_info.get("phone") or billing.get("phone") or "").strip()
         owner_name  = str(billing.get("name") or shop_info.get("name") or "").strip()
+        # Mağaza görünen adını kaydet (admin panelde handle yerine gerçek isim göster)
+        _shop_name = str(shop_info.get("name") or "").strip()
+        if _shop_name:
+            set_connection_settings(username, brand, "shopify", {"shop_name": _shop_name})
         if owner_phone:
             digits = "".join(c for c in owner_phone if c.isdigit())
             if digits and not owner_phone.startswith("+"):

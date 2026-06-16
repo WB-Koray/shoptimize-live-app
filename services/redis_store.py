@@ -580,12 +580,28 @@ class RedisStore:
     # ── Mağaza sahibi telefon → username eşleşmesi ──────────────────────────────
 
     async def set_owner_phone(self, username: str, brand: str, phone: str) -> None:
-        """Mağaza sahibi telefonu → username:brand eşleşmesini kaydeder (1 yıl TTL)."""
+        """Mağaza sahibi telefonu → username:brand eşleşmesini kaydeder (1 yıl TTL).
+        Ayrıca ileri yönlü indeks (username:brand → telefon) — admin panelde göstermek için."""
         normalized = phone.strip().lstrip("+")
         if not normalized:
             return
         await self._redis.set(f"owner_phone:{normalized}", f"{username}:{brand}", ex=86400 * 365)
+        await self._redis.set(f"owner_phone_of:{username}:{brand}", "+" + normalized, ex=86400 * 365)
         logger.info("[REDIS] Sahip telefonu kaydedildi: %s → %s:%s", normalized[-4:], username, brand)
+
+    async def get_owner_phone(self, username: str, brand: str = "default") -> str:
+        """Merchant'ın kayıtlı sahip telefonunu döner (ileri indeks; yoksa ters indekste arar)."""
+        val = await self._redis.get(f"owner_phone_of:{username}:{brand}")
+        if val:
+            return val
+        # Eski kayıtlar için ters indekste ara (forward index olmadan kurulanlar)
+        target = f"{username}:{brand}"
+        async for key in self._redis.scan_iter("owner_phone:*"):
+            if await self._redis.get(key) == target:
+                phone = "+" + key.split("owner_phone:", 1)[1]
+                await self._redis.set(f"owner_phone_of:{username}:{brand}", phone, ex=86400 * 365)
+                return phone
+        return ""
 
     async def get_username_by_phone(self, phone: str) -> Optional[tuple[str, str]]:
         """Telefon numarasına göre (username, brand) döner; bulunamazsa None."""
