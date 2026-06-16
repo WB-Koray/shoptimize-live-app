@@ -97,31 +97,6 @@ async def list_merchants(admin_token: str = Query(...)):
         granted_scopes = settings.get("granted_scopes", "")
         # Token kök veya nested 'settings' altında olabilir (paylaşımlı DB)
         admin_token_val = settings.get("admin_api_token") or (settings.get("settings") or {}).get("admin_api_token") or ""
-
-        # Mağaza adı + token sağlık kontrolü (ek güvence: kaçırılan uninstall webhook'unu yakala)
-        shop_name = settings.get("shop_name", "")
-        token_for_name = admin_token_val
-        if not token_for_name:
-            try:
-                token_for_name = await store.get_online_token(username, brand) or ""
-            except Exception:
-                token_for_name = ""
-        # Aktif/trial/onay-bekleyen mağazalarda token'ı doğrula (terminal durumları atla)
-        need_check = (billing_status not in ("uninstalled", "declined")) and bool(shop_domain) and bool(token_for_name)
-        if need_check and (not shop_name or admin_token_val):
-            import asyncio as _aio
-            info = await _aio.to_thread(_fetch_shop_info, shop_domain, token_for_name)
-            if info.get("name"):
-                if info["name"] != shop_name:
-                    shop_name = info["name"]
-                    set_connection_settings(username, brand, "shopify", {"shop_name": shop_name})
-            elif info.get("auth_failed") and admin_token_val:
-                # Token revoke edilmiş → uygulama kaldırılmış (webhook kaçmış olsa bile yakala)
-                billing_status = "uninstalled"
-                set_connection_settings(username, brand, "shopify",
-                                        {"billing_status": "uninstalled", "admin_api_token": ""})
-                logger.info("[ADMIN] token revoke → uninstalled işaretlendi: %s:%s", username, brand)
-
         # Sahip telefonu (iletişim için)
         owner_phone = ""
         try:
@@ -167,6 +142,40 @@ async def list_merchants(admin_token: str = Query(...)):
         except Exception:
             pass
 
+        # HEAL: yanlış "uninstalled" — son 1 saatte aktivite varsa mağaza kesinlikle kurulu
+        # (kaldırılmış app event göndermez). Önceki agresif token-check hatasını düzeltir.
+        if billing_status == "uninstalled" and last_event_ts and (now * 1000 - last_event_ts) < 3600 * 1000:
+            billing_status = "none"
+            set_connection_settings(username, brand, "shopify", {"billing_status": "none"})
+            logger.info("[ADMIN] yanlış uninstalled düzeltildi (aktivite var): %s:%s", username, brand)
+
+        # Mağaza adı backfill + token sağlık göstergesi
+        shop_name = settings.get("shop_name", "")
+        token_for_name = admin_token_val
+        if not token_for_name:
+            try:
+                token_for_name = await store.get_online_token(username, brand) or ""
+            except Exception:
+                token_for_name = ""
+        token_invalid = False
+        need_check = (billing_status not in ("uninstalled", "declined")) and bool(shop_domain) and bool(token_for_name)
+        if need_check and (not shop_name or admin_token_val):
+            import asyncio as _aio
+            info = await _aio.to_thread(_fetch_shop_info, shop_domain, token_for_name)
+            if info.get("name"):
+                if info["name"] != shop_name:
+                    shop_name = info["name"]
+                    set_connection_settings(username, brand, "shopify", {"shop_name": shop_name})
+            elif info.get("auth_failed"):
+                # 401 = token iptal. Aktif mağazayı korumak için: yalnızca uzun süredir
+                # aktivite YOKSA (dormant) uninstalled işaretle. Token'ı SİLME.
+                token_invalid = True
+                dormant = (not last_event_ts) or (now * 1000 - last_event_ts) > 2 * 86400 * 1000
+                if dormant and admin_token_val:
+                    billing_status = "uninstalled"
+                    set_connection_settings(username, brand, "shopify", {"billing_status": "uninstalled"})
+                    logger.info("[ADMIN] token revoke + dormant → uninstalled: %s:%s", username, brand)
+
         # Deneme süresi hesapla
         trial_ends_at = None
         trial_remaining_hours = None
@@ -208,6 +217,7 @@ async def list_merchants(admin_token: str = Query(...)):
             "orders_count": orders_count,
             "revenue": round(revenue, 2),
             "has_token": bool(admin_token_val),
+            "token_invalid": token_invalid,
             "pixel_ready": bool(tid),
             "granted_scopes": granted_scopes,
         })
