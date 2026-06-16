@@ -117,6 +117,7 @@ export default function App() {
   const [session, setSession]           = useState(readValidSession);
   const [adminToken, setAdminToken]     = useState(null);
   const [shopifyLoading, setShopifyLoading] = useState(false);
+  const [billingRetryUrl, setBillingRetryUrl] = useState('');
   const [shopifyError, setShopifyError]     = useState('');
   const authAttempted = useRef(false);
 
@@ -220,6 +221,7 @@ export default function App() {
         // stale dashboard yerine billing/hata ekranı gösterilsin.
         clearSession();
         setSession(null);
+        setBillingRetryUrl(data.detail?.retry_url || `${API_URL}/auth/shopify/install?shop=${encodeURIComponent(currentShop())}`);
         setShopifyError(data.detail?.message || data.detail || 'Aboneliğinizi aktive edin');
         return;
       }
@@ -294,14 +296,25 @@ export default function App() {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        minHeight: '100vh', background: '#0f1117', flexDirection: 'column', gap: 12,
+        minHeight: '100vh', background: '#0f1117', flexDirection: 'column', gap: 14, padding: 24,
       }}>
-        <p style={{ color: '#f87171', fontSize: 14, margin: 0 }}>{shopifyError}</p>
+        <p style={{ color: '#f87171', fontSize: 15, margin: 0, textAlign: 'center', maxWidth: 420 }}>{shopifyError}</p>
+        {billingRetryUrl && (
+          <button
+            onClick={() => topRedirect(billingRetryUrl)}
+            style={{
+              padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
+              color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            Aboneliği Aktive Et →
+          </button>
+        )}
         <button
-          onClick={() => { authAttempted.current = false; doShopifyAuth(); }}
+          onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(); }}
           style={{
-            padding: '8px 20px', borderRadius: 8, background: '#22d3a5',
-            color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 13,
+            padding: '7px 18px', borderRadius: 8, background: 'transparent',
+            color: '#6b7280', border: '1px solid #2a2f3a', cursor: 'pointer', fontSize: 12,
           }}
         >
           Tekrar dene
