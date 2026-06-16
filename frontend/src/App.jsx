@@ -158,11 +158,18 @@ export default function App() {
     // aynı tarayıcıda güvenle kullanabilmesini sağlar (incognito dahil).
     if (!detectShopifyContext() || authAttempted.current) return;
 
+    // Plan sekmesindeki "Aboneliği Aktive Et" → ?spt_activate=1 ile yeniden yüklenir
+    const wantActivate = params.get('spt_activate') === '1';
+    if (wantActivate) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('spt_activate');
+      window.history.replaceState({}, '', url.toString());
+    }
     authAttempted.current = true;
-    doShopifyAuth();
+    doShopifyAuth(wantActivate);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function doShopifyAuth() {
+  async function doShopifyAuth(activate = false) {
     setShopifyLoading(true);
     setShopifyError('');
     try {
@@ -196,7 +203,7 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/auth/shopify-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_token: sessionToken }),
+        body: JSON.stringify({ session_token: sessionToken, activate }),
       });
 
       const data = await res.json();
@@ -299,17 +306,15 @@ export default function App() {
         minHeight: '100vh', background: '#0f1117', flexDirection: 'column', gap: 14, padding: 24,
       }}>
         <p style={{ color: '#f87171', fontSize: 15, margin: 0, textAlign: 'center', maxWidth: 420 }}>{shopifyError}</p>
-        {billingRetryUrl && (
-          <button
-            onClick={() => topRedirect(billingRetryUrl)}
-            style={{
-              padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
-              color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
-            }}
-          >
-            Aboneliği Aktive Et →
-          </button>
-        )}
+        <button
+          onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(true); }}
+          style={{
+            padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
+            color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+          }}
+        >
+          Aboneliği Aktive Et →
+        </button>
         <button
           onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(); }}
           style={{

@@ -4642,17 +4642,17 @@ export default function Dashboard({ session, onLogout }) {
               )}
 
               {/* Declined */}
-              {isDeclined && bi && (
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-textMute">{t('plan.declined_msg')}</p>
-                  {shopifyShop && (
-                    <a href={`https://${shopifyShop}/admin/apps/${encodeURIComponent('shoptimize-live')}`}
-                      target="_top" rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity no-underline">
-                      <ExternalLink size={11} /> {t('plan.start_sub')}
-                    </a>
-                  )}
-                </div>
+              {isDeclined && (
+                <p className="text-sm text-textMute text-center">{t('plan.declined_msg')}</p>
+              )}
+
+              {/* Aboneliği aktive et — aktif değilse (deneme/declined) her zaman göster */}
+              {!isActive && (
+                <button
+                  onClick={() => { const u = new URL(window.location.href); u.searchParams.set('spt_activate', '1'); window.location.href = u.toString(); }}
+                  className="w-full py-2.5 bg-gradient-to-r from-green to-teal text-bg rounded-lg text-sm font-bold hover:brightness-105 transition-all shadow-lg flex items-center justify-center gap-1.5">
+                  <CreditCard size={14} /> {t('plan.activate_now')}
+                </button>
               )}
             </div>
 

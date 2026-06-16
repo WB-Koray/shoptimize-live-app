@@ -217,13 +217,19 @@ async def shopify_callback(
         set_connection_settings(username, brand, "shopify", {"admin_api_token": access_token})
         logger.info("[OAuth] ✓ Yeniden giriş: shop=%s username=%s", shop, username)
     else:
-        set_connection_settings(username, brand, "shopify", {
+        _updates = {
             "shop_domain": shop,
             "admin_api_token": access_token,
             "granted_scopes": granted_scopes,
-            "installed_at": int(time.time()),
-        })
-        logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s", shop, username)
+        }
+        # installed_at'i KORU — daha önce kurulduysa deneme tekrar başlamasın
+        # (re-install ile sonsuz deneme açığını önler). Yoksa ilk kurulum say.
+        _existing_installed = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
+        if not _existing_installed:
+            _updates["installed_at"] = int(time.time())
+        set_connection_settings(username, brand, "shopify", _updates)
+        logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s installed_at_korundu=%s",
+                    shop, username, bool(_existing_installed))
 
     # 4b. Mağaza sahibi bilgilerini al ve kaydet (GraphQL)
     owner_phone = ""
@@ -599,6 +605,7 @@ async def request_access(body: AccessRequest):
 
 class ShopifySessionTokenRequest(BaseModel):
     session_token: str
+    activate: bool = False   # True → deneme sürse bile abonelik onayına yönlendir
 
 
 def _verify_jwt_with_secret(header_b64: str, payload_b64: str, sig_b64: str, secret: str) -> bool:
@@ -787,7 +794,8 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
         trial_active = bool(installed_at) and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400)
         allow = (billing_status == "active") or (not installed_at) or (trial_active and billing_status != "declined")
-        if not allow:
+        # activate=True → merchant "Aboneliği Aktive Et"e bastı; deneme sürse bile onaya götür
+        if (not allow) or (body.activate and billing_status != "active"):
             access_token_for_billing = (
                 online_tok
                 or new_access_token
@@ -800,8 +808,9 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
                     logger.info("[SessTok] Billing onay URL'i oluşturuldu: shop=%s", shop)
                 except Exception as e:
                     logger.warning("[SessTok] Billing charge oluşturulamadı: %s", e)
-            if not billing_url:
-                # Onaya yönlendirilemedi → erişimi engelle (bedava kullanımı önle)
+            if not billing_url and not allow:
+                # Deneme bitti AMA onaya yönlendirilemedi → erişimi engelle (bedava kullanımı önle).
+                # (activate sırasında deneme hâlâ sürüyorsa engelleme — sadece izin ver.)
                 raise HTTPException(status_code=402, detail={
                     "error": "trial_expired",
                     "message": "Deneme süreniz doldu. Devam etmek için aboneliğinizi aktive edin.",
