@@ -232,11 +232,13 @@ async def list_merchants(admin_token: str = Query(...)):
     converted_pool = active_n + sum(1 for m in result if m["status"] in ("trial_ended", "declined"))
     conversion = round(active_n / converted_pool * 100, 1) if converted_pool else 0.0
 
+    billing_enabled = os.getenv("BILLING_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
     return {
         "ok": True,
         "total": len(result),
         "merchants": result,
         "plan_price": PLAN_PRICE,
+        "billing_enabled": billing_enabled,
         "stats": {
             "active":       active_n,
             "trialing":     sum(1 for m in result if m["status"] == "trialing"),

@@ -35,7 +35,7 @@ OPERATOR_WA_TOKEN    = os.getenv("OPERATOR_WA_TOKEN", "")
 OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 
 SCOPES = "read_checkouts,read_customers,read_orders"
-BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() == "true"
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
 
 # State token store — in-memory, TTL 10 dakika

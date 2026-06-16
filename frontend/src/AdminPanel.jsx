@@ -168,6 +168,12 @@ export default function AdminPanel({ adminToken, onExit }) {
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {error && <div className="flex items-center gap-2 bg-roseSoft border border-rose/20 rounded-xl px-4 py-3 text-sm text-rose"><AlertCircle size={15} />{error}</div>}
+        {data && data.billing_enabled === false && (
+          <div className="flex items-center gap-2 bg-roseSoft border border-rose/30 rounded-xl px-4 py-3 text-sm text-rose">
+            <AlertCircle size={15} />
+            <span><strong>BILLING_ENABLED kapalı!</strong> Deneme süresi zorlaması devre dışı — tüm merchant'lar ücretsiz kullanıyor. Coolify env'de <code className="bg-rose/10 px-1 rounded">BILLING_ENABLED=true</code> yapın.</span>
+          </div>
+        )}
 
         {/* İş özeti — MRR / dönüşüm / ciro */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
