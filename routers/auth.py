@@ -37,6 +37,29 @@ OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 SCOPES = "read_checkouts,read_customers,read_orders"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+# Managed Pricing: Billing API yerine Shopify'ın fiyatlandırma sayfasına yönlendirilir.
+SHOPIFY_APP_HANDLE = os.getenv("SHOPIFY_APP_HANDLE", "shoptimize-live")
+
+
+def _managed_pricing_url(shop: str) -> str:
+    """Shopify managed pricing (plan seçim) sayfası URL'i."""
+    handle = shop.replace("https://", "").replace(".myshopify.com", "").strip().rstrip("/")
+    return f"https://admin.shopify.com/store/{handle}/charges/{SHOPIFY_APP_HANDLE}/pricing_plans"
+
+
+def _has_active_subscription(shop: str, token: str) -> bool:
+    """Shopify'da aktif abonelik var mı (managed pricing — gerçek durum kaynağı)."""
+    if not shop or not token:
+        return False
+    try:
+        from routers.live import _shopify_graphql
+        body = _shopify_graphql(shop, token,
+                                "{ currentAppInstallation { activeSubscriptions { status } } }")
+        subs = ((body.get("data") or {}).get("currentAppInstallation") or {}).get("activeSubscriptions") or []
+        return any((s or {}).get("status") == "ACTIVE" for s in subs)
+    except Exception as e:
+        logger.warning("[BILLING] aktif abonelik sorgusu hatası: %s", e)
+        return False
 
 # State token store — in-memory, TTL 10 dakika
 _state_store: dict[str, dict] = {}
@@ -784,38 +807,31 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     token = create_access_token(username, brand)
     tid   = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
 
-    # ── Billing zorlaması ───────────────────────────────────────────────────
-    # Aktif → izin. Deneme sürüyor (ve reddetmemiş) → izin. Aksi halde (deneme bitti /
-    # needs_billing / reddedildi) → Shopify onay sayfasına yönlendir (billing_url).
-    # Onay URL'i üretilemezse bile 402 ile engelle — deneme bitince bedava erişim olmasın.
+    # ── Billing zorlaması (Managed Pricing) ─────────────────────────────────
+    # Bu uygulama Shopify "Managed Pricing" — Billing API ile ücret OLUŞTURULAMAZ.
+    # Gerçek abonelik durumu Shopify'dan sorgulanır; gerekirse merchant Shopify'ın
+    # fiyatlandırma sayfasına yönlendirilir (billing_url).
     billing_url = None
     if BILLING_ENABLED:
         billing_status = get_setting(username, brand, "shopify", "billing_status", "")
+
+        # Gerçek abonelik durumunu Shopify'dan doğrula (tek doğru kaynak)
+        bill_token = online_tok or new_access_token or get_setting(username, brand, "shopify", "admin_api_token", "")
+        if bill_token:
+            subscribed = _has_active_subscription(shop, bill_token)
+            if subscribed and billing_status != "active":
+                set_connection_settings(username, brand, "shopify", {"billing_status": "active"})
+                billing_status = "active"
+            elif not subscribed and billing_status == "active":
+                set_connection_settings(username, brand, "shopify", {"billing_status": "needs_billing"})
+                billing_status = "needs_billing"
+
         installed_at = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
         trial_active = bool(installed_at) and (time.time() < installed_at + PLAN_TRIAL_DAYS * 86400)
-        allow = (billing_status == "active") or (not installed_at) or (trial_active and billing_status != "declined")
-        # activate=True → merchant "Aboneliği Aktive Et"e bastı; deneme sürse bile onaya götür
+        allow = (billing_status == "active") or (not installed_at) or trial_active
+        # Deneme bitti VEYA merchant "Aboneliği Aktive Et"e bastı → managed pricing sayfası
         if (not allow) or (body.activate and billing_status != "active"):
-            access_token_for_billing = (
-                online_tok
-                or new_access_token
-                or get_setting(username, brand, "shopify", "admin_api_token", "")
-            )
-            if access_token_for_billing:
-                try:
-                    from routers.billing import create_charge
-                    billing_url = create_charge(shop, access_token_for_billing, username, brand)
-                    logger.info("[SessTok] Billing onay URL'i oluşturuldu: shop=%s", shop)
-                except Exception as e:
-                    logger.warning("[SessTok] Billing charge oluşturulamadı: %s", e)
-            if not billing_url and not allow:
-                # Deneme bitti AMA onaya yönlendirilemedi → erişimi engelle (bedava kullanımı önle).
-                # (activate sırasında deneme hâlâ sürüyorsa engelleme — sadece izin ver.)
-                raise HTTPException(status_code=402, detail={
-                    "error": "trial_expired",
-                    "message": "Deneme süreniz doldu. Devam etmek için aboneliğinizi aktive edin.",
-                    "retry_url": f"{APP_URL}/auth/shopify/install?shop={shop}",
-                })
+            billing_url = _managed_pricing_url(shop)
 
     logger.info("[SessTok] ✓ Embedded giriş: shop=%s username=%s billing_url=%s",
                 shop, username, "yes" if billing_url else "no")
