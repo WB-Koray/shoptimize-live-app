@@ -1693,7 +1693,7 @@ function fmtRevenue(amount) {
 const GUIDE_CONTENT = {
   tr: {
     title: '📋 WhatsApp Kurulum Rehberi — Adım Adım',
-    intro: 'Bu rehberi takip ederek WhatsApp otomasyonunuzu yaklaşık 30-45 dakikada kurabilirsiniz. Her adımı sırasıyla tamamlayın.',
+    intro: '⚡ HIZLI BAĞLAN: Artık yalnızca Erişim Tokenı (Adım 4-A) yeterli! Tokenı alıp yukarıdaki "Hızlı Bağlan" kutusuna yapıştırın — Phone Number ID ve WABA ID otomatik bulunur, 4-B ve 4-C ile uğraşmanıza gerek yok. (Aşağıdaki adımlar tokenı nasıl alacağınızı anlatır.)',
     steps: [
       {
         num: 1, icon: '🏢',
@@ -1859,7 +1859,7 @@ const GUIDE_CONTENT = {
   },
   en: {
     title: '📋 WhatsApp Setup Guide — Step by Step',
-    intro: 'Follow this guide to set up your WhatsApp automation in about 30-45 minutes. Complete each step in order.',
+    intro: '⚡ QUICK CONNECT: You now only need the Access Token (Step 4-A)! Get the token and paste it into the "Quick Connect" box above — Phone Number ID and WABA ID are detected automatically, so you can skip 4-B and 4-C. (The steps below show how to get the token.)',
     steps: [
       {
         num: 1, icon: '🏢',
