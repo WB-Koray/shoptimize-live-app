@@ -31,12 +31,13 @@ def _require_admin(token: str):
 SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 
 
-def _fetch_shop_name(domain: str, token: str) -> str:
-    """Mağaza görünen adını çeker — önce REST (en müsaadeli), sonra GraphQL. Hata yutar."""
+def _fetch_shop_info(domain: str, token: str) -> dict:
+    """Mağaza adını çeker + token sağlığını döner.
+    {name: str, auth_failed: bool} — auth_failed=True ise token revoke (uninstall sinyali)."""
     import requests as _rq
     d = domain.replace("https://", "").replace("http://", "").strip().rstrip("/")
     if not d or not token:
-        return ""
+        return {"name": "", "auth_failed": False}
     # REST: /admin/api/{ver}/shop.json — dar scope'lu token'larda da genelde erişilebilir
     try:
         r = _rq.get(
@@ -47,8 +48,9 @@ def _fetch_shop_name(domain: str, token: str) -> str:
         )
         if r.status_code == 200:
             name = ((r.json() or {}).get("shop") or {}).get("name", "")
-            if name:
-                return name
+            return {"name": name, "auth_failed": False}
+        if r.status_code in (401, 403):
+            return {"name": "", "auth_failed": True}  # token revoke → uninstall sinyali
     except Exception as e:
         logger.warning("[ADMIN] shop adı REST hatası %s: %s", d, e)
     # GraphQL fallback (data:null olabilir → defansif)
@@ -59,12 +61,14 @@ def _fetch_shop_name(domain: str, token: str) -> str:
             headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
             timeout=10,
         )
+        if r.status_code in (401, 403):
+            return {"name": "", "auth_failed": True}
         body = r.json() if r.status_code == 200 else {}
         data = body.get("data") or {}
-        return (data.get("shop") or {}).get("name", "") or ""
+        return {"name": (data.get("shop") or {}).get("name", "") or "", "auth_failed": False}
     except Exception as e:
         logger.warning("[ADMIN] shop adı GraphQL hatası %s: %s", d, e)
-    return ""
+    return {"name": "", "auth_failed": False}
 
 
 @router.get("/merchants")
@@ -93,19 +97,29 @@ async def list_merchants(admin_token: str = Query(...)):
         # Token kök veya nested 'settings' altında olabilir (paylaşımlı DB)
         admin_token_val = settings.get("admin_api_token") or (settings.get("settings") or {}).get("admin_api_token") or ""
 
-        # Mağaza görünen adı — yoksa Shopify'dan çek (REST+GraphQL) ve kalıcı kaydet (cache)
+        # Mağaza adı + token sağlık kontrolü (ek güvence: kaçırılan uninstall webhook'unu yakala)
         shop_name = settings.get("shop_name", "")
-        if not shop_name and shop_domain:
-            token_for_name = admin_token_val
-            if not token_for_name:
-                try:
-                    token_for_name = await store.get_online_token(username, brand) or ""
-                except Exception:
-                    token_for_name = ""
-            if token_for_name:
-                shop_name = _fetch_shop_name(shop_domain, token_for_name)
-                if shop_name:
+        token_for_name = admin_token_val
+        if not token_for_name:
+            try:
+                token_for_name = await store.get_online_token(username, brand) or ""
+            except Exception:
+                token_for_name = ""
+        # Aktif/trial/onay-bekleyen mağazalarda token'ı doğrula (terminal durumları atla)
+        need_check = (billing_status not in ("uninstalled", "declined")) and bool(shop_domain) and bool(token_for_name)
+        if need_check and (not shop_name or admin_token_val):
+            import asyncio as _aio
+            info = await _aio.to_thread(_fetch_shop_info, shop_domain, token_for_name)
+            if info.get("name"):
+                if info["name"] != shop_name:
+                    shop_name = info["name"]
                     set_connection_settings(username, brand, "shopify", {"shop_name": shop_name})
+            elif info.get("auth_failed") and admin_token_val:
+                # Token revoke edilmiş → uygulama kaldırılmış (webhook kaçmış olsa bile yakala)
+                billing_status = "uninstalled"
+                set_connection_settings(username, brand, "shopify",
+                                        {"billing_status": "uninstalled", "admin_api_token": ""})
+                logger.info("[ADMIN] token revoke → uninstalled işaretlendi: %s:%s", username, brand)
 
         # Sahip telefonu (iletişim için)
         owner_phone = ""
