@@ -71,6 +71,7 @@ class RedisStore:
         pipe.lpush(key, raw)
         pipe.ltrim(key, 0, _MAX_EVENTS - 1)
         pipe.expire(key, _EVENTS_TTL)
+        pipe.incr(f"events_total:{tid}")  # ömür boyu sayaç (liste 5000'de kırpıldığı için)
         await pipe.execute()
 
         vid = event.get("vid", "")
@@ -101,6 +102,14 @@ class RedisStore:
 
     async def count_events(self, tid: str) -> int:
         return await self._redis.llen(f"events:{tid}")
+
+    async def get_total_events(self, tid: str) -> int:
+        """Ömür boyu toplam event sayısı (5000 buffer sınırından bağımsız)."""
+        try:
+            val = await self._redis.get(f"events_total:{tid}")
+            return int(val) if val else 0
+        except Exception:
+            return 0
 
     async def get_active_visitor_count(self, tid: str) -> int:
         count = 0

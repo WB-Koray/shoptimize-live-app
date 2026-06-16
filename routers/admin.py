@@ -28,6 +28,45 @@ def _require_admin(token: str):
         raise HTTPException(403, "Geçersiz admin token")
 
 
+SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
+
+
+def _fetch_shop_name(domain: str, token: str) -> str:
+    """Mağaza görünen adını çeker — önce REST (en müsaadeli), sonra GraphQL. Hata yutar."""
+    import requests as _rq
+    d = domain.replace("https://", "").replace("http://", "").strip().rstrip("/")
+    if not d or not token:
+        return ""
+    # REST: /admin/api/{ver}/shop.json — dar scope'lu token'larda da genelde erişilebilir
+    try:
+        r = _rq.get(
+            f"https://{d}/admin/api/{SHOPIFY_API_VERSION}/shop.json",
+            headers={"X-Shopify-Access-Token": token},
+            params={"fields": "name"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            name = ((r.json() or {}).get("shop") or {}).get("name", "")
+            if name:
+                return name
+    except Exception as e:
+        logger.warning("[ADMIN] shop adı REST hatası %s: %s", d, e)
+    # GraphQL fallback (data:null olabilir → defansif)
+    try:
+        r = _rq.post(
+            f"https://{d}/admin/api/{SHOPIFY_API_VERSION}/graphql.json",
+            json={"query": "{ shop { name } }"},
+            headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
+            timeout=10,
+        )
+        body = r.json() if r.status_code == 200 else {}
+        data = body.get("data") or {}
+        return (data.get("shop") or {}).get("name", "") or ""
+    except Exception as e:
+        logger.warning("[ADMIN] shop adı GraphQL hatası %s: %s", d, e)
+    return ""
+
+
 @router.get("/merchants")
 async def list_merchants(admin_token: str = Query(...)):
     """Tüm merchant'ları billing durumu ve event sayısıyla döner."""
@@ -53,17 +92,19 @@ async def list_merchants(admin_token: str = Query(...)):
         granted_scopes = settings.get("granted_scopes", "")
         admin_token_val = settings.get("admin_api_token", "")
 
-        # Mağaza görünen adı — yoksa Shopify'dan çek ve kalıcı kaydet (backfill, sonra cache)
+        # Mağaza görünen adı — yoksa Shopify'dan çek (REST+GraphQL) ve kalıcı kaydet (cache)
         shop_name = settings.get("shop_name", "")
-        if not shop_name and shop_domain and admin_token_val:
-            try:
-                from routers.live import _shopify_graphql
-                _r = _shopify_graphql(shop_domain, admin_token_val, "{ shop { name } }")
-                shop_name = (_r.get("data", {}).get("shop", {}) or {}).get("name", "") or ""
+        if not shop_name and shop_domain:
+            token_for_name = admin_token_val
+            if not token_for_name:
+                try:
+                    token_for_name = await store.get_online_token(username, brand) or ""
+                except Exception:
+                    token_for_name = ""
+            if token_for_name:
+                shop_name = _fetch_shop_name(shop_domain, token_for_name)
                 if shop_name:
                     set_connection_settings(username, brand, "shopify", {"shop_name": shop_name})
-            except Exception:
-                pass
 
         # Sahip telefonu (iletişim için)
         owner_phone = ""
@@ -80,11 +121,13 @@ async def list_merchants(admin_token: str = Query(...)):
         except Exception:
             pass
 
-        # Event sayısı
+        # Event sayısı — ömür boyu toplam (buffer llen 5000'de kapanır), ikisinin maks'ı
         event_count = 0
         if tid:
             try:
-                event_count = await store.count_events(tid)
+                buf = await store.count_events(tid)
+                total = await store.get_total_events(tid)
+                event_count = max(buf, total)
             except Exception:
                 pass
 
