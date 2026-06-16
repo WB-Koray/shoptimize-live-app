@@ -22,6 +22,30 @@ function clearSession() {
   try { localStorage.removeItem('spt_session'); } catch { /* ignored */ }
 }
 
+/** Mevcut mağaza domain'i — URL ?shop= (en güvenilir) yoksa sessionStorage. */
+function currentShop() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return (p.get('shop') || sessionStorage.getItem('spt_shopify_shop') || '').toLowerCase();
+  } catch { return ''; }
+}
+
+/**
+ * Tenant-aware session okuma. Cache'lenmiş session farklı bir mağazaya aitse
+ * (tek tarayıcıda birden çok Shopify mağazası) KULLANMA — aksi halde yanlış
+ * mağazanın verisi/oturumu gösterilir. Eşleşmeyen veya shop'suz session → null.
+ */
+function readValidSession() {
+  const s = readSession();
+  if (!s) return null;
+  const shop = currentShop();
+  if (shop) {
+    // Shopify bağlamında: session'ın shop'u mevcut mağazayla eşleşmeli
+    if (!s.shop || s.shop.toLowerCase() !== shop) return null;
+  }
+  return s;
+}
+
 /**
  * Shopify admin'den açıldığımızı doğrula.
  * Shopify her zaman ?shop= + ?host= parametrelerini ekler.
@@ -90,7 +114,7 @@ function getFreshUrlToken() {
 }
 
 export default function App() {
-  const [session, setSession]           = useState(readSession);
+  const [session, setSession]           = useState(readValidSession);
   const [adminToken, setAdminToken]     = useState(null);
   const [shopifyLoading, setShopifyLoading] = useState(false);
   const [shopifyError, setShopifyError]     = useState('');
@@ -116,6 +140,7 @@ export default function App() {
         token:    autoToken,
         username: params.get('u')   || '',
         brand:    params.get('b')   || 'default',
+        shop:     (params.get('shop') || currentShop() || '').toLowerCase(),
         tid:      params.get('tid') || '',
       };
       saveSession(newSession);
@@ -191,8 +216,11 @@ export default function App() {
       }
 
       if (res.status === 402) {
-        // Billing sorunu — login sayfasına düş, orada billing mesajı gösterilecek
-        setShopifyError(data.detail?.message || 'Abonelik sorunu');
+        // Deneme bitti / abonelik gerekli. Eski (farklı mağaza) session'ı temizle ki
+        // stale dashboard yerine billing/hata ekranı gösterilsin.
+        clearSession();
+        setSession(null);
+        setShopifyError(data.detail?.message || data.detail || 'Aboneliğinizi aktive edin');
         return;
       }
 
@@ -210,6 +238,7 @@ export default function App() {
         token:    data.token,
         username: data.username,
         brand:    data.brand,
+        shop:     (data.shop || currentShop() || '').toLowerCase(),  // tenant guard
         tid:      data.tid || '',
       };
       saveSession(newSession);

@@ -815,6 +815,7 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         "token":       token,
         "username":    username,
         "brand":       brand,
+        "shop":        shop,          # tenant guard: frontend bu shop'u session'a yazar
         "tid":         tid or "",
         "billing_url": billing_url,   # varsa frontend buraya yönlendirir
     }
