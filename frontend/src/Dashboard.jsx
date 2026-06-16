@@ -4616,8 +4616,9 @@ export default function Dashboard({ session, onLogout }) {
 
               <div className="h-px bg-border" />
 
-              {/* Trial countdown */}
-              {isTrial && bi?.installed_at && (
+              {/* Trial countdown — yalnızca app tarafı deneme aktifse (trial_days > 0).
+                  Managed pricing'de deneme Shopify'da yönetilir → bu blok gösterilmez. */}
+              {isTrial && bi?.installed_at && bi?.trial_days > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs text-textMute">
                     <span>{t('plan.installed')} <span className="text-text font-semibold">{fmtPlanDate(bi.installed_at)}</span></span>
@@ -4634,6 +4635,11 @@ export default function Dashboard({ session, onLogout }) {
                       .replace('{days}', bi.trial_days)
                       .replace('{price}', `<strong>$${bi.plan_price}</strong>`) }} />
                 </div>
+              )}
+
+              {/* Managed pricing — aktif değil ve app denemesi yok → temiz abone ol mesajı */}
+              {!isActive && !isDeclined && !(bi?.trial_days > 0) && (
+                <p className="text-sm text-textMute text-center">{t('plan.subscribe_prompt')}</p>
               )}
 
               {/* Active subscription */}

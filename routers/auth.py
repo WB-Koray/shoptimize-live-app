@@ -36,7 +36,8 @@ OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 
 SCOPES = "read_checkouts,read_customers,read_orders"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
-PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+# Managed Pricing: deneme süresi Shopify plan'ında yönetilir → app tarafı 0 (kapalı).
+PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))
 # Managed Pricing: Billing API yerine Shopify'ın fiyatlandırma sayfasına yönlendirilir.
 SHOPIFY_APP_HANDLE = os.getenv("SHOPIFY_APP_HANDLE", "shoptimize-live")
 

@@ -31,7 +31,7 @@ SHOPIFY_GRAPHQL_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 
 PLAN_NAME = os.getenv("BILLING_PLAN_NAME", "Shoptimize Live")
 PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
-PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))  # Managed pricing → Shopify yönetir
 TEST_MODE = os.getenv("BILLING_TEST_MODE", "true").lower() == "true"
 
 

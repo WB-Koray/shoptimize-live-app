@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin")
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
-PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))  # Managed pricing → Shopify yönetir
 PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
 
 
