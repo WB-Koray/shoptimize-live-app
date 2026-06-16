@@ -377,14 +377,16 @@ async def create_dashboard_token(body: TokenRequest):
 async def auth_status(current_user: dict = Depends(get_current_user_dep)):
     """
     JWT geçerliliği + billing durumunu döner.
-    get_current_user_dep içinde billing 402 fırlatır; bu endpoint sadece başarılı durumu döner.
+    Dashboard her açılışta bunu çağırır → billing burada zorlanır (cache'li JWT ile
+    giren ama denemesi bitmiş merchant'lar da engellensin diye). Deneme bittiyse 402.
     """
     username = current_user.get("username", "")
     brand    = current_user.get("brand", "default")
+    _check_billing(username, brand)   # deneme bittiyse 402 fırlatır → frontend overlay gösterir
     billing_status  = get_setting(username, brand, "shopify", "billing_status",  "")
     installed_at_ts = int(get_setting(username, brand, "shopify", "installed_at", 0) or 0)
     trial_remaining = None
-    if billing_status in ("pending", "cancelled", "frozen") and installed_at_ts:
+    if billing_status != "active" and installed_at_ts:
         import math
         remaining_sec = (installed_at_ts + PLAN_TRIAL_DAYS * 86400) - time.time()
         trial_remaining = max(0, math.ceil(remaining_sec / 86400))
