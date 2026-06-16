@@ -111,6 +111,16 @@ class RedisStore:
         except Exception:
             return 0
 
+    async def get_last_event_ts(self, tid: str) -> int:
+        """En son event zaman damgası (ms) — ucuz (sadece baş eleman)."""
+        try:
+            raws = await self._redis.lrange(f"events:{tid}", 0, 0)
+            if raws:
+                return int(json.loads(raws[0]).get("ts", 0) or 0)
+        except Exception:
+            pass
+        return 0
+
     async def get_active_visitor_count(self, tid: str) -> int:
         count = 0
         async for _ in self._redis.scan_iter(f"visitor:{tid}:*"):

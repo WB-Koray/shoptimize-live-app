@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/admin")
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "7"))
+PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
 
 
 def _require_admin(token: str):
@@ -148,11 +149,23 @@ async def list_merchants(admin_token: str = Query(...)):
 
         # Aktif ziyaretçi sayısı
         active_visitors = 0
+        last_event_ts = 0
         if tid:
             try:
                 active_visitors = await store.get_active_visitor_count(tid)
+                last_event_ts = await store.get_last_event_ts(tid)
             except Exception:
                 pass
+
+        # Takip edilen sipariş + ciro (wa_orders cache)
+        orders_count = 0
+        revenue = 0.0
+        try:
+            _orders = await store.get_converted_orders(username, brand, limit=200)
+            orders_count = len(_orders)
+            revenue = sum(float(o.get("total_price", 0) or 0) for o in _orders)
+        except Exception:
+            pass
 
         # Deneme süresi hesapla
         trial_ends_at = None
@@ -191,7 +204,11 @@ async def list_merchants(admin_token: str = Query(...)):
             "tid": tid,
             "event_count": event_count,
             "active_visitors": active_visitors,
+            "last_event_ts": last_event_ts,
+            "orders_count": orders_count,
+            "revenue": round(revenue, 2),
             "has_token": bool(admin_token_val),
+            "pixel_ready": bool(tid),
             "granted_scopes": granted_scopes,
         })
 
@@ -200,19 +217,66 @@ async def list_merchants(admin_token: str = Query(...)):
                     "declined": 4, "uninstalled": 5}
     result.sort(key=lambda m: (STATUS_ORDER.get(m["status"], 9), m["username"]))
 
+    active_n = sum(1 for m in result if m["status"] == "active")
+    # Dönüşüm: ücretli / (ücretli + deneme bitmiş + reddetmiş) — denemeyi tamamlamış kitle
+    converted_pool = active_n + sum(1 for m in result if m["status"] in ("trial_ended", "declined"))
+    conversion = round(active_n / converted_pool * 100, 1) if converted_pool else 0.0
+
     return {
         "ok": True,
         "total": len(result),
         "merchants": result,
+        "plan_price": PLAN_PRICE,
         "stats": {
-            "active":       sum(1 for m in result if m["status"] == "active"),
+            "active":       active_n,
             "trialing":     sum(1 for m in result if m["status"] == "trialing"),
             "needs_billing":sum(1 for m in result if m["status"] == "needs_billing"),
             "trial_ended":  sum(1 for m in result if m["status"] == "trial_ended"),
             "declined":     sum(1 for m in result if m["status"] == "declined"),
             "uninstalled":  sum(1 for m in result if m["status"] == "uninstalled"),
+            "mrr":          round(active_n * PLAN_PRICE, 2),
+            "conversion":   conversion,
+            "total_revenue":round(sum(m["revenue"] for m in result), 2),
         },
     }
+
+
+@router.post("/nudge")
+async def nudge_merchant(request_data: dict, admin_token: str = Query(...)):
+    """Ödemeyen merchant'ın sahip telefonuna WhatsApp ile dashboard/onay linki gönderir.
+    Link açılınca billing aktif değilse 'aboneliği aktive et' ekranına düşer → dönüşüm."""
+    _require_admin(admin_token)
+    username = str(request_data.get("username", "")).strip()
+    brand = str(request_data.get("brand", "default")).strip()
+    if not username:
+        raise HTTPException(400, "username gerekli")
+
+    phone = await store.get_owner_phone(username, brand)
+    if not phone:
+        return {"ok": False, "error": "no_phone"}
+
+    op_token = os.getenv("OPERATOR_WA_TOKEN", "")
+    op_phone_id = os.getenv("OPERATOR_WA_PHONE_ID", "")
+    if not op_token or not op_phone_id:
+        return {"ok": False, "error": "wa_not_configured"}
+
+    from services.auth import create_access_token
+    from services.db import get_setting
+    from services.wa_sender import send_wa_template
+
+    tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    app_url = os.getenv("SHOPIFY_APP_URL", "https://live.shoptimize.com.tr")
+    token = create_access_token(username, brand, expires_days=0, expires_hours=1)
+    access_url = f"{app_url}/?auto_token={token}&u={username}&b={brand}" + (f"&tid={tid}" if tid else "")
+
+    lang = "tr" if phone.lstrip("+").startswith("90") else "en"
+    tpl = "dashboard_erisim" if lang == "tr" else "panel_access"
+    res = await send_wa_template(op_token, op_phone_id, phone, name=access_url,
+                                 template_name=tpl, language=lang)
+    if res.get("ok"):
+        logger.info("[ADMIN] nudge gönderildi: %s:%s → %s", username, brand, phone[-4:])
+        return {"ok": True, "phone": phone}
+    return {"ok": False, "error": res.get("error", "send_failed")}
 
 
 @router.post("/set-shopify-token")
