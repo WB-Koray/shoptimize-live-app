@@ -354,6 +354,7 @@ async def shopify_callback(
                 _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
             except Exception as _we:
                 logger.warning("[OAuth] Webhook kayıt hatası: topic=%s err=%s", topic, _we)
+        set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
         logger.info("[OAuth] ✓ Webhook'lar kaydedildi (GraphQL): shop=%s", shop)
     except Exception as e:
         logger.warning("[OAuth] Webhook kurulum hatası: %s", e)
@@ -762,6 +763,50 @@ def _exchange_session_token_for_online(shop: str, session_token: str) -> Optiona
         return None
 
 
+def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_token: str) -> None:
+    """Token-exchange ile kurulan mağazalarda webhook'ları BİR KEZ kaydeder.
+    Modern Shopify install akışı OAuth callback'i atlayıp token exchange kullanabilir;
+    o durumda checkouts/create + orders/create webhook'ları hiç kaydolmaz → sepet
+    kurtarma çalışmaz. Aynı callback URL'i ile tekrar kayıt Shopify tarafından
+    reddedilir (duplicate) → mevcut OAuth mağazalarında zararsızdır."""
+    if not access_token:
+        return
+    if get_setting(username, brand, "shopify", "webhooks_registered", ""):
+        return
+    try:
+        from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP
+        import secrets as _secrets
+        wh_token = get_setting(username, brand, "shopify", "webhook_token", "")
+        if not wh_token:
+            wh_token = _secrets.token_hex(16)
+            set_connection_settings(username, brand, "shopify", {"webhook_token": wh_token})
+        checkout_url = f"{APP_URL}/api/shopify/webhook/checkouts-create?token={wh_token}&username={username}&brand={brand}"
+        webhook_topics = [
+            ("orders/create",    f"{APP_URL}/api/shopify/webhook/orders-create?token={wh_token}&username={username}&brand={brand}"),
+            ("checkouts/create", checkout_url),
+            ("checkouts/update", checkout_url),
+            ("app/uninstalled",  f"{APP_URL}/webhooks/app/uninstalled"),
+        ]
+        _WH_MUT = """
+        mutation WebhookCreate($topic: WebhookSubscriptionTopic!, $callbackUrl: URL!) {
+          webhookSubscriptionCreate(topic: $topic, webhookSubscription: {callbackUrl: $callbackUrl, format: JSON}) {
+            webhookSubscription { id }
+            userErrors { field message }
+          }
+        }
+        """
+        for topic, callback_url in webhook_topics:
+            gql_topic = _WEBHOOK_TOPIC_MAP.get(topic, topic.upper().replace("/", "_"))
+            try:
+                _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
+            except Exception as _we:
+                logger.warning("[SessTok] Webhook kayıt hatası: topic=%s err=%s", topic, _we)
+        set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
+        logger.info("[SessTok] ✓ Webhook'lar kaydedildi (token-exchange): shop=%s", shop)
+    except Exception as e:
+        logger.warning("[SessTok] Webhook kurulum hatası: %s", e)
+
+
 @router.post("/api/auth/shopify-token")
 async def shopify_session_auth(body: ShopifySessionTokenRequest):
     """
@@ -794,6 +839,12 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     new_access_token = _exchange_session_token_for_offline(shop, body.session_token)
     if new_access_token:
         set_connection_settings(username, brand, "shopify", {"admin_api_token": new_access_token})
+
+    # ── Webhook'ları garanti et (OAuth atlandıysa burada kaydedilir) ────────
+    _ensure_webhooks_registered(
+        shop, username, brand,
+        new_access_token or get_setting(username, brand, "shopify", "admin_api_token", ""),
+    )
 
     # ── Online token'ı Redis'e kaydet (user-triggered API çağrıları için) ──
     # Online token her zaman expiring → Admin API 403 hatasını önler.
