@@ -795,14 +795,35 @@ def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_tok
           }
         }
         """
+        any_ok = False
         for topic, callback_url in webhook_topics:
             gql_topic = _WEBHOOK_TOPIC_MAP.get(topic, topic.upper().replace("/", "_"))
             try:
-                _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
+                resp = _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
+                errs = (resp.get("data", {}).get("webhookSubscriptionCreate", {}) or {}).get("userErrors", [])
+                if errs:
+                    # "already taken" = zaten kayıtlı → başarı say
+                    msg = str(errs).lower()
+                    if "taken" in msg or "already" in msg:
+                        any_ok = True
+                    else:
+                        logger.warning("[SessTok] Webhook userError: topic=%s errs=%s", topic, errs)
+                else:
+                    any_ok = True
             except Exception as _we:
-                logger.warning("[SessTok] Webhook kayıt hatası: topic=%s err=%s", topic, _we)
-        set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
-        logger.info("[SessTok] ✓ Webhook'lar kaydedildi (token-exchange): shop=%s", shop)
+                # 403 vb. → Shopify yanıt gövdesini de logla (gerçek sebep için)
+                _resp_txt = ""
+                _r = getattr(_we, "response", None)
+                if _r is not None:
+                    try: _resp_txt = _r.text[:400]
+                    except Exception: pass
+                logger.warning("[SessTok] Webhook kayıt hatası: topic=%s err=%s body=%s", topic, _we, _resp_txt)
+        # Sadece en az biri başarılıysa flag'le; hepsi patladıysa sonraki açılışta tekrar denenir
+        if any_ok:
+            set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
+            logger.info("[SessTok] ✓ Webhook'lar kaydedildi (token-exchange): shop=%s", shop)
+        else:
+            logger.warning("[SessTok] Webhook kaydı tamamen başarısız (flag set edilmedi): shop=%s", shop)
     except Exception as e:
         logger.warning("[SessTok] Webhook kurulum hatası: %s", e)
 

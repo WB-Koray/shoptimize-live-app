@@ -1472,6 +1472,30 @@ async def get_products_stock(
 # Webhook endpoint'leri
 # ---------------------------------------------------------------------------
 
+async def _verify_webhook(request: Request, token: str, username: str, brand: str) -> Optional[bytes]:
+    """Shopify webhook doğrulama — ÖNCE HMAC imzası (asıl güvenlik), sonra URL token.
+    HMAC, webhook URL'sindeki token zamanla değişse/sürüklense bile çalışır
+    (eski kayıtlı webhook'lar bu yüzden 401 alıyordu). Geçerliyse raw body döner,
+    değilse None."""
+    body = await request.body()
+    # 1) Shopify HMAC imzası — en güvenilir doğrulama
+    hmac_header = request.headers.get("x-shopify-hmac-sha256", "")
+    if hmac_header:
+        try:
+            from routers.gdpr import _verify_hmac
+            if _verify_hmac(body, hmac_header):
+                return body
+        except Exception as e:
+            logger.warning("[WEBHOOK] HMAC doğrulama hatası: %s", e)
+    # 2) Geriye dönük: URL token eşleşmesi (HMAC yoksa/secret yoksa)
+    stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
+    if not stored_token or token == stored_token:
+        return body
+    logger.warning("[WEBHOOK] yetkisiz: %s:%s hmac=%s token_match=False",
+                   username, brand, bool(hmac_header))
+    return None
+
+
 @router.post("/api/shopify/webhook/orders-create")
 async def shopify_orders_webhook(
     request: Request,
@@ -1479,11 +1503,11 @@ async def shopify_orders_webhook(
     username: str = Query(""),
     brand: str = Query("default"),
 ):
-    stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
-    if stored_token and token != stored_token:
+    _body = await _verify_webhook(request, token, username, brand)
+    if _body is None:
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
     try:
-        order = await request.json()
+        order = json.loads(_body)
     except Exception:
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
@@ -1609,11 +1633,11 @@ async def shopify_checkouts_webhook(
     username: str = Query(""),
     brand: str = Query("default"),
 ):
-    stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
-    if stored_token and token != stored_token:
+    _body = await _verify_webhook(request, token, username, brand)
+    if _body is None:
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
     try:
-        checkout = await request.json()
+        checkout = json.loads(_body)
     except Exception:
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
