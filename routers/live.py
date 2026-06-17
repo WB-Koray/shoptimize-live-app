@@ -1725,7 +1725,9 @@ async def shopify_checkouts_webhook(
 async def register_order_webhook(username: str = Query(""), brand: str = Query("default")):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
-    version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
+    # Webhook kaydı GÜNCEL sürümle yapılmalı — bazı mağazalarda kayıtlı api_version
+    # eski ("2024-10") kalıp Shopify'dan 403 aldırıyordu.
+    version = SHOPIFY_API_VERSION
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
 
@@ -1762,12 +1764,21 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
                 results[topic] = {"ok": True, "already_registered": True}
             elif errs:
                 results[topic] = {"ok": False, "error": errs[0].get("message")}
+                logger.warning("[WH-REGISTER] userError topic=%s errs=%s", topic, errs)
             else:
                 wh = result.get("webhookSubscription") or {}
                 results[topic] = {"ok": True, "webhook_id": wh.get("id")}
+                logger.info("[WH-REGISTER] ✓ %s → %s", topic, wh.get("id"))
         except Exception as e:
-            results[topic] = {"ok": False, "error": str(e)}
+            _txt = ""
+            _r = getattr(e, "response", None)
+            if _r is not None:
+                try: _txt = _r.text[:400]
+                except Exception: pass
+            logger.warning("[WH-REGISTER] hata topic=%s ver=%s err=%s body=%s", topic, version, e, _txt)
+            results[topic] = {"ok": False, "error": str(e), "detail": _txt}
 
+    set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
     return {"ok": True, "results": results}
 
 
@@ -1775,7 +1786,7 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
 async def get_webhook_status(username: str = Query(""), brand: str = Query("default")):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = get_setting(username, brand, "shopify", "admin_api_token", "")
-    version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
+    version = SHOPIFY_API_VERSION
     if not domain or not token:
         return {"ok": False, "webhooks": []}
     _QRY = """
