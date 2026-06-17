@@ -118,13 +118,34 @@ def _get_waba_id(phone_number_id: str, token: str) -> str | None:
     return None
 
 
+def _body_text_example(text: str) -> list | None:
+    """Body'deki {{1}},{{2}}... değişkenleri için Meta'nın zorunlu kıldığı örnek
+    değerleri üretir. Değişken yoksa None döner."""
+    import re
+    nums = [int(n) for n in re.findall(r"\{\{\s*(\d+)\s*\}\}", text or "")]
+    if not nums:
+        return None
+    count = max(nums)
+    samples = ["Ayşe", "Kırmızı Elbise", "ABC123", "10", "örnek"]
+    vals = [samples[i] if i < len(samples) else "örnek" for i in range(count)]
+    return [vals]   # Meta formatı: [[v1, v2, ...]]
+
+
 def _create_template(waba_id: str, token: str, name: str, body: str, language: str,
                      category: str = "MARKETING", header: str = "", button_text: str = "", button_url: str = "") -> dict:
     """Tek bir WhatsApp template oluşturur ve Meta'ya onaya gönderir."""
     components = []
     if header:
-        components.append({"type": "HEADER", "format": "TEXT", "text": header})
-    components.append({"type": "BODY", "text": body})
+        header_comp = {"type": "HEADER", "format": "TEXT", "text": header}
+        hex_ex = _body_text_example(header)
+        if hex_ex:
+            header_comp["example"] = {"header_text": hex_ex[0]}
+        components.append(header_comp)
+    body_comp = {"type": "BODY", "text": body}
+    body_ex = _body_text_example(body)
+    if body_ex:
+        body_comp["example"] = {"body_text": body_ex}   # Meta: değişkenli body'de zorunlu
+    components.append(body_comp)
     if button_text and button_url:
         components.append({
             "type": "BUTTONS",
@@ -683,9 +704,25 @@ async def remove_optout(
 # ── WhatsApp Template Yönetimi ───────────────────────────────────────────────
 
 @router.get("/api/flow/template-defaults")
-async def get_template_defaults(current_user: dict = Depends(get_current_user)):
-    """Varsayılan şablon metinlerini döner (merchant düzenleyebilir)."""
-    return {"ok": True, "templates": _DEFAULT_TEMPLATES}
+async def get_template_defaults(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Varsayılan şablon metinlerini döner (merchant düzenleyebilir).
+    button_url placeholder'ı mağazanın kendi domain'iyle değiştirilir."""
+    from services.db import get_setting
+    shop_domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    templates = _DEFAULT_TEMPLATES
+    if shop_domain:
+        base = shop_domain.replace("https://", "").replace("http://", "").strip().rstrip("/")
+        cart_url = f"https://{base}/cart"
+        import copy
+        templates = copy.deepcopy(_DEFAULT_TEMPLATES)
+        for tpl in templates:
+            if tpl.get("button_url") == "https://yourdomain.com/cart":
+                tpl["button_url"] = cart_url
+    return {"ok": True, "templates": templates}
 
 
 @router.post("/api/flow/create-templates")

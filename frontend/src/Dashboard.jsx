@@ -2315,8 +2315,19 @@ function WaTemplateManager({ qs, t, token }) {
         body: JSON.stringify({ templates: filtered }),
       });
       const d = await r.json();
-      if (d.ok) setTimeout(loadAll, 3000);
-      else alert(d.error || 'Gönderim başarısız');
+      if (!d.ok) { alert(d.error || 'Gönderim başarısız'); return; }
+      // Backend her zaman ok:true döner — asıl başarı/hata results[].tr/.en içinde.
+      const OKv = ['PENDING', 'APPROVED', 'ACTIVE', 'ALREADY_EXISTS', 'IN_APPEAL', 'PENDING_DELETION'];
+      const res = (d.results || []).find(x => x.name === tpl.name) || {};
+      const checkLangs = lang === 'both' ? ['tr', 'en'] : [lang];
+      const errs = checkLangs
+        .map(l => res[l])
+        .filter(s => s && !OKv.includes(s));   // hata ise Meta mesajı string olur
+      if (errs.length) {
+        alert(`${tpl.name}: ${errs.join(' | ')}`);
+        return;   // formu sıfırlama — düzenlemeyi koru
+      }
+      setTimeout(loadAll, 3000);   // sadece başarıda yeniden yükle
     } catch (e) {
       alert(e.message);
     } finally {
