@@ -1491,8 +1491,18 @@ async def _verify_webhook(request: Request, token: str, username: str, brand: st
     stored_token = get_setting(username, brand, "shopify", "webhook_token", "")
     if not stored_token or token == stored_token:
         return body
-    logger.warning("[WEBHOOK] yetkisiz: %s:%s hmac=%s token_match=False",
-                   username, brand, bool(hmac_header))
+    # 3) Shop-domain eşleşmesi — eski app secret'ı ile imzalanmış / token sürüklenmiş
+    #    webhook'lar için güvenli fallback. Shopify her webhook'ta bu başlığı gönderir;
+    #    merchant'ın kayıtlı mağaza adresiyle birebir eşleşiyorsa kabul edilir.
+    shop_hdr = (request.headers.get("x-shopify-shop-domain", "") or "").strip().lower()
+    if shop_hdr:
+        stored_domain = get_setting(username, brand, "shopify", "shop_domain", "")
+        sd = stored_domain.replace("https://", "").replace("http://", "").rstrip("/").lower()
+        if sd and shop_hdr == sd:
+            logger.info("[WEBHOOK] shop-domain ile kabul (HMAC/token drift): %s", shop_hdr)
+            return body
+    logger.warning("[WEBHOOK] yetkisiz: %s:%s hmac=%s token_match=False shop_hdr=%s",
+                   username, brand, bool(hmac_header), shop_hdr or "-")
     return None
 
 
