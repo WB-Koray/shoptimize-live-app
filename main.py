@@ -13,6 +13,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+# ── Uygulama INFO loglarını aç ──────────────────────────────────────────────
+# uvicorn yalnızca kendi logger'larını yapılandırır; root logger WARNING'de kalır
+# ve routers/services içindeki logger.info(...) satırları ([CHECKOUT], [FLOW],
+# [WA] ...) sessizce düşerdi. Root'u INFO yapıp bir handler garantiliyoruz.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(message)s")
+logging.getLogger("routers").setLevel(logging.INFO)
+logging.getLogger("services").setLevel(logging.INFO)
+
 
 # ── Erişim logu gürültü filtresi ────────────────────────────────────────────
 # Pixel olayları (/api/live/event, /pixel.js, SSE stream) saniyede onlarca satır
