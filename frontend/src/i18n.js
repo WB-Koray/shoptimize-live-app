@@ -206,6 +206,14 @@ const translations = {
     'ojrn.order_btn':         'Journey',
     'ojrn.close':             'Close',
 
+    // Attribution Report Widget
+    'report.title':         'Attribution Report',
+    'report.desc':          'Download an Excel report of orders by channel, source and campaign. Includes a summary sheet (revenue & AOV per channel, first vs last touch), new/returning split, payment status and WhatsApp attribution.',
+    'report.download':      'Download XLS',
+    'report.loading':       'Preparing…',
+    'report.rows':          'orders',
+    'report.error':         'Error',
+
     // RFM Widget
     'rfm.title':            'Customer Segments (RFM)',
     'rfm.customers':        'customers',
@@ -690,6 +698,14 @@ const translations = {
     'ojrn.direct':            'Direkt',
     'ojrn.order_btn':         'Yolculuk',
     'ojrn.close':             'Kapat',
+
+    // Attribution Report Widget
+    'report.title':         'Attribution Raporu',
+    'report.desc':          'Siparişlerin kanal, kaynak ve kampanya kırılımını Excel olarak indirin. Özet sayfası (kanal başına ciro & AOV, ilk vs son dokunuş), yeni/tekrar müşteri, ödeme durumu ve WhatsApp attribution dahil.',
+    'report.download':      'XLS İndir',
+    'report.loading':       'Hazırlanıyor…',
+    'report.rows':          'sipariş',
+    'report.error':         'Hata',
 
     // RFM Widget
     'rfm.title':            'Müşteri Segmentleri (RFM)',

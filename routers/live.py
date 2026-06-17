@@ -921,6 +921,307 @@ async def get_order_journey(
 
 
 # ---------------------------------------------------------------------------
+# Attribution Raporu (siparişlerin kanal/kaynak/kampanya kırılımı → XLSX)
+# ---------------------------------------------------------------------------
+
+_ATTR_REPORT_GQL = """
+query AttrReport($cursor: String, $query: String!) {
+  orders(first: 50, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      name
+      createdAt
+      sourceName
+      test
+      displayFinancialStatus
+      totalPriceSet { shopMoney { amount currencyCode } }
+      customer { displayName }
+      channelInformation { channelDefinition { channelName } }
+      customerJourneySummary {
+        ready
+        daysToConversion
+        customerOrderIndex
+        momentsCount { count }
+        firstVisit { source referrerUrl occurredAt utmParameters { source medium campaign } }
+        lastVisit  { source referrerUrl occurredAt utmParameters { source medium campaign } }
+      }
+    }
+  }
+}
+"""
+
+_ATTR_HEADERS = {
+    "tr": ["Sipariş", "Tarih", "Müşteri", "Yeni/Tekrar", "Tutar", "Para Birimi",
+           "Ödeme Durumu", "WhatsApp", "Satış Kanalı",
+           "İlk Kaynak", "İlk Kampanya", "Son Kaynak", "Son Medium", "Son Kampanya",
+           "Yönlendiren (Referrer)", "İlk Ziyaret", "Son Ziyaret", "Dönüşüm Günü",
+           "Temas Noktası", "Sipariş Sırası"],
+    "en": ["Order", "Date", "Customer", "New/Returning", "Amount", "Currency",
+           "Payment Status", "WhatsApp", "Sales Channel",
+           "First Source", "First Campaign", "Last Source", "Last Medium", "Last Campaign",
+           "Referrer", "First Visit", "Last Visit", "Days to Conversion",
+           "Touchpoints", "Order Index"],
+}
+
+# Özet sayfası başlıkları
+_ATTR_SUMMARY_TXT = {
+    "tr": {"sheet": "Özet", "by_last": "Son Dokunuş — Kaynak Bazlı",
+           "by_first": "İlk Dokunuş — Kaynak Bazlı", "wa": "WhatsApp Attribution",
+           "cols": ["Kaynak", "Sipariş", "Ciro", "Ort. Sepet (AOV)", "Ciro %"],
+           "total": "TOPLAM", "unknown": "(bilinmiyor)",
+           "wa_rows": ["WhatsApp'tan gelen sipariş", "WhatsApp cirosu",
+                       "Toplam sipariş", "Toplam ciro", "WhatsApp ciro payı"],
+           "note": "Not: İptal/iade siparişler dahildir; test siparişleri hariç tutulmuştur."},
+    "en": {"sheet": "Summary", "by_last": "Last-touch — by Source",
+           "by_first": "First-touch — by Source", "wa": "WhatsApp Attribution",
+           "cols": ["Source", "Orders", "Revenue", "Avg Order (AOV)", "Revenue %"],
+           "total": "TOTAL", "unknown": "(unknown)",
+           "wa_rows": ["WhatsApp-attributed orders", "WhatsApp revenue",
+                       "Total orders", "Total revenue", "WhatsApp revenue share"],
+           "note": "Note: cancelled/refunded orders are included; test orders are excluded."},
+}
+
+
+def _attr_visit_fields(visit: dict) -> tuple:
+    """firstVisit/lastVisit dict'inden (source, medium, campaign, referrer, occurredAt) çıkarır."""
+    if not visit:
+        return ("", "", "", "", "")
+    utm = visit.get("utmParameters") or {}
+    return (
+        visit.get("source") or "",
+        utm.get("medium") or "",
+        utm.get("campaign") or "",
+        visit.get("referrerUrl") or "",
+        visit.get("occurredAt") or "",
+    )
+
+
+@router.get("/api/shopify/attribution-report")
+async def get_attribution_report(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    days: int = Query(30),
+    lang: str = Query("tr"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Son N gündeki siparişlerin kanal/kaynak/kampanya attribution kırılımını XLSX olarak indirir."""
+    from datetime import datetime, timezone, timedelta
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    days = max(1, min(int(days), 365))
+    lang = lang if lang in ("tr", "en") else "tr"
+    YENI  = "Yeni" if lang == "tr" else "New"
+    TEKRAR = "Tekrar" if lang == "tr" else "Returning"
+    EVET  = "Evet ✓" if lang == "tr" else "Yes ✓"
+
+    domain = get_setting(username, brand, "shopify", "shop_domain", "")
+    token  = await store.get_online_token(username, brand) \
+             or get_setting(username, brand, "shopify", "admin_api_token", "")
+    if not domain or not token:
+        return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
+
+    # WhatsApp-attributed sipariş kimlikleri (kendi attribution verimiz)
+    wa_ids = set()
+    try:
+        for co in await store.get_converted_orders(username, brand, limit=200):
+            if co.get("wa_attributed"):
+                if co.get("order_id"):
+                    wa_ids.add(str(co["order_id"]))
+                if co.get("order_number"):
+                    wa_ids.add(str(co["order_number"]).lstrip("#"))
+    except Exception:
+        logger.warning("[ATTR-REPORT] WA attribution verisi okunamadı")
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    gql_query = f"created_at:>={since}"
+
+    rows = []
+    agg = []   # (last_src, first_src, amount_float, is_wa) — özet için
+    cursor = None
+    pages = 0
+    try:
+        while True:
+            data = await asyncio.to_thread(
+                _shopify_graphql, domain, token, _ATTR_REPORT_GQL,
+                {"cursor": cursor, "query": gql_query},
+            )
+            errs = data.get("errors")
+            if errs:
+                msg = errs[0].get("message", str(errs)) if isinstance(errs, list) else str(errs)
+                logger.warning("[ATTR-REPORT] GQL hata: %s", msg)
+                return JSONResponse({"ok": False, "error": msg}, status_code=502)
+
+            conn = ((data.get("data") or {}).get("orders") or {})
+            for o in conn.get("nodes", []):
+                if o.get("test"):
+                    continue   # test siparişlerini ayıkla
+                money = (o.get("totalPriceSet") or {}).get("shopMoney") or {}
+                cust  = o.get("customer") or {}
+                chan  = ((o.get("channelInformation") or {}).get("channelDefinition") or {})
+                cjs   = o.get("customerJourneySummary") or {}
+                f_src, _f_med, f_camp, _f_ref, f_occ = _attr_visit_fields(cjs.get("firstVisit"))
+                l_src, l_med, l_camp, l_ref, l_occ   = _attr_visit_fields(cjs.get("lastVisit"))
+                try:
+                    amount = float(money.get("amount") or 0)
+                    amount_f = amount
+                except (TypeError, ValueError):
+                    amount = money.get("amount") or ""
+                    amount_f = 0.0
+
+                # Yeni / Tekrar müşteri
+                idx = cjs.get("customerOrderIndex")
+                if idx == 1:
+                    new_ret = YENI
+                elif isinstance(idx, int) and idx > 1:
+                    new_ret = TEKRAR
+                else:
+                    new_ret = ""
+
+                # WhatsApp eşleşmesi (numeric id ya da sipariş no)
+                oid_num = str(o.get("id") or "").rsplit("/", 1)[-1]
+                oname   = str(o.get("name") or "").lstrip("#")
+                is_wa = bool(wa_ids) and (oid_num in wa_ids or oname in wa_ids)
+
+                rows.append([
+                    o.get("name") or "",
+                    (o.get("createdAt") or "")[:10],
+                    cust.get("displayName") or "",
+                    new_ret,
+                    amount,
+                    money.get("currencyCode") or "",
+                    o.get("displayFinancialStatus") or "",
+                    EVET if is_wa else "",
+                    chan.get("channelName") or o.get("sourceName") or "",
+                    f_src,
+                    f_camp,
+                    l_src,
+                    l_med,
+                    l_camp,
+                    l_ref,
+                    (f_occ or "")[:10],
+                    (l_occ or "")[:10],
+                    cjs.get("daysToConversion") if cjs.get("daysToConversion") is not None else "",
+                    (cjs.get("momentsCount") or {}).get("count", "") if cjs.get("momentsCount") else "",
+                    idx if idx is not None else "",
+                ])
+                agg.append((l_src, f_src, amount_f, is_wa))
+
+            page_info = conn.get("pageInfo") or {}
+            pages += 1
+            if page_info.get("hasNextPage") and pages < 40:   # güvenlik tavanı: ~2000 sipariş
+                cursor = page_info.get("endCursor")
+            else:
+                break
+    except Exception as exc:
+        logger.exception("[ATTR-REPORT] Shopify bağlantı hatası")
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    # ── XLSX oluştur ──
+    headers = _ATTR_HEADERS[lang]
+    txt = _ATTR_SUMMARY_TXT[lang]
+    wb = Workbook()
+
+    hdr_font  = Font(bold=True, color="FFFFFF", size=11)
+    hdr_fill  = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    sec_font  = Font(bold=True, size=12, color="111827")
+    col_font  = Font(bold=True, size=10, color="374151")
+    col_fill  = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+    tot_font  = Font(bold=True, size=10)
+    center    = Alignment(horizontal="center", vertical="center")
+
+    # ── Sayfa 1: Özet ──
+    sm = wb.active
+    sm.title = txt["sheet"]
+    currency = next((r[5] for r in rows if r[5]), "")
+    total_orders  = len(agg)
+    total_revenue = sum(a[2] for a in agg)
+
+    def _breakdown(key_idx):
+        d = {}
+        for a in agg:
+            k = a[key_idx] or txt["unknown"]
+            cnt, rev = d.get(k, (0, 0.0))
+            d[k] = (cnt + 1, rev + a[2])
+        return sorted(d.items(), key=lambda kv: kv[1][1], reverse=True)
+
+    def _write_table(start_row, title, data):
+        sm.cell(row=start_row, column=1, value=title).font = sec_font
+        hr = start_row + 1
+        for ci, ch in enumerate(txt["cols"], start=1):
+            c = sm.cell(row=hr, column=ci, value=ch)
+            c.font = col_font
+            c.fill = col_fill
+            c.alignment = center
+        r = hr + 1
+        for src, (cnt, rev) in data:
+            share = (rev / total_revenue * 100) if total_revenue else 0
+            sm.cell(row=r, column=1, value=src)
+            sm.cell(row=r, column=2, value=cnt)
+            sm.cell(row=r, column=3, value=round(rev, 2))
+            sm.cell(row=r, column=4, value=round(rev / cnt, 2) if cnt else 0)
+            sm.cell(row=r, column=5, value=f"{share:.1f}%")
+            r += 1
+        # toplam satırı
+        sm.cell(row=r, column=1, value=txt["total"]).font = tot_font
+        sm.cell(row=r, column=2, value=total_orders).font = tot_font
+        sm.cell(row=r, column=3, value=round(total_revenue, 2)).font = tot_font
+        sm.cell(row=r, column=4, value=round(total_revenue / total_orders, 2) if total_orders else 0).font = tot_font
+        sm.cell(row=r, column=5, value="100%").font = tot_font
+        return r + 2   # sonraki tablo için boş satır
+
+    nxt = _write_table(1, f"{txt['by_last']}  ({currency})", _breakdown(0))
+    nxt = _write_table(nxt, f"{txt['by_first']}  ({currency})", _breakdown(1))
+
+    # WhatsApp özeti
+    wa_orders  = sum(1 for a in agg if a[3])
+    wa_revenue = sum(a[2] for a in agg if a[3])
+    sm.cell(row=nxt, column=1, value=txt["wa"]).font = sec_font
+    wr = nxt + 1
+    wa_vals = [wa_orders, round(wa_revenue, 2), total_orders, round(total_revenue, 2),
+               f"{(wa_revenue / total_revenue * 100):.1f}%" if total_revenue else "0%"]
+    for label, val in zip(txt["wa_rows"], wa_vals):
+        sm.cell(row=wr, column=1, value=label).font = col_font
+        sm.cell(row=wr, column=2, value=val)
+        wr += 1
+    sm.cell(row=wr + 1, column=1, value=txt["note"]).font = Font(italic=True, size=9, color="6B7280")
+
+    for col, w in zip("ABCDE", [30, 12, 16, 18, 12]):
+        sm.column_dimensions[col].width = w
+
+    # ── Sayfa 2: Detay ──
+    ws = wb.create_sheet("Attribution" if lang == "en" else "Detay")
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = hdr_font
+        c.fill = hdr_fill
+        c.alignment = center
+    for r in rows:
+        ws.append(r)
+
+    widths = [12, 12, 22, 12, 11, 8, 14, 11, 18, 16, 28, 16, 12, 28, 30, 12, 12, 10, 8, 8]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+    ws.freeze_panes = "A2"
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f"attribution-report-{since}-{days}d.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "X-Report-Rows": str(len(rows)),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # RFM Segmentasyon endpoint'i
 # ---------------------------------------------------------------------------
 

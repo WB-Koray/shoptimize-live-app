@@ -8,6 +8,7 @@ import {
   Clock, Phone, FileText, XCircle, AlertCircle,
   ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings, ExternalLink,
   User, Megaphone, Image as ImageIcon, Calendar, Users as UsersIcon,
+  Download,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -970,6 +971,82 @@ function SectionHead({ icon: Icon, iconClass = 'text-textDim', title, badge, ext
         <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-1">{badge}</span>
       )}
       {extra && <span className="text-[10px] text-textMute ml-auto">{extra}</span>}
+    </div>
+  );
+}
+
+// ── AttributionReportWidget (sipariş → kanal/kaynak/kampanya XLSX raporu) ───────
+function AttributionReportWidget({ session }) {
+  const { t, lang } = useLang();
+  const { token, username, brand } = session;
+  const [days, setDays] = useState(30);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [lastRows, setLastRows] = useState(null);
+
+  async function downloadReport() {
+    setLoading(true);
+    setError('');
+    try {
+      const r = await fetch(
+        `${API_URL}/api/shopify/attribution-report?username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}&days=${days}&lang=${lang}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try { const d = await r.json(); if (d.error) msg = d.error; } catch {}
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+      const rows = r.headers.get('X-Report-Rows');
+      if (rows != null) setLastRows(Number(rows));
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `attribution-report-${today}-${days}d.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      setError(String(e?.message || e));
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 p-4 border-b border-border">
+        <Download size={15} className="text-teal" />
+        <span className="text-text text-sm font-bold">{t('report.title')}</span>
+        {lastRows != null && (
+          <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full ml-1">
+            {lastRows} {t('report.rows')}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <select value={days} onChange={e => setDays(Number(e.target.value))}
+            className="bg-surfaceAlt border border-border rounded-lg px-2 py-1 text-xs text-text focus:outline-none">
+            <option value={7}>7d</option>
+            <option value={30}>30d</option>
+            <option value={90}>90d</option>
+            <option value={180}>180d</option>
+            <option value={365}>365d</option>
+          </select>
+          <button onClick={downloadReport} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-tealSoft border border-teal/20 text-teal hover:bg-teal/10 transition-colors disabled:opacity-50">
+            {loading ? <RefreshCw size={11} className="animate-spin" /> : <Download size={11} />}
+            {loading ? t('report.loading') : t('report.download')}
+          </button>
+        </div>
+      </div>
+      <div className="px-4 py-3">
+        <p className="text-textMute text-[11px] leading-relaxed">{t('report.desc')}</p>
+        {error && <p className="text-rose-400 text-[11px] mt-2">{t('report.error')}: {error}</p>}
+      </div>
     </div>
   );
 }
@@ -5137,6 +5214,9 @@ export default function Dashboard({ session, onLogout }) {
 
             {/* RFM Müşteri Segmentasyonu */}
             <RFMWidget session={session} anonymized={anonymized} />
+
+            {/* Attribution Raporu (XLSX indir) */}
+            <AttributionReportWidget session={session} />
 
             {/* UTM campaigns accordion */}
             {utmStats.length > 0 && (
