@@ -863,12 +863,6 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     if new_access_token:
         set_connection_settings(username, brand, "shopify", {"admin_api_token": new_access_token})
 
-    # ── Webhook'ları garanti et (OAuth atlandıysa burada kaydedilir) ────────
-    _ensure_webhooks_registered(
-        shop, username, brand,
-        new_access_token or get_setting(username, brand, "shopify", "admin_api_token", ""),
-    )
-
     # ── Online token'ı Redis'e kaydet (user-triggered API çağrıları için) ──
     # Online token her zaman expiring → Admin API 403 hatasını önler.
     import asyncio as _asyncio
@@ -877,6 +871,14 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         from services.redis_store import store as _store
         if _asyncio.get_event_loop().is_running():
             _asyncio.ensure_future(_store.set_online_token(username, brand, online_tok))
+
+    # ── Webhook'ları garanti et (OAuth atlandıysa burada kaydedilir) ────────
+    # ÖNEMLİ: Shopify artık "non-expiring" offline token'ları Admin API'de
+    # reddediyor. Webhook kaydını EXPIRING (online) token ile yap.
+    _ensure_webhooks_registered(
+        shop, username, brand,
+        online_tok or new_access_token or get_setting(username, brand, "shopify", "admin_api_token", ""),
+    )
 
     from services.auth import create_access_token
     token = create_access_token(username, brand)
