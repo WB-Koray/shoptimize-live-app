@@ -3132,7 +3132,7 @@ function FlowPanel({ session, anonymized = false }) {
         setQuickToken('');
         await fetchSettings();   // phone_number_id + waba_id otomatik dolar
       } else {
-        setQuickMsg('err:' + (d.message || d.error || ''));
+        setQuickMsg('err:' + (d.message || d.error || '') + (d.detail ? ` (${d.detail})` : ''));
       }
     } catch {
       setQuickMsg('err:');

@@ -302,41 +302,73 @@ async def wa_connect(
 
     # 1. Token'dan WABA ID'yi bul (debug_token → granular_scopes → target_ids)
     waba_id = ""
+    scopes_seen = []
+    meta_detail = ""
     try:
         r = _requests.get(f"{META_GRAPH}/debug_token",
                           params={"input_token": token, "access_token": token}, timeout=12)
-        data = (r.json() or {}).get("data", {})
+        body = r.json() or {}
+        data = body.get("data", {}) or {}
+        # Meta hata döndürdüyse (geçersiz/expired token vb.) yakala
+        if body.get("error"):
+            meta_detail = str(body["error"].get("message", body["error"]))
+            logger.warning("[WA-CONNECT] debug_token Meta hatası: %s", meta_detail)
         for gs in data.get("granular_scopes", []) or []:
+            scopes_seen.append(gs.get("scope"))
             if gs.get("scope") in ("whatsapp_business_management", "whatsapp_business_messaging"):
                 tids = gs.get("target_ids") or []
                 if tids:
                     waba_id = str(tids[0])
                     break
+        logger.info("[WA-CONNECT] debug_token status=%s scopes=%s waba=%s",
+                    r.status_code, scopes_seen, waba_id or "—")
     except Exception as e:
-        logger.warning("[WA-CONNECT] debug_token hatası: %s", e)
+        meta_detail = str(e)
+        logger.warning("[WA-CONNECT] debug_token istisna: %s", e)
     if not waba_id:
+        # Sebep ayrımı: scope var ama target_ids boş mu, yoksa scope hiç yok mu?
+        has_wa_scope = any(s in ("whatsapp_business_management", "whatsapp_business_messaging")
+                           for s in scopes_seen)
+        if has_wa_scope:
+            msg = ("Token WhatsApp iznine sahip ama bağlı bir WhatsApp Business hesabı "
+                   "(WABA) bulunamadı. Token'ı oluştururken doğru WhatsApp Business "
+                   "hesabını/uygulamasını seçtiğinizden emin olun.")
+        else:
+            msg = ("Token'da WhatsApp Business hesabı bulunamadı. Token'ı "
+                   "whatsapp_business_management ve whatsapp_business_messaging "
+                   "izinleriyle oluşturduğunuzdan emin olun.")
+        logger.warning("[WA-CONNECT] waba_not_found %s:%s scopes=%s detail=%s",
+                       username, brand, scopes_seen, meta_detail)
         return JSONResponse({"ok": False, "error": "waba_not_found",
-            "message": "Token'da WhatsApp Business hesabı bulunamadı. Token'ı "
-                       "whatsapp_business_management ve whatsapp_business_messaging "
-                       "izinleriyle oluşturduğunuzdan emin olun."}, status_code=400)
+            "message": msg, "detail": meta_detail, "scopes": scopes_seen}, status_code=400)
 
     # 2. WABA'dan telefon numarasını ve ID'sini bul
     phone_number_id = ""
     phone_display = ""
+    phone_detail = ""
     try:
         r = _requests.get(f"{META_GRAPH}/{waba_id}/phone_numbers",
                           params={"access_token": token,
                                   "fields": "id,display_phone_number,verified_name"}, timeout=12)
-        nums = (r.json() or {}).get("data", []) or []
+        body = r.json() or {}
+        if body.get("error"):
+            phone_detail = str(body["error"].get("message", body["error"]))
+            logger.warning("[WA-CONNECT] phone_numbers Meta hatası: %s", phone_detail)
+        nums = body.get("data", []) or []
         if nums:
             phone_number_id = str(nums[0].get("id", ""))
             phone_display = nums[0].get("display_phone_number", "") or nums[0].get("verified_name", "")
+        logger.info("[WA-CONNECT] phone_numbers status=%s count=%s", r.status_code, len(nums))
     except Exception as e:
-        logger.warning("[WA-CONNECT] phone_numbers hatası: %s", e)
+        phone_detail = str(e)
+        logger.warning("[WA-CONNECT] phone_numbers istisna: %s", e)
     if not phone_number_id:
+        logger.warning("[WA-CONNECT] phone_not_found %s:%s waba=%s detail=%s",
+                       username, brand, waba_id, phone_detail)
         return JSONResponse({"ok": False, "error": "phone_not_found",
             "message": "Bu WhatsApp Business hesabında telefon numarası bulunamadı. "
-                       "Önce Meta'da numara ekleyin, sonra tekrar deneyin."}, status_code=400)
+                       "Önce Meta'da numara ekleyin, sonra tekrar deneyin.",
+            "detail": phone_detail}, status_code=400)
 
     # 3. Mevcut ayarları koruyarak bağlantı bilgilerini kaydet
     existing = await store.get_flow_settings(username, brand)
