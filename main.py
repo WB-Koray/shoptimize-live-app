@@ -6,11 +6,30 @@ Port: 8001 (Coolify'da ayarlanacak)
 """
 
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
+
+# ── Erişim logu gürültü filtresi ────────────────────────────────────────────
+# Pixel olayları (/api/live/event, /pixel.js, SSE stream) saniyede onlarca satır
+# üretip [CHECKOUT]/[FLOW]/[WA] gibi önemli logları boğuyor. Bu yolların uvicorn
+# access loglarını sustur — uygulama logları (logger.info) etkilenmez.
+class _AccessLogNoiseFilter(logging.Filter):
+    _NOISY = ("/api/live/event", "/pixel.js", "/api/live/stream")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+        return not any(p in msg for p in self._NOISY)
+
+
+logging.getLogger("uvicorn.access").addFilter(_AccessLogNoiseFilter())
 
 from services.redis_store import store
 from routers import live
