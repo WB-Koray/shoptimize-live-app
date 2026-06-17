@@ -354,7 +354,7 @@ async def shopify_callback(
                 _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
             except Exception as _we:
                 logger.warning("[OAuth] Webhook kayıt hatası: topic=%s err=%s", topic, _we)
-        set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
+        set_connection_settings(username, brand, "shopify", {"webhooks_registered": "wh_v2"})
         logger.info("[OAuth] ✓ Webhook'lar kaydedildi (GraphQL): shop=%s", shop)
     except Exception as e:
         logger.warning("[OAuth] Webhook kurulum hatası: %s", e)
@@ -771,10 +771,12 @@ def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_tok
     reddedilir (duplicate) → mevcut OAuth mağazalarında zararsızdır."""
     if not access_token:
         return
-    if get_setting(username, brand, "shopify", "webhooks_registered", ""):
+    # Sürümlü flag: eski "1" işaretli mağazalar (yanlış/eski API sürümüyle kaydı
+    # patlamış olanlar) bir kez DAHA, güncel sürümle otomatik yeniden denesin.
+    if get_setting(username, brand, "shopify", "webhooks_registered", "") == "wh_v2":
         return
     try:
-        from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP
+        from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP, SHOPIFY_API_VERSION
         import secrets as _secrets
         wh_token = get_setting(username, brand, "shopify", "webhook_token", "")
         if not wh_token:
@@ -799,7 +801,7 @@ def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_tok
         for topic, callback_url in webhook_topics:
             gql_topic = _WEBHOOK_TOPIC_MAP.get(topic, topic.upper().replace("/", "_"))
             try:
-                resp = _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url})
+                resp = _shopify_graphql(shop, access_token, _WH_MUT, {"topic": gql_topic, "callbackUrl": callback_url}, SHOPIFY_API_VERSION)
                 errs = (resp.get("data", {}).get("webhookSubscriptionCreate", {}) or {}).get("userErrors", [])
                 if errs:
                     # "already taken" = zaten kayıtlı → başarı say
@@ -820,7 +822,7 @@ def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_tok
                 logger.warning("[SessTok] Webhook kayıt hatası: topic=%s err=%s body=%s", topic, _we, _resp_txt)
         # Sadece en az biri başarılıysa flag'le; hepsi patladıysa sonraki açılışta tekrar denenir
         if any_ok:
-            set_connection_settings(username, brand, "shopify", {"webhooks_registered": "1"})
+            set_connection_settings(username, brand, "shopify", {"webhooks_registered": "wh_v2"})
             logger.info("[SessTok] ✓ Webhook'lar kaydedildi (token-exchange): shop=%s", shop)
         else:
             logger.warning("[SessTok] Webhook kaydı tamamen başarısız (flag set edilmedi): shop=%s", shop)
