@@ -33,8 +33,8 @@ _DEFAULT_TEMPLATES = [
     {
         "name": "sepet_hatirlatma_2",
         "category": "MARKETING",
-        "header_tr": "Sepetini unuttun mu? ⏰",
-        "header_en": "Did you forget your cart? ⏰",
+        "header_tr": "Sepetini unuttun mu?",
+        "header_en": "Did you forget your cart?",
         "body_tr": "{{1}}, sepetindeki ürünler hâlâ duruyor.\nStoklar sınırlı olabilir, geç kalma!",
         "body_en": "{{1}}, the items in your cart are still there.\nStocks may be limited, don't wait!",
         "button_text": "Sepete git",
@@ -43,8 +43,8 @@ _DEFAULT_TEMPLATES = [
     {
         "name": "sepet_hatirlatma_3",
         "category": "MARKETING",
-        "header_tr": "Son hatırlatma! 🎯",
-        "header_en": "Last reminder! 🎯",
+        "header_tr": "Son hatırlatma!",
+        "header_en": "Last reminder!",
         "body_tr": "{{1}}, sepetindeki {{2}} için son şansın!\nHemen tamamla.",
         "body_en": "{{1}}, last chance for {{2}} in your cart!\nComplete it now.",
         "button_text": "Sepete git",
@@ -131,10 +131,30 @@ def _body_text_example(text: str) -> list | None:
     return [vals]   # Meta formatı: [[v1, v2, ...]]
 
 
+def _clean_header(text: str) -> str:
+    """WhatsApp başlığı (HEADER TEXT) emoji/yeni satır/biçimlendirme karakteri kabul
+    etmez (Meta subcode 2388072). Bunları ayıklar, Türkçe harfleri korur."""
+    import re, unicodedata
+    if not text:
+        return text
+    text = re.sub(r"[\r\n\t]+", " ", text)
+    for ch in "*_~`":
+        text = text.replace(ch, "")
+    out = []
+    for ch in text:
+        if ch in ("‍", "️"):          # ZWJ / variation selector
+            continue
+        if unicodedata.category(ch) in ("So", "Sk", "Cs", "Cf"):  # sembol/emoji
+            continue
+        out.append(ch)
+    return re.sub(r"\s{2,}", " ", "".join(out)).strip()
+
+
 def _create_template(waba_id: str, token: str, name: str, body: str, language: str,
                      category: str = "MARKETING", header: str = "", button_text: str = "", button_url: str = "") -> dict:
     """Tek bir WhatsApp template oluşturur ve Meta'ya onaya gönderir."""
     components = []
+    header = _clean_header(header)
     if header:
         header_comp = {"type": "HEADER", "format": "TEXT", "text": header}
         hex_ex = _body_text_example(header)
