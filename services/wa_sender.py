@@ -32,13 +32,25 @@ def _build_product_text(product: str, products: list | None) -> str:
     return titles[0]
 
 
+# Sepet şablonlarının body değişken sayısı (Meta'da onaylı içerikle birebir):
+#   sepet_hatirlatma   : {{1}} ad + {{2}} ürün  → 2
+#   sepet_hatirlatma_2 : sadece {{1}} ad         → 1  (yanlış sayıda param = #132000)
+#   sepet_hatirlatma_3 : {{1}} ad + {{2}} ürün  → 2
+_CART_PARAM_COUNT = {
+    "sepet_hatirlatma": 2,
+    "sepet_hatirlatma_2": 1,
+    "sepet_hatirlatma_3": 2,
+}
+
+
 def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "", products: list | None = None) -> list:
     """Her şablon için doğru body parametrelerini döner."""
-    if template_name in ("sepet_hatirlatma", "sepet_hatirlatma_2", "sepet_hatirlatma_3"):
-        return [
+    if template_name in _CART_PARAM_COUNT:
+        full = [
             {"type": "text", "text": name or "Değerli müşterimiz"},
             {"type": "text", "text": _build_product_text(product, products)},
         ]
+        return full[:_CART_PARAM_COUNT[template_name]]
     if template_name == "siparis_onay":
         return [
             {"type": "text", "text": name or "Değerli müşterimiz"},
