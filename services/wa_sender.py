@@ -46,11 +46,12 @@ _CART_PARAM_COUNT = {
 def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "", products: list | None = None) -> list:
     """Her şablon için doğru body parametrelerini döner."""
     if template_name in _CART_PARAM_COUNT:
-        full = [
+        # Varsayılan ad+ürün (2 param). Şablonun gerçek değişken sayısı farklıysa
+        # send_wa_template #132000 hatasından beklenen sayıyı okuyup otomatik düzeltir.
+        return [
             {"type": "text", "text": name or "Değerli müşterimiz"},
             {"type": "text", "text": _build_product_text(product, products)},
         ]
-        return full[:_CART_PARAM_COUNT[template_name]]
     if template_name == "siparis_onay":
         return [
             {"type": "text", "text": name or "Değerli müşterimiz"},
@@ -249,27 +250,51 @@ async def send_wa_template(
                 template_name, language, to[-4:],
                 phone_number_id[-6:] if phone_number_id else "?",
                 components)
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(url, headers=headers, json=payload)
-        data = r.json()
+    import re as _re
+    _attempt = 0
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.post(url, headers=headers, json=payload)
+            data = r.json()
+        except Exception as e:
+            logger.error("[WA] İstek hatası: %s", e)
+            return {"ok": False, "error": str(e)}
+
         if r.status_code == 200 and data.get("messages"):
             msg_id = data["messages"][0].get("id", "")
             logger.info("[WA] Template gönderildi [%s] %s → %s", template_name, to[-4:], msg_id)
             return {"ok": True, "message_id": msg_id}
+
         err_obj = data.get("error", {})
         error = err_obj.get("message", r.text[:300])
         err_code = err_obj.get("code", r.status_code)
         err_sub = err_obj.get("error_subcode", "")
-        # Meta'nın spesifik açıklaması — hangi parametre/component sorunlu (header mı body mi)
         err_details = (err_obj.get("error_data") or {}).get("details", "")
+
+        # Self-heal: body parametre sayısı uyuşmazlığı (#132000) → şablonun beklediği
+        # sayıya göre body parametrelerini kırp/tamamla ve BİR KEZ yeniden dene.
+        _m = _re.search(r"expected number of params \((\d+)\)", err_details or "")
+        if err_code == 132000 and _m and _attempt == 0:
+            want = int(_m.group(1))
+            for comp in components:
+                if comp.get("type") == "body":
+                    ps = comp.get("parameters", [])
+                    if len(ps) > want:
+                        comp["parameters"] = ps[:want]
+                    elif len(ps) < want:
+                        pad = ps[-1] if ps else {"type": "text", "text": name or "Değerli müşterimiz"}
+                        comp["parameters"] = ps + [dict(pad) for _ in range(want - len(ps))]
+            payload["template"]["components"] = components
+            _attempt += 1
+            logger.info("[WA] #132000 param uyuşmazlığı → %s parametreyle yeniden deneniyor (tpl=%s)",
+                        want, template_name)
+            continue
+
         error_full = f"{error}" + (f" — {err_details}" if err_details else "")
         logger.warning("[WA] Gönderim hatası %s (#%s/%s): %s | details=%s | url=%s tpl=%s lang=%s | full_resp=%s",
                        to, err_code, err_sub, error, err_details, url, template_name, language, r.text[:1000])
         return {"ok": False, "error": error_full, "code": err_code, "details": err_details}
-    except Exception as e:
-        logger.error("[WA] İstek hatası: %s", e)
-        return {"ok": False, "error": str(e)}
 
 
 # Geriye dönük uyumluluk — main.py worker ve flow.py test endpoint'i bu ismi çağırıyor
