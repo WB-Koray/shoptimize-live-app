@@ -411,15 +411,28 @@ async def wa_connect(
                        "Önce Meta'da numara ekleyin, sonra tekrar deneyin.",
             "detail": phone_detail}, status_code=400)
 
-    # 3. Mevcut ayarları koruyarak bağlantı bilgilerini kaydet
+    # 3. WABA'yı uygulamanın webhook'una abone et — gelen mesaj (opt-out "dur") ve
+    #    teslim/okundu bildirimleri ancak böyle /api/wa/webhook'a düşer.
+    subscribed = False
+    try:
+        sub = _requests.post(f"{META_GRAPH}/{waba_id}/subscribed_apps",
+                             params={"access_token": token}, timeout=12)
+        sub_body = sub.json() if sub.content else {}
+        subscribed = bool(sub_body.get("success")) or sub.status_code == 200
+        logger.info("[WA-CONNECT] subscribed_apps status=%s body=%s", sub.status_code, str(sub_body)[:200])
+    except Exception as e:
+        logger.warning("[WA-CONNECT] subscribed_apps hatası: %s", e)
+
+    # 4. Mevcut ayarları koruyarak bağlantı bilgilerini kaydet
     existing = await store.get_flow_settings(username, brand)
     settings = {**existing, "wa_token": token, "waba_id": waba_id, "phone_number_id": phone_number_id}
     await store.save_flow_settings(username, brand, settings)
     await store.set_merchant_phone_id(phone_number_id, username, brand)
-    logger.info("[WA-CONNECT] ✓ %s:%s → waba=%s phone_id=%s (%s)",
-                username, brand, waba_id, phone_number_id, phone_display)
+    logger.info("[WA-CONNECT] ✓ %s:%s → waba=%s phone_id=%s (%s) subscribed=%s",
+                username, brand, waba_id, phone_number_id, phone_display, subscribed)
 
-    return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id, "phone": phone_display}
+    return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id,
+            "phone": phone_display, "subscribed": subscribed}
 
 
 @router.post("/api/flow/wa-embedded")
