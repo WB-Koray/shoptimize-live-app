@@ -322,7 +322,22 @@ async def save_flow_settings(
     phone_number_id = settings.get("phone_number_id", "")
     if phone_number_id:
         await store.set_merchant_phone_id(phone_number_id, username, brand)
-    return {"ok": True}
+
+    # WABA'yı uygulamanın webhook'una abone et — gelen opt-out ("dur") ve teslim/okundu
+    # bildirimleri ancak böyle /api/wa/webhook'a düşer. Manuel "Kaydet" yolu da
+    # Quick Connect gibi abone etsin (idempotent). Geçersiz token'da Meta hata döndürür.
+    subscribed = None
+    if settings.get("wa_token") and settings.get("waba_id"):
+        try:
+            sub = _requests.post(f"{META_GRAPH}/{settings['waba_id']}/subscribed_apps",
+                                 params={"access_token": settings["wa_token"]}, timeout=12)
+            sub_body = sub.json() if sub.content else {}
+            subscribed = bool(sub_body.get("success")) or sub.status_code == 200
+            logger.info("[FLOW-SETTINGS] subscribed_apps status=%s body=%s",
+                        sub.status_code, str(sub_body)[:200])
+        except Exception as e:
+            logger.warning("[FLOW-SETTINGS] subscribed_apps hatası: %s", e)
+    return {"ok": True, "subscribed": subscribed}
 
 
 @router.post("/api/flow/wa-connect")
