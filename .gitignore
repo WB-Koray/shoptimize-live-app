@@ -212,3 +212,7 @@ frontend/dist/
 
 # Claude Code local settings (may contain secrets)
 .claude/
+
+# Yerel ajan/skill araclari (repo disi)
+.agents/
+skills-lock.json
