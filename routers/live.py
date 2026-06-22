@@ -1651,6 +1651,9 @@ async def shopify_checkouts_webhook(
     except Exception:
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
+    # ÖNEMLİ: yalnızca siparişi verenin telefonu (iletişim → fatura). shipping_address.phone
+    # KASTEN kullanılmaz — o, ürünün gönderileceği kişi (ör. hediye alan arkadaş) olabilir;
+    # alakasız birine "sepetinde ürün var" mesajı gitmesin diye. Veren telefonu yoksa atlanır.
     phone       = str(checkout.get("phone") or checkout.get("billing_address", {}).get("phone") or "").strip()
     email       = str(checkout.get("email") or "").strip().lower()
     customer    = checkout.get("customer") or {}
