@@ -396,9 +396,27 @@ def setup_operator_template(admin_token: str = Query(...)):
     token = os.getenv("OPERATOR_WA_TOKEN", "")
     waba = os.getenv("OPERATOR_WABA_ID", "")
     name = os.getenv("OPERATOR_ALERT_TEMPLATE", "operator_bildirim")
-    if not token or not waba:
+    if not token:
         return {"ok": False, "error": "env_eksik",
-                "message": "OPERATOR_WA_TOKEN ve OPERATOR_WABA_ID env'leri gerekli."}
+                "message": "OPERATOR_WA_TOKEN env'i gerekli."}
+    # WABA verilmediyse token'dan otomatik bul (debug_token → granular_scopes → target_ids)
+    if not waba:
+        try:
+            dbg = _rq.get(f"{META_GRAPH}/debug_token",
+                          params={"input_token": token, "access_token": token}, timeout=12)
+            data = (dbg.json() or {}).get("data", {}) or {}
+            for gs in data.get("granular_scopes", []) or []:
+                if gs.get("scope") in ("whatsapp_business_management", "whatsapp_business_messaging"):
+                    tids = gs.get("target_ids") or []
+                    if tids:
+                        waba = str(tids[0])
+                        break
+            logger.info("[ADMIN] operator WABA otomatik bulundu: %s", waba or "—")
+        except Exception as e:
+            logger.warning("[ADMIN] operator WABA debug_token hatası: %s", e)
+    if not waba:
+        return {"ok": False, "error": "waba_bulunamadi",
+                "message": "WABA bulunamadı — OPERATOR_WABA_ID env'ini elle ekleyin."}
     payload = {
         "name": name, "language": "tr", "category": "UTILITY",
         "components": [{
