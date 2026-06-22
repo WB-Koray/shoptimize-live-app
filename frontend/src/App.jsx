@@ -125,12 +125,22 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
 
     // ── Admin panel ────────────────────────────────────────────────
+    // Token URL'den okunur, güvenlik için URL'den silinir; ama localStorage'a
+    // kaydedilir ki sayfa yenilense de panel açık kalsın (tekrar yapıştırma yok).
     const at = params.get('admin_token');
     if (at) {
+      try { localStorage.setItem('admin_token', at); } catch { /* yoksay */ }
       setAdminToken(at);
       const url = new URL(window.location.href);
       url.searchParams.delete('admin_token');
       window.history.replaceState({}, '', url.toString());
+      return;
+    }
+    // URL'de yoksa daha önce kaydedilmiş token ile paneli geri aç
+    let savedAdmin = '';
+    try { savedAdmin = localStorage.getItem('admin_token') || ''; } catch { savedAdmin = ''; }
+    if (savedAdmin) {
+      setAdminToken(savedAdmin);
       return;
     }
 
@@ -277,7 +287,10 @@ export default function App() {
   // ── Render ──────────────────────────────────────────────────────
 
   if (adminToken) {
-    return <AdminPanel adminToken={adminToken} onExit={() => setAdminToken(null)} />;
+    return <AdminPanel adminToken={adminToken} onExit={() => {
+      try { localStorage.removeItem('admin_token'); } catch { /* yoksay */ }
+      setAdminToken(null);
+    }} />;
   }
 
   // Shopify admin'de yükleniyor
