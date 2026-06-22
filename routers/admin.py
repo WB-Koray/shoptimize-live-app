@@ -425,13 +425,15 @@ def setup_operator_template(admin_token: str = Query(...)):
             "example": {"body_text": [["Yeni mağaza kuruldu: ornek.myshopify.com"]]},
         }],
     }
+    sent_text = payload["components"][0]["text"]
+    logger.info("[ADMIN] setup-operator-template waba=%s gövde=%r", waba, sent_text)
     try:
         r = _rq.post(f"{META_GRAPH}/{waba}/message_templates",
                      params={"access_token": token}, json=payload, timeout=15)
         body = r.json() if r.content else {}
         ok = r.status_code in (200, 201) and not body.get("error")
         logger.info("[ADMIN] setup-operator-template status=%s body=%s", r.status_code, str(body)[:200])
-        return {"ok": ok, "status": r.status_code, "response": body}
+        return {"ok": ok, "status": r.status_code, "sent_text": sent_text, "response": body}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
