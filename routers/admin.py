@@ -30,6 +30,45 @@ def _require_admin(token: str):
 
 
 SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
+META_GRAPH = "https://graph.facebook.com/v21.0"
+
+
+def _check_wa_health(waba_id: str, token: str) -> dict:
+    """WhatsApp bağlantı sağlığı: token geçerli mi + onaylı şablon sayısı.
+    status: ok | invalid (token öldü, #190 vb.) | error | no_token"""
+    import requests as _rq
+    if not token:
+        return {"status": "no_token"}
+    try:
+        if waba_id:
+            r = _rq.get(
+                f"{META_GRAPH}/{waba_id}/message_templates",
+                params={"fields": "name,status", "limit": 200, "access_token": token},
+                timeout=10,
+            )
+        else:
+            # WABA yoksa en azından token'ı doğrula
+            r = _rq.get(f"{META_GRAPH}/debug_token",
+                        params={"input_token": token, "access_token": token}, timeout=10)
+        body = r.json() or {}
+        if r.status_code == 200 and waba_id and "data" in body:
+            data = body.get("data", []) or []
+            approved = [t for t in data if t.get("status") == "APPROVED"]
+            cart = [t for t in approved if str(t.get("name", "")).startswith("sepet_hatirlatma")]
+            return {"status": "ok", "approved": len(approved),
+                    "cart_approved": len(cart), "total": len(data)}
+        if r.status_code == 200 and not waba_id:
+            # debug_token başarılı → token canlı ama şablon sayısı bilinmiyor
+            err = (body.get("data") or {}).get("error")
+            if err:
+                return {"status": "invalid", "error_code": err.get("code"),
+                        "error": str(err.get("message", ""))[:140]}
+            return {"status": "ok", "approved": 0, "cart_approved": 0, "total": 0, "note": "no_waba"}
+        err = body.get("error", {}) or {}
+        return {"status": "invalid", "error_code": err.get("code"),
+                "error": str(err.get("message", ""))[:140]}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:140]}
 
 
 def _fetch_shop_info(domain: str, token: str) -> dict:
@@ -251,6 +290,80 @@ async def list_merchants(admin_token: str = Query(...)):
             "total_revenue":round(sum(m["revenue"] for m in result), 2),
         },
     }
+
+
+@router.get("/health")
+async def merchants_health(admin_token: str = Query(...)):
+    """Operatör monitöring — her mağaza için WhatsApp/sepet-kurtarma boru hattı
+    sağlığı. Sorunlu süreçleri (ölü token, eksik şablon, kayıtsız webhook, kapalı
+    akış, eksik pixel) tek bakışta gösterir."""
+    _require_admin(admin_token)
+    import asyncio as _aio
+
+    try:
+        connections = get_all_shopify_connections()
+    except Exception as e:
+        logger.exception("[ADMIN] health get_all_shopify_connections hatası")
+        raise HTTPException(500, f"DB hatası: {e}")
+
+    async def _check(conn):
+        username = conn["username"]
+        brand = conn["brand"]
+        settings = conn.get("connection", {}).get("settings", {})
+        shop_domain = settings.get("shop_domain", "")
+        shop_name = settings.get("shop_name", "") or username
+        billing_status = settings.get("billing_status", "none")
+        tid = settings.get("pixel_tracking_id", "")
+        webhooks_registered = settings.get("webhooks_registered", "") == "wh_v2"
+
+        try:
+            fs = await store.get_flow_settings(username, brand)
+        except Exception:
+            fs = {}
+        wa_token = fs.get("wa_token", "")
+        waba_id = fs.get("waba_id", "")
+        phone_id = fs.get("phone_number_id", "")
+        flow_enabled = bool(fs.get("enabled"))
+        wa_connected = bool(wa_token and phone_id)
+
+        wa = {"status": "skip"}
+        if wa_connected and billing_status != "uninstalled":
+            wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token)
+
+        problems = []
+        if billing_status != "uninstalled":
+            if flow_enabled and not wa_connected:
+                problems.append("Akış açık ama WhatsApp bağlı değil")
+            if wa_connected and wa.get("status") == "invalid":
+                code = wa.get("error_code")
+                problems.append(f"WA token geçersiz (#{code})" if code else "WA token geçersiz/expired")
+            if wa_connected and wa.get("status") == "error":
+                problems.append("WA kontrolü yapılamadı (Meta erişim hatası)")
+            if wa_connected and wa.get("status") == "ok" and wa.get("cart_approved", 0) == 0:
+                problems.append("Onaylı sepet şablonu yok (count=0)")
+            if flow_enabled and not webhooks_registered:
+                problems.append("Shopify webhook kayıtlı değil")
+            if flow_enabled and not tid:
+                problems.append("Pixel kurulu değil")
+
+        return {
+            "username": username, "brand": brand,
+            "shop_name": shop_name, "shop_domain": shop_domain,
+            "billing_status": billing_status,
+            "flow_enabled": flow_enabled, "wa_connected": wa_connected,
+            "waba_id": waba_id, "phone_id": phone_id,
+            "webhooks_registered": webhooks_registered, "pixel_ready": bool(tid),
+            "wa": wa, "problems": problems, "healthy": len(problems) == 0,
+        }
+
+    results = await _aio.gather(*[_check(c) for c in connections])
+    # Sadece ilgili mağazalar: akış açık VEYA WA bağlı, kaldırılmamış
+    relevant = [r for r in results
+                if (r["flow_enabled"] or r["wa_connected"]) and r["billing_status"] != "uninstalled"]
+    relevant.sort(key=lambda r: (r["healthy"], r["shop_name"].lower()))
+    problem_count = sum(1 for r in relevant if not r["healthy"])
+    return {"ok": True, "checked": len(relevant),
+            "problem_count": problem_count, "merchants": relevant}
 
 
 @router.post("/nudge")

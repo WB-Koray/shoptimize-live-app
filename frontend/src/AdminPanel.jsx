@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, CheckCircle, Clock, XCircle, AlertCircle, Send, ExternalLink, Download, ArrowUpDown, X, Zap } from 'lucide-react';
+import { RefreshCw, CheckCircle, Clock, XCircle, AlertCircle, Send, ExternalLink, Download, ArrowUpDown, X, Zap, Activity } from 'lucide-react';
 import { LangSwitch } from './LangContext';
 import { ThemeSwitch } from './ThemeContext';
 
@@ -57,6 +57,9 @@ export default function AdminPanel({ adminToken, onExit }) {
   const [detail, setDetail] = useState(null);
   const [nudging, setNudging] = useState({});
   const [toast, setToast] = useState('');
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [showHealth, setShowHealth] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -70,6 +73,18 @@ export default function AdminPanel({ adminToken, onExit }) {
   }, [adminToken]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadHealth = useCallback(async () => {
+    setHealthLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/health?admin_token=${encodeURIComponent(adminToken)}`);
+      const json = await res.json();
+      if (res.ok) setHealth(json);
+    } catch { /* sessiz */ }
+    finally { setHealthLoading(false); }
+  }, [adminToken]);
+
+  function openHealth() { setShowHealth(true); if (!health) loadHealth(); }
 
   function showToast(m) { setToast(m); setTimeout(() => setToast(''), 4000); }
 
@@ -158,6 +173,10 @@ export default function AdminPanel({ adminToken, onExit }) {
           <span className="font-bold text-text text-sm">Shoptimize Live — Admin</span>
           <span className="text-xs text-textMute bg-surfaceAlt border border-border px-2 py-0.5 rounded-md">{data?.total ?? '…'} merchants</span>
           <div className="ml-auto flex items-center gap-3">
+            <button onClick={openHealth} className="flex items-center gap-1.5 text-xs text-textDim hover:text-text transition-colors">
+              <Activity size={13} /> Sağlık
+              {health?.problem_count > 0 && <span className="text-rose font-bold">({health.problem_count})</span>}
+            </button>
             <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs text-textDim hover:text-text transition-colors"><Download size={13} /> CSV</button>
             <button onClick={load} disabled={loading} className="flex items-center gap-1.5 text-xs text-textDim hover:text-text transition-colors disabled:opacity-50"><RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh</button>
             <LangSwitch /><ThemeSwitch />
@@ -273,6 +292,67 @@ export default function AdminPanel({ adminToken, onExit }) {
           </div>
         </div>
       </div>
+
+      {/* Sağlık / Monitöring modalı */}
+      {showHealth && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setShowHealth(false)}>
+          <div className="w-full max-w-3xl bg-surface border border-border rounded-2xl mt-10 p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-text font-bold flex items-center gap-2"><Activity size={16} /> Sistem Sağlığı — WhatsApp / Sepet Kurtarma</h2>
+              <div className="flex items-center gap-3">
+                <button onClick={loadHealth} disabled={healthLoading} className="text-textDim hover:text-text disabled:opacity-50"><RefreshCw size={14} className={healthLoading ? 'animate-spin' : ''} /></button>
+                <button onClick={() => setShowHealth(false)} className="p-1 text-textMute hover:text-text"><X size={16} /></button>
+              </div>
+            </div>
+
+            {healthLoading && !health && <div className="text-center py-10 text-textMute text-sm">Kontrol ediliyor… (Meta API sorgulanıyor)</div>}
+
+            {health && (
+              <>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-textMute">{health.checked} mağaza kontrol edildi</span>
+                  {health.problem_count > 0
+                    ? <span className="text-rose font-bold flex items-center gap-1"><XCircle size={14} />{health.problem_count} sorunlu</span>
+                    : <span className="text-green font-bold flex items-center gap-1"><CheckCircle size={14} />Hepsi sağlıklı</span>}
+                </div>
+
+                <div className="space-y-2">
+                  {health.merchants.filter(m => !m.healthy).map(m => (
+                    <div key={m.username + m.brand} className="bg-roseSoft border border-rose/20 rounded-xl p-3">
+                      <div className="font-medium text-text text-sm flex items-center gap-2">
+                        {m.shop_name}
+                        <span className="text-textMute text-[11px] font-normal">{m.shop_domain || m.username}</span>
+                      </div>
+                      <ul className="mt-1.5 space-y-1">
+                        {m.problems.map((p, i) => (
+                          <li key={i} className="text-xs text-rose flex items-center gap-1.5"><XCircle size={11} />{p}</li>
+                        ))}
+                      </ul>
+                      {m.wa?.error && <div className="text-[10px] text-textMute mt-1 font-mono break-all">{m.wa.error}</div>}
+                    </div>
+                  ))}
+
+                  {health.merchants.filter(m => m.healthy).length > 0 && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer py-2 text-textMute hover:text-text">
+                        Sağlıklı mağazalar ({health.merchants.filter(m => m.healthy).length})
+                      </summary>
+                      <div className="space-y-1 pt-1">
+                        {health.merchants.filter(m => m.healthy).map(m => (
+                          <div key={m.username + m.brand} className="flex items-center gap-2 py-0.5 text-green">
+                            <CheckCircle size={11} /> <span className="text-text">{m.shop_name}</span>
+                            <span className="text-textMute">· {m.wa?.cart_approved ?? 0} sepet şablonu · {m.flow_enabled ? 'akış açık' : 'akış kapalı'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Detay paneli */}
       {detail && (
