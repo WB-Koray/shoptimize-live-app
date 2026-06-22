@@ -101,6 +101,15 @@ export default function AdminPanel({ adminToken, onExit }) {
     } catch { showToast('Test bildirimi başarısız'); }
   }
 
+  async function setupTemplate() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/setup-operator-template?admin_token=${encodeURIComponent(adminToken)}`, { method: 'POST' });
+      const d = await res.json();
+      if (d.ok) showToast('✅ Şablon oluşturuldu — Meta onayını bekle (1-2 dk)');
+      else showToast(`Şablon kurulamadı: ${d.message || JSON.stringify(d.response?.error || d.error || '')}`.slice(0, 160));
+    } catch { showToast('Şablon kurulumu başarısız'); }
+  }
+
   function showToast(m) { setToast(m); setTimeout(() => setToast(''), 4000); }
 
   async function nudge(m) {
@@ -315,6 +324,8 @@ export default function AdminPanel({ adminToken, onExit }) {
             <div className="flex items-center justify-between">
               <h2 className="text-text font-bold flex items-center gap-2"><Activity size={16} /> Sistem Sağlığı — WhatsApp / Sepet Kurtarma</h2>
               <div className="flex items-center gap-3">
+                <button onClick={setupTemplate} title="operator_bildirim şablonunu Meta'da oluştur (tek sefer)"
+                  className="flex items-center gap-1 text-xs text-textDim hover:text-text"><Zap size={12} /> Şablon kur</button>
                 <button onClick={testAlert} title="Operatör bildirim hattını test et"
                   className="flex items-center gap-1 text-xs text-blue hover:text-text"><Send size={12} /> Test bildirim</button>
                 <button onClick={loadHealth} disabled={healthLoading} className="text-textDim hover:text-text disabled:opacity-50"><RefreshCw size={14} className={healthLoading ? 'animate-spin' : ''} /></button>
