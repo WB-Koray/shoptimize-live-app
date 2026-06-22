@@ -420,7 +420,8 @@ def setup_operator_template(admin_token: str = Query(...)):
     payload = {
         "name": name, "language": "tr", "category": "UTILITY",
         "components": [{
-            "type": "BODY", "text": "Shoptimize bildirimi: {{1}}",
+            # Meta kuralı: değişken body'nin başında/sonunda olamaz → sona sabit metin
+            "type": "BODY", "text": "Shoptimize bildirimi: {{1}} — Shoptimize Live",
             "example": {"body_text": [["Yeni mağaza kuruldu: ornek.myshopify.com"]]},
         }],
     }
