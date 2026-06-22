@@ -207,6 +207,45 @@ async def _scheduled_campaign_worker():
             _log.warning("[CAMPAIGN] worker hatası: %s", e)
 
 
+async def _health_monitor_worker():
+    """Periyodik sağlık kontrolü — bir mağazanın WhatsApp/sepet boru hattı bozulunca
+    (ölü token, eksik şablon, kayıtsız webhook...) operatöre WhatsApp bildirimi atar,
+    düzelince 'düzeldi' bildirimi gönderir. Durum geçişlerinde tek sefer bildirir."""
+    import asyncio
+    import logging
+    _log = logging.getLogger(__name__)
+    await asyncio.sleep(120)  # açılış sonrası bekle
+    from routers.admin import compute_store_health
+    from services.db import get_all_shopify_connections
+    from services.notify import notify_operator, is_configured
+    INTERVAL = int(os.getenv("HEALTH_MONITOR_INTERVAL_SEC", str(6 * 3600)))
+    while True:
+        try:
+            if is_configured():
+                conns = get_all_shopify_connections()
+                results = await asyncio.gather(
+                    *[compute_store_health(c) for c in conns], return_exceptions=True)
+                for r in results:
+                    if not isinstance(r, dict) or not r.get("relevant"):
+                        continue
+                    key = f"{r['username']}:{r['brand']}"
+                    prev = await store.kv_get(f"health:{key}")
+                    cur = "ok" if r["healthy"] else "problem"
+                    if cur != prev:
+                        if cur == "problem":
+                            await notify_operator(
+                                f"⚠️ Sorun: {r['shop_name']} — " + " · ".join(r["problems"]),
+                                dedupe_key=f"hp:{key}", cooldown_sec=12 * 3600)
+                        elif prev == "problem":
+                            await notify_operator(
+                                f"✅ Düzeldi: {r['shop_name']}",
+                                dedupe_key=f"hr:{key}", cooldown_sec=3600)
+                        await store.kv_set(f"health:{key}", cur)
+        except Exception as e:
+            _log.warning("[HEALTH-MON] worker hatası: %s", e)
+        await asyncio.sleep(INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -215,6 +254,7 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(_abandoned_checkout_worker())
     asyncio.create_task(_scheduled_campaign_worker())
+    asyncio.create_task(_health_monitor_worker())
     yield
     # Shutdown
     await store.disconnect()

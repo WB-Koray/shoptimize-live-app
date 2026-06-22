@@ -52,6 +52,9 @@ def _build_params(template_name: str, name: str = "", product: str = "", order_n
             {"type": "text", "text": name or "Değerli müşterimiz"},
             {"type": "text", "text": _build_product_text(product, products)},
         ]
+    if template_name == "operator_bildirim":
+        # Body: "Shoptimize bildirimi: {{1}}" → tek metin parametresi
+        return [{"type": "text", "text": name or "-"}]
     if template_name == "siparis_onay":
         return [
             {"type": "text", "text": name or "Değerli müşterimiz"},

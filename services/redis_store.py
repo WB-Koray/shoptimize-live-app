@@ -58,6 +58,31 @@ class RedisStore:
             await self._redis.expire(key, window_sec)
         return count > limit
 
+    async def once(self, key: str, ttl_sec: int) -> bool:
+        """Dedupe/cooldown: ilk çağrıda True döner, ttl_sec içinde tekrar çağrılırsa False."""
+        try:
+            result = await self._redis.set(f"once:{key}", "1", ex=ttl_sec, nx=True)
+            return result is not None
+        except Exception:
+            return True
+
+    async def kv_get(self, key: str) -> str:
+        """Basit durum hafızası okuma (health monitor için)."""
+        try:
+            val = await self._redis.get(f"kv:{key}")
+            return val if isinstance(val, str) else (val.decode() if val else "")
+        except Exception:
+            return ""
+
+    async def kv_set(self, key: str, value: str, ttl_sec: int = 0) -> None:
+        try:
+            if ttl_sec > 0:
+                await self._redis.setex(f"kv:{key}", ttl_sec, value)
+            else:
+                await self._redis.set(f"kv:{key}", value)
+        except Exception:
+            pass
+
     async def is_duplicate(self, tid: str, vid: str, event_type: str, url: str, window_sec: int = 10) -> bool:
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
         key = f"dedup:{tid}:{vid}:{event_type}:{url_hash}"

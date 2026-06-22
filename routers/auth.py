@@ -254,6 +254,14 @@ async def shopify_callback(
         set_connection_settings(username, brand, "shopify", _updates)
         logger.info("[OAuth] ✓ Kurulum tamamlandı: shop=%s username=%s installed_at_korundu=%s",
                     shop, username, bool(_existing_installed))
+        # Operatöre yeni mağaza bildirimi (sadece ilk kurulumda)
+        if not _existing_installed:
+            try:
+                from services.notify import notify_operator
+                await notify_operator(f"🆕 Yeni mağaza kuruldu: {shop}",
+                                      dedupe_key=f"install:{shop}", cooldown_sec=86400)
+            except Exception as _e:
+                logger.warning("[OAuth] yeni mağaza bildirimi hatası: %s", _e)
 
     # 4b. Mağaza sahibi bilgilerini al ve kaydet (GraphQL)
     owner_phone = ""

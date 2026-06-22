@@ -86,6 +86,21 @@ export default function AdminPanel({ adminToken, onExit }) {
 
   function openHealth() { setShowHealth(true); if (!health) loadHealth(); }
 
+  // Panel açıkken 60 sn'de bir otomatik yenile
+  useEffect(() => {
+    if (!showHealth) return;
+    const id = setInterval(loadHealth, 60000);
+    return () => clearInterval(id);
+  }, [showHealth, loadHealth]);
+
+  async function testAlert() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/test-alert?admin_token=${encodeURIComponent(adminToken)}`, { method: 'POST' });
+      const d = await res.json();
+      showToast(d.ok ? `✅ Test bildirimi gönderildi${d.to ? ` (***${d.to})` : ''}` : `Bildirim başarısız: ${d.message || d.error || ''}`);
+    } catch { showToast('Test bildirimi başarısız'); }
+  }
+
   function showToast(m) { setToast(m); setTimeout(() => setToast(''), 4000); }
 
   async function nudge(m) {
@@ -300,6 +315,8 @@ export default function AdminPanel({ adminToken, onExit }) {
             <div className="flex items-center justify-between">
               <h2 className="text-text font-bold flex items-center gap-2"><Activity size={16} /> Sistem Sağlığı — WhatsApp / Sepet Kurtarma</h2>
               <div className="flex items-center gap-3">
+                <button onClick={testAlert} title="Operatör bildirim hattını test et"
+                  className="flex items-center gap-1 text-xs text-blue hover:text-text"><Send size={12} /> Test bildirim</button>
                 <button onClick={loadHealth} disabled={healthLoading} className="text-textDim hover:text-text disabled:opacity-50"><RefreshCw size={14} className={healthLoading ? 'animate-spin' : ''} /></button>
                 <button onClick={() => setShowHealth(false)} className="p-1 text-textMute hover:text-text"><X size={16} /></button>
               </div>
@@ -329,6 +346,20 @@ export default function AdminPanel({ adminToken, onExit }) {
                         ))}
                       </ul>
                       {m.wa?.error && <div className="text-[10px] text-textMute mt-1 font-mono break-all">{m.wa.error}</div>}
+                      <div className="flex items-center gap-2 mt-2">
+                        {m.owner_phone && (
+                          <a href={`https://wa.me/${m.owner_phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-green bg-green/10 border border-green/20 rounded-md px-2 py-0.5 no-underline">
+                            <Send size={10} /> Sahibe yaz
+                          </a>
+                        )}
+                        {m.shop_domain && (
+                          <a href={`https://${m.shop_domain}/admin`} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-textDim bg-surfaceAlt border border-border rounded-md px-2 py-0.5 no-underline">
+                            <ExternalLink size={10} /> Shopify
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
 

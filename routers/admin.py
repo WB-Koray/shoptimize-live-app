@@ -292,6 +292,67 @@ async def list_merchants(admin_token: str = Query(...)):
     }
 
 
+async def compute_store_health(conn: dict) -> dict:
+    """Tek mağazanın WhatsApp/sepet-kurtarma boru hattı sağlığını döner.
+    Hem /api/admin/health endpoint'i hem de periyodik health worker kullanır."""
+    import asyncio as _aio
+    username = conn["username"]
+    brand = conn["brand"]
+    settings = conn.get("connection", {}).get("settings", {})
+    shop_domain = settings.get("shop_domain", "")
+    shop_name = settings.get("shop_name", "") or username
+    billing_status = settings.get("billing_status", "none")
+    tid = settings.get("pixel_tracking_id", "")
+    webhooks_registered = settings.get("webhooks_registered", "") == "wh_v2"
+
+    try:
+        owner_phone = await store.get_owner_phone(username, brand)
+    except Exception:
+        owner_phone = ""
+    try:
+        fs = await store.get_flow_settings(username, brand)
+    except Exception:
+        fs = {}
+    wa_token = fs.get("wa_token", "")
+    waba_id = fs.get("waba_id", "")
+    phone_id = fs.get("phone_number_id", "")
+    flow_enabled = bool(fs.get("enabled"))
+    wa_connected = bool(wa_token and phone_id)
+
+    wa = {"status": "skip"}
+    if wa_connected and billing_status != "uninstalled":
+        wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token)
+
+    problems = []
+    if billing_status != "uninstalled":
+        if flow_enabled and not wa_connected:
+            problems.append("Akış açık ama WhatsApp bağlı değil")
+        if wa_connected and wa.get("status") == "invalid":
+            code = wa.get("error_code")
+            problems.append(f"WA token geçersiz (#{code})" if code else "WA token geçersiz/expired")
+        if wa_connected and wa.get("status") == "error":
+            problems.append("WA kontrolü yapılamadı (Meta erişim hatası)")
+        if wa_connected and wa.get("status") == "ok" and wa.get("cart_approved", 0) == 0:
+            problems.append("Onaylı sepet şablonu yok (count=0)")
+        if flow_enabled and not webhooks_registered:
+            problems.append("Shopify webhook kayıtlı değil")
+        if flow_enabled and not tid:
+            problems.append("Pixel kurulu değil")
+
+    return {
+        "username": username, "brand": brand,
+        "shop_name": shop_name, "shop_domain": shop_domain,
+        "owner_phone": owner_phone,
+        "billing_status": billing_status,
+        "flow_enabled": flow_enabled, "wa_connected": wa_connected,
+        "waba_id": waba_id, "phone_id": phone_id,
+        "webhooks_registered": webhooks_registered, "pixel_ready": bool(tid),
+        "wa": wa, "problems": problems, "healthy": len(problems) == 0,
+        # worker filtresi için
+        "relevant": (flow_enabled or wa_connected) and billing_status != "uninstalled",
+    }
+
+
 @router.get("/health")
 async def merchants_health(admin_token: str = Query(...)):
     """Operatör monitöring — her mağaza için WhatsApp/sepet-kurtarma boru hattı
@@ -306,64 +367,54 @@ async def merchants_health(admin_token: str = Query(...)):
         logger.exception("[ADMIN] health get_all_shopify_connections hatası")
         raise HTTPException(500, f"DB hatası: {e}")
 
-    async def _check(conn):
-        username = conn["username"]
-        brand = conn["brand"]
-        settings = conn.get("connection", {}).get("settings", {})
-        shop_domain = settings.get("shop_domain", "")
-        shop_name = settings.get("shop_name", "") or username
-        billing_status = settings.get("billing_status", "none")
-        tid = settings.get("pixel_tracking_id", "")
-        webhooks_registered = settings.get("webhooks_registered", "") == "wh_v2"
-
-        try:
-            fs = await store.get_flow_settings(username, brand)
-        except Exception:
-            fs = {}
-        wa_token = fs.get("wa_token", "")
-        waba_id = fs.get("waba_id", "")
-        phone_id = fs.get("phone_number_id", "")
-        flow_enabled = bool(fs.get("enabled"))
-        wa_connected = bool(wa_token and phone_id)
-
-        wa = {"status": "skip"}
-        if wa_connected and billing_status != "uninstalled":
-            wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token)
-
-        problems = []
-        if billing_status != "uninstalled":
-            if flow_enabled and not wa_connected:
-                problems.append("Akış açık ama WhatsApp bağlı değil")
-            if wa_connected and wa.get("status") == "invalid":
-                code = wa.get("error_code")
-                problems.append(f"WA token geçersiz (#{code})" if code else "WA token geçersiz/expired")
-            if wa_connected and wa.get("status") == "error":
-                problems.append("WA kontrolü yapılamadı (Meta erişim hatası)")
-            if wa_connected and wa.get("status") == "ok" and wa.get("cart_approved", 0) == 0:
-                problems.append("Onaylı sepet şablonu yok (count=0)")
-            if flow_enabled and not webhooks_registered:
-                problems.append("Shopify webhook kayıtlı değil")
-            if flow_enabled and not tid:
-                problems.append("Pixel kurulu değil")
-
-        return {
-            "username": username, "brand": brand,
-            "shop_name": shop_name, "shop_domain": shop_domain,
-            "billing_status": billing_status,
-            "flow_enabled": flow_enabled, "wa_connected": wa_connected,
-            "waba_id": waba_id, "phone_id": phone_id,
-            "webhooks_registered": webhooks_registered, "pixel_ready": bool(tid),
-            "wa": wa, "problems": problems, "healthy": len(problems) == 0,
-        }
-
-    results = await _aio.gather(*[_check(c) for c in connections])
-    # Sadece ilgili mağazalar: akış açık VEYA WA bağlı, kaldırılmamış
-    relevant = [r for r in results
-                if (r["flow_enabled"] or r["wa_connected"]) and r["billing_status"] != "uninstalled"]
+    results = await _aio.gather(*[compute_store_health(c) for c in connections])
+    relevant = [r for r in results if r["relevant"]]
     relevant.sort(key=lambda r: (r["healthy"], r["shop_name"].lower()))
     problem_count = sum(1 for r in relevant if not r["healthy"])
     return {"ok": True, "checked": len(relevant),
             "problem_count": problem_count, "merchants": relevant}
+
+
+@router.post("/test-alert")
+async def test_alert(admin_token: str = Query(...)):
+    """Operatör bildirim hattını test eder — kendi telefonuna örnek mesaj atar."""
+    _require_admin(admin_token)
+    from services.notify import notify_operator, is_configured, OPERATOR_ALERT_PHONE
+    if not is_configured():
+        return {"ok": False, "error": "env_eksik",
+                "message": "OPERATOR_WA_TOKEN / OPERATOR_WA_PHONE_ID / OPERATOR_ALERT_PHONE ayarlanmalı."}
+    ok = await notify_operator("🔔 Test bildirimi — operatör hattı çalışıyor")
+    return {"ok": ok, "to": OPERATOR_ALERT_PHONE[-4:] if OPERATOR_ALERT_PHONE else ""}
+
+
+@router.post("/setup-operator-template")
+def setup_operator_template(admin_token: str = Query(...)):
+    """operator_bildirim şablonunu operatör WABA'sında oluşturur (tek seferlik).
+    Gerekli env: OPERATOR_WA_TOKEN + OPERATOR_WABA_ID."""
+    _require_admin(admin_token)
+    import requests as _rq
+    token = os.getenv("OPERATOR_WA_TOKEN", "")
+    waba = os.getenv("OPERATOR_WABA_ID", "")
+    name = os.getenv("OPERATOR_ALERT_TEMPLATE", "operator_bildirim")
+    if not token or not waba:
+        return {"ok": False, "error": "env_eksik",
+                "message": "OPERATOR_WA_TOKEN ve OPERATOR_WABA_ID env'leri gerekli."}
+    payload = {
+        "name": name, "language": "tr", "category": "UTILITY",
+        "components": [{
+            "type": "BODY", "text": "Shoptimize bildirimi: {{1}}",
+            "example": {"body_text": [["Yeni mağaza kuruldu: ornek.myshopify.com"]]},
+        }],
+    }
+    try:
+        r = _rq.post(f"{META_GRAPH}/{waba}/message_templates",
+                     params={"access_token": token}, json=payload, timeout=15)
+        body = r.json() if r.content else {}
+        ok = r.status_code in (200, 201) and not body.get("error")
+        logger.info("[ADMIN] setup-operator-template status=%s body=%s", r.status_code, str(body)[:200])
+        return {"ok": ok, "status": r.status_code, "response": body}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @router.post("/nudge")

@@ -287,6 +287,15 @@ async def billing_callback(
     else:
         raise HTTPException(400, f"Beklenmeyen subscription durumu: {status!r}")
 
+    # Operatöre "ödeme aktif" bildirimi (mağaza başına günde 1 kez)
+    try:
+        from services.notify import notify_operator
+        _shop_label = get_setting(username, brand, "shopify", "shop_name", "") or shop or username
+        await notify_operator(f"💰 Ödeme aktif: {_shop_label}",
+                              dedupe_key=f"billing:{username}:{brand}", cooldown_sec=86400)
+    except Exception as _e:
+        logger.warning("[BILLING] ödeme bildirimi hatası: %s", _e)
+
     # ── 2. Merchant'ı dashboard'a yönlendir ─────────────────────────
     from services.auth import create_access_token
     token = create_access_token(username, brand)

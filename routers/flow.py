@@ -337,6 +337,17 @@ async def save_flow_settings(
                         sub.status_code, str(sub_body)[:200])
         except Exception as e:
             logger.warning("[FLOW-SETTINGS] subscribed_apps hatası: %s", e)
+
+    # Operatöre "WhatsApp bağlandı" bildirimi (bağlı değilken bağlandıysa)
+    was_connected = bool(existing.get("wa_token") and existing.get("phone_number_id"))
+    now_connected = bool(settings.get("wa_token") and settings.get("phone_number_id"))
+    if now_connected and not was_connected:
+        try:
+            from services.notify import notify_operator
+            await notify_operator(f"🔗 WhatsApp bağlandı: {username}",
+                                  dedupe_key=f"waconn:{username}:{brand}", cooldown_sec=3600)
+        except Exception:
+            pass
     return {"ok": True, "subscribed": subscribed}
 
 
@@ -445,6 +456,15 @@ async def wa_connect(
     await store.set_merchant_phone_id(phone_number_id, username, brand)
     logger.info("[WA-CONNECT] ✓ %s:%s → waba=%s phone_id=%s (%s) subscribed=%s",
                 username, brand, waba_id, phone_number_id, phone_display, subscribed)
+
+    # Operatöre "WhatsApp bağlandı" bildirimi (yeni bağlantıda)
+    if not (existing.get("wa_token") and existing.get("phone_number_id")):
+        try:
+            from services.notify import notify_operator
+            await notify_operator(f"🔗 WhatsApp bağlandı: {username} ({phone_display or phone_number_id})",
+                                  dedupe_key=f"waconn:{username}:{brand}", cooldown_sec=3600)
+        except Exception:
+            pass
 
     return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id,
             "phone": phone_display, "subscribed": subscribed}
