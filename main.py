@@ -288,10 +288,16 @@ async def lifespan(app: FastAPI):
     await store.disconnect()
 
 
+# API dokümanını (Swagger/ReDoc/OpenAPI şeması) production'da kapat — herkese açık
+# API şemasını sızdırmasın. Geliştirmede ENABLE_DOCS=true ile geçici açılabilir.
+_DOCS_ON = os.getenv("ENABLE_DOCS", "false").strip().lower() in ("true", "1", "yes", "on")
 app = FastAPI(
     title="Shoptimize Live Activity",
     version="2.0.0",
     lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ON else None,
+    redoc_url="/redoc" if _DOCS_ON else None,
+    openapi_url="/openapi.json" if _DOCS_ON else None,
 )
 
 # CORS — pixel.js ve /api/live/event herkese açık olmalı
