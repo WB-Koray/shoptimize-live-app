@@ -33,9 +33,10 @@ SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 META_GRAPH = "https://graph.facebook.com/v21.0"
 
 
-def _check_wa_health(waba_id: str, token: str) -> dict:
-    """WhatsApp bağlantı sağlığı: token geçerli mi + onaylı şablon sayısı.
-    status: ok | invalid (token öldü, #190 vb.) | error | no_token"""
+def _check_wa_health(waba_id: str, token: str, phone_id: str = "") -> dict:
+    """WhatsApp bağlantı sağlığı: token geçerli mi + onaylı şablon sayısı + GÖNDERİM
+    yapılacak telefona erişim var mı (token şablon okuyabilir ama gönderemiyor olabilir).
+    status: ok | invalid (token öldü, #190 vb.) | send_blocked (telefon erişimi yok) | error | no_token"""
     import requests as _rq
     if not token:
         return {"status": "no_token"}
@@ -55,6 +56,22 @@ def _check_wa_health(waba_id: str, token: str) -> dict:
             data = body.get("data", []) or []
             approved = [t for t in data if t.get("status") == "APPROVED"]
             cart = [t for t in approved if str(t.get("name", "")).startswith("sepet_hatirlatma")]
+            # Gönderim ön koşulu: token, gönderen telefona erişebiliyor mu? (gönderimsiz test)
+            if phone_id:
+                pr = _rq.get(f"{META_GRAPH}/{phone_id}",
+                             params={"fields": "verified_name,quality_rating,code_verification_status",
+                                     "access_token": token}, timeout=10)
+                pbody = pr.json() or {}
+                if pr.status_code != 200 or pbody.get("error"):
+                    perr = pbody.get("error", {}) or {}
+                    return {"status": "send_blocked", "approved": len(approved),
+                            "cart_approved": len(cart), "total": len(data),
+                            "error_code": perr.get("code"),
+                            "error": "Telefon erişimi yok (gönderim yapılamaz): "
+                                     + str(perr.get("message", ""))[:110]}
+                return {"status": "ok", "approved": len(approved),
+                        "cart_approved": len(cart), "total": len(data),
+                        "quality": pbody.get("quality_rating", "")}
             return {"status": "ok", "approved": len(approved),
                     "cart_approved": len(cart), "total": len(data)}
         if r.status_code == 200 and not waba_id:
@@ -321,7 +338,7 @@ async def compute_store_health(conn: dict) -> dict:
 
     wa = {"status": "skip"}
     if wa_connected and billing_status != "uninstalled":
-        wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token)
+        wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token, phone_id)
 
     problems = []
     if billing_status != "uninstalled":
@@ -330,6 +347,9 @@ async def compute_store_health(conn: dict) -> dict:
         if wa_connected and wa.get("status") == "invalid":
             code = wa.get("error_code")
             problems.append(f"WA token geçersiz (#{code})" if code else "WA token geçersiz/expired")
+        if wa_connected and wa.get("status") == "send_blocked":
+            code = wa.get("error_code")
+            problems.append(f"WA gönderemiyor — telefon erişimi yok{f' (#{code})' if code else ''}")
         if wa_connected and wa.get("status") == "error":
             problems.append("WA kontrolü yapılamadı (Meta erişim hatası)")
         if wa_connected and wa.get("status") == "ok" and wa.get("cart_approved", 0) == 0:
