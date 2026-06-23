@@ -175,6 +175,17 @@ async def _abandoned_checkout_worker():
                         await store.append_flow_log(username, brand, entry)
                         status = "✓" if result.get("ok") else "✗"
                         _log.info("[FLOW] %s [%s] WA→%s token=%s…", status, step.get("label", f"adım{step_idx}"), "***" + phone[-4:], token[:8])
+
+                    # Anlık hata hook'u: kritik kimlik/token hatası (#190/#401) → periyodik
+                    # taramayı beklemeden operatöre HEMEN haber (mağaza başına saatte 1).
+                    if (not result.get("ok")) and result.get("code") in (190, 401):
+                        try:
+                            from services.notify import notify_operator
+                            await notify_operator(
+                                f"⚠️ WhatsApp gönderimi başarısız: {username} (#{result.get('code')}) — token geçersiz olabilir, yenilenmeli",
+                                dedupe_key=f"sendfail:{username}:{brand}", cooldown_sec=3600)
+                        except Exception:
+                            pass
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("[FLOW] Worker hatası: %s", e)
@@ -213,12 +224,14 @@ async def _health_monitor_worker():
     düzelince 'düzeldi' bildirimi gönderir. Durum geçişlerinde tek sefer bildirir."""
     import asyncio
     import logging
+    import time
     _log = logging.getLogger(__name__)
     await asyncio.sleep(120)  # açılış sonrası bekle
     from routers.admin import compute_store_health
     from services.db import get_all_shopify_connections
     from services.notify import notify_operator, is_configured
     INTERVAL = int(os.getenv("HEALTH_MONITOR_INTERVAL_SEC", str(6 * 3600)))
+    TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))
     while True:
         try:
             if is_configured():
@@ -241,6 +254,21 @@ async def _health_monitor_worker():
                                 f"✅ Düzeldi: {r['shop_name']}",
                                 dedupe_key=f"hr:{key}", cooldown_sec=3600)
                         await store.kv_set(f"health:{key}", cur)
+
+                # Trial bitiyor uyarısı (son 24 saat) — yalnızca trial kullanılıyorsa
+                if TRIAL_DAYS > 0:
+                    for c in conns:
+                        s = c.get("connection", {}).get("settings", {})
+                        bs = s.get("billing_status", "none")
+                        ia = int(s.get("installed_at", 0) or 0)
+                        if bs in ("active", "uninstalled", "declined") or not ia:
+                            continue
+                        remaining_h = (ia + TRIAL_DAYS * 86400 - time.time()) / 3600
+                        if 0 < remaining_h < 24:
+                            name = s.get("shop_name") or c["username"]
+                            await notify_operator(
+                                f"⏳ Trial bitiyor: {name} — ~{int(remaining_h)} saat kaldı",
+                                dedupe_key=f"trialend:{c['username']}:{c['brand']}", cooldown_sec=48 * 3600)
         except Exception as e:
             _log.warning("[HEALTH-MON] worker hatası: %s", e)
         await asyncio.sleep(INTERVAL)

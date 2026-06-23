@@ -420,7 +420,7 @@ export default function AdminPanel({ adminToken, onExit }) {
                 ['Last seen', fmtAgo(detail.last_event_ts) + ' ago'],
                 ['Installed', detail.installed_days_ago != null ? `${detail.installed_days_ago}d ago` : '—'],
                 ['Pixel', detail.pixel_ready ? 'Ready ✓' : 'Not installed'],
-                ['Token', detail.has_token ? 'Valid ✓' : '—'],
+                ['Shopify Token', detail.has_token ? 'Valid ✓' : '—'],
                 ['Scopes', detail.granted_scopes || '—'],
                 ['TID', detail.tid ? detail.tid.slice(0, 16) + '…' : '—'],
               ].map(([k, v]) => (
