@@ -1858,6 +1858,11 @@ async def wa_webhook_incoming(request: Request):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 phone_number_id = value.get("metadata", {}).get("phone_number_id", "")
+                # Teşhis: her webhook'ta phone_id + kaç mesaj / kaç status geldi
+                _msgs = value.get("messages", []) or []
+                _stats = value.get("statuses", []) or []
+                logger.info("[WA-HOOK] phone_id=%s mesaj=%d status=%d",
+                            phone_number_id[-6:] if phone_number_id else "?", len(_msgs), len(_stats))
                 for msg in value.get("messages", []):
                     from_phone = msg.get("from", "")
                     text_body  = (msg.get("text") or {}).get("body", "")
