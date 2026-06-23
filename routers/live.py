@@ -1861,6 +1861,10 @@ async def wa_webhook_incoming(request: Request):
                 for msg in value.get("messages", []):
                     from_phone = msg.get("from", "")
                     text_body  = (msg.get("text") or {}).get("body", "")
+                    # Teşhis: gelen her mesajı logla (hangi numaraya, kimden, ne yazıldı)
+                    logger.info("[WA-IN] phone_id=%s from=***%s text=%r",
+                                phone_number_id[-6:] if phone_number_id else "?",
+                                from_phone[-4:] if from_phone else "?", (text_body or "")[:40])
                     if from_phone and text_body:
                         await handle_incoming_message(phone_number_id, from_phone, text_body)
                 # Teslim/okundu durumları → kampanya istatistiği (iletildi/okundu)
