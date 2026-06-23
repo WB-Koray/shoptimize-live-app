@@ -31,6 +31,8 @@ def _require_admin(token: str):
 
 SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 META_GRAPH = "https://graph.facebook.com/v21.0"
+# Geçici Meta hataları (rate limit / kısa süreli) — token geçersiz DEĞİL, beklenince geçer.
+_WA_TRANSIENT = {4, 368, 80007, 80008, 130429, 131048, 131056}
 
 
 def _check_wa_health(waba_id: str, token: str, phone_id: str = "") -> dict:
@@ -64,6 +66,12 @@ def _check_wa_health(waba_id: str, token: str, phone_id: str = "") -> dict:
                 pbody = pr.json() or {}
                 if pr.status_code != 200 or pbody.get("error"):
                     perr = pbody.get("error", {}) or {}
+                    if perr.get("is_transient") or perr.get("code") in _WA_TRANSIENT:
+                        return {"status": "rate_limited", "approved": len(approved),
+                                "cart_approved": len(cart), "total": len(data),
+                                "error_code": perr.get("code"),
+                                "error": "Geçici Meta sınırı (#%s) — beklenince geçer"
+                                         % perr.get("code", "")}
                     return {"status": "send_blocked", "approved": len(approved),
                             "cart_approved": len(cart), "total": len(data),
                             "error_code": perr.get("code"),
@@ -82,6 +90,9 @@ def _check_wa_health(waba_id: str, token: str, phone_id: str = "") -> dict:
                         "error": str(err.get("message", ""))[:140]}
             return {"status": "ok", "approved": 0, "cart_approved": 0, "total": 0, "note": "no_waba"}
         err = body.get("error", {}) or {}
+        if err.get("is_transient") or err.get("code") in _WA_TRANSIENT:
+            return {"status": "rate_limited", "error_code": err.get("code"),
+                    "error": "Geçici Meta sınırı (#%s) — beklenince geçer" % err.get("code", "")}
         return {"status": "invalid", "error_code": err.get("code"),
                 "error": str(err.get("message", ""))[:140]}
     except Exception as e:
@@ -338,7 +349,23 @@ async def compute_store_health(conn: dict) -> dict:
 
     wa = {"status": "skip"}
     if wa_connected and billing_status != "uninstalled":
-        wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token, phone_id)
+        # Meta'yı dövmemek için sonucu cache'le (rate limit / #80008 önlenir).
+        import json as _json
+        _ck = f"wahealth:{username}:{brand}"
+        cached = await store.kv_get(_ck)
+        if cached:
+            try:
+                wa = _json.loads(cached)
+            except Exception:
+                wa = {}
+        if not wa or wa.get("status") in (None, "skip"):
+            wa = await _aio.to_thread(_check_wa_health, waba_id, wa_token, phone_id)
+            # Sağlıklı/kesin sonuçlar 5 dk, geçici hatalar 60 sn cache (yakında tekrar dene)
+            _ttl = 60 if wa.get("status") in ("rate_limited", "error") else 300
+            try:
+                await store.kv_set(_ck, _json.dumps(wa), ttl_sec=_ttl)
+            except Exception:
+                pass
 
     problems = []
     if billing_status != "uninstalled":
