@@ -28,13 +28,24 @@ logging.getLogger("services").setLevel(logging.INFO)
 # access loglarını sustur — uygulama logları (logger.info) etkilenmez.
 class _AccessLogNoiseFilter(logging.Filter):
     _NOISY = ("/api/live/event", "/pixel.js", "/api/live/stream")
+    # Otomatik bot/güvenlik taramaları (sızıntı arayan botlar) saniyede yüzlerce
+    # 404 üretip gerçek olayları boğuyor. Bu sinyalleri içeren 404 satırlarını sustur.
+    _SCAN = (".env", ".git", ".aws", ".docker", ".s3cfg", ".boto", "phpinfo",
+             "credentials", "settings.py", "config.js", "config.json", "/.well-known",
+             "docker-compose", "terraform", "serverless", "stripe", "/wp-", "/.vscode",
+             "appsettings", "secrets", "/rest/", "/api/v1/", "/_next/", "/vendor/")
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             msg = record.getMessage()
         except Exception:
             return True
-        return not any(p in msg for p in self._NOISY)
+        if any(p in msg for p in self._NOISY):
+            return False
+        # 404 dönen tarama isteklerini gizle (gerçek 404'lar nadirdir)
+        if "404" in msg and any(p in msg for p in self._SCAN):
+            return False
+        return True
 
 
 logging.getLogger("uvicorn.access").addFilter(_AccessLogNoiseFilter())
@@ -308,6 +319,17 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Güvenlik başlıkları — Shopify iframe gömülmesini ve pixel'i BOZMAYAN güvenli set.
+# (X-Frame-Options/CSP frame-ancestors EKLENMEZ; admin iframe'ini kırardı.)
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+    return response
 
 app.include_router(live.router)
 app.include_router(auth.router)
