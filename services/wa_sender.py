@@ -195,6 +195,7 @@ async def send_wa_template(
     brand: str = "default",
     header_image_url: str = "",
     body_text_params: list | None = None,
+    coupon_code: str = "",
 ) -> dict:
     """
     WhatsApp Cloud API üzerinden onaylı template mesajı gönderir.
@@ -218,8 +219,8 @@ async def send_wa_template(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    # Kampanya modu: görsel header + serbest body parametreleri
-    if header_image_url or body_text_params is not None:
+    # Kampanya modu: görsel header + serbest body parametreleri (+ opsiyonel kupon butonu)
+    if header_image_url or body_text_params is not None or coupon_code:
         components = []
         if header_image_url:
             components.append({
@@ -230,6 +231,14 @@ async def send_wa_template(
             components.append({
                 "type": "body",
                 "parameters": [{"type": "text", "text": str(p)} for p in body_text_params],
+            })
+        # Kupon kodu butonu (copy_code) — şablonda kupon butonu varsa zorunlu
+        if coupon_code:
+            components.append({
+                "type": "button",
+                "sub_type": "copy_code",
+                "index": "0",
+                "parameters": [{"type": "coupon_code", "coupon_code": str(coupon_code)}],
             })
     else:
         # Şablona göre component listesini oluştur (body veya button)

@@ -2599,6 +2599,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [message, setMessage]   = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [link, setLink]         = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [segment, setSegment]   = useState('all');
   const [whenMode, setWhenMode] = useState('now'); // now | later
   const [scheduleAt, setScheduleAt] = useState('');
@@ -2684,7 +2685,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     try {
       const r = await fetch(`${base}/api/campaign/test${qp}`, {
         method: 'POST', headers: authH,
-        body: JSON.stringify({ phone: testPhone.trim(), message, image_url: imageUrl, link, template_name: tplName, language: lang }),
+        body: JSON.stringify({ phone: testPhone.trim(), message, image_url: imageUrl, coupon_code: couponCode, link, template_name: tplName, language: lang }),
       });
       const d = await r.json();
       showToast(d.ok ? t('campaign.test_sent') : (t('campaign.test_fail') + ': ' + (d.result?.error || d.detail || '')));
@@ -2707,13 +2708,13 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
         method: 'POST', headers: authH,
         body: JSON.stringify({
           name: message.slice(0, 40), template_name: tplName, language: lang,
-          message, image_url: imageUrl, link, segment, audience_days: audienceDays, scheduled_at,
+          message, image_url: imageUrl, coupon_code: couponCode, link, segment, audience_days: audienceDays, scheduled_at,
         }),
       });
       const d = await r.json();
       if (d.ok) {
         showToast(d.status === 'scheduled' ? t('campaign.scheduled_ok') : t('campaign.sending_ok'));
-        setMessage(''); setImageUrl(''); setLink('');
+        setMessage(''); setImageUrl(''); setLink(''); setCouponCode('');
         setTimeout(loadCampaigns, 1500);
       } else showToast(t('campaign.send_fail'));
     } catch { showToast(t('campaign.send_fail')); } finally { setSending(false); }
@@ -2852,6 +2853,15 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             <img src={imageUrl} alt="preview" className="mt-2 max-h-40 rounded-lg border border-border object-contain"
               onError={e => { e.target.style.display = 'none'; }} onLoad={e => { e.target.style.display = 'block'; }} />
           )}
+        </div>
+
+        {/* Kupon kodu (opsiyonel) — şablonda "kupon kodu kopyala" butonu varsa zorunlu */}
+        <div>
+          <label className="text-[11px] font-bold text-textDim block mb-1">Kupon kodu (opsiyonel)</label>
+          <input value={couponCode} onChange={e => setCouponCode(e.target.value)}
+            placeholder="ANNELER15"
+            className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
+          <p className="text-[10px] text-textMute mt-1">Sadece "kupon kodu kopyala" butonlu şablonlarda gerekir. Müşteri butona basınca bu kod kopyalanır.</p>
         </div>
 
         {/* Link (opsiyonel) — tıklama/sipariş atfı için */}

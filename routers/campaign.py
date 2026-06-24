@@ -519,6 +519,7 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
     tpl = campaign.get("template_name", "")
     lang = campaign.get("language", "tr")
     image_url = campaign.get("image_url", "")
+    coupon_code = campaign.get("coupon_code", "")
     message = _clean_param(campaign.get("message", ""))
 
     # Link varsa UTM ile etiketle ve mesaja ekle (boşlukla — newline WA param'da yasak)
@@ -540,6 +541,7 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
             template_name=tpl, language=lang,
             header_image_url=image_url,
             body_text_params=[_clean_param(_first_name(t["name"])) or "Değerli müşterimiz", message],
+            coupon_code=coupon_code,
             username=username, brand=brand,
         )
         if res.get("opted_out"):
@@ -588,6 +590,7 @@ async def send_campaign(
         "language": body.get("language", "tr"),
         "message": message,
         "image_url": image_url,
+        "coupon_code": body.get("coupon_code", "").strip(),
         "link": body.get("link", "").strip(),
         "segment": body.get("segment", "all"),
         "audience_days": int(body.get("audience_days", 180)),
@@ -622,6 +625,7 @@ async def send_test_campaign(
     phone = _normalize_phone(body.get("phone", ""))
     message = _clean_param(body.get("message", ""))
     image_url = body.get("image_url", "").strip()
+    coupon_code = body.get("coupon_code", "").strip()
     link = body.get("link", "").strip()
     template_name = body.get("template_name", "").strip()
     if not phone or not message or not template_name:
@@ -641,6 +645,7 @@ async def send_test_campaign(
         template_name=template_name, language=body.get("language", "tr"),
         header_image_url=image_url,
         body_text_params=["Test", message],
+        coupon_code=coupon_code,
         username=username, brand=brand,
     )
     return {"ok": res.get("ok", False), "result": res}
