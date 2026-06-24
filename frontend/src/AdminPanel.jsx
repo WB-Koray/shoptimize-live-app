@@ -33,6 +33,12 @@ function fmtAgo(ms) {
 function fmtMoney(n, cur = '₺') {
   return `${cur}${(n || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`;
 }
+// installed_at saniye cinsinden — tarih göster
+function fmtDate(sec) {
+  if (!sec) return '—';
+  return new Date(sec * 1000).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+const TRIAL_DAYS_EST = 7;  // Shopify Managed Pricing deneme süresi (tahmini ilk ücret = kurulum + 7g)
 
 function StatCard({ icon: Icon, label, value, color = 'text-text' }) {
   return (
@@ -263,7 +269,7 @@ export default function AdminPanel({ adminToken, onExit }) {
                   <SortTh label="Revenue" k="revenue" right />
                   <SortTh label="Online" k="active_visitors" right />
                   <SortTh label="Last seen" k="last_event_ts" />
-                  <SortTh label="Trial" k="trial_remaining_hours" />
+                  <SortTh label="Ücret tarihi" k="installed_at" />
                   <th className="text-center px-4 py-3 text-xs font-semibold text-textDim uppercase tracking-wide">⚡</th>
                 </tr>
               </thead>
@@ -281,7 +287,7 @@ export default function AdminPanel({ adminToken, onExit }) {
                         {m.shop_name || <span className="text-textDim">{m.username}</span>}
                         {al.map((a, i) => <span key={i} className={`text-[9px] px-1 py-px rounded font-semibold ${a.c}`}>{a.t}</span>)}
                       </div>
-                      <div className="text-[11px] text-textMute">{m.shop_domain ? m.shop_domain.replace('.myshopify.com', '') : m.username}{m.brand !== 'default' && ` · ${m.brand}`}</div>
+                      <div className="text-[11px] text-textMute">{m.shop_domain ? m.shop_domain.replace('.myshopify.com', '') : m.username}{m.brand !== 'default' && ` · ${m.brand}`}{m.installed_at ? ` · kuruldu ${fmtDate(m.installed_at)}` : ''}</div>
                     </td>
                     <td className="px-4 py-3 text-textDim text-xs">
                       {m.owner_phone ? <span className="font-mono">{m.owner_phone}</span> : <span className="text-textMute">—</span>}
@@ -295,9 +301,11 @@ export default function AdminPanel({ adminToken, onExit }) {
                     <td className="px-4 py-3 text-right">{m.active_visitors > 0 ? <span className="inline-flex items-center gap-1 text-green font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />{m.active_visitors}</span> : <span className="text-textMute">—</span>}</td>
                     <td className="px-4 py-3 text-textMute text-xs">{fmtAgo(m.last_event_ts)}</td>
                     <td className="px-4 py-3 text-xs">
-                      {m.trial_remaining_hours != null && m.trial_remaining_hours > 0
-                        ? <span className="text-amber-400">{m.trial_remaining_hours < 24 ? `${m.trial_remaining_hours}h` : `${Math.round(m.trial_remaining_hours / 24)}d`}</span>
-                        : m.status === 'active' ? <span className="text-green text-[11px]">✓</span> : <span className="text-textMute">—</span>}
+                      {m.status === 'active'
+                        ? <span className="text-green text-[11px]">✓ ödüyor</span>
+                        : m.installed_at
+                          ? <span className="text-textDim">{fmtDate(m.installed_at + TRIAL_DAYS_EST * 86400)}</span>
+                          : <span className="text-textMute">—</span>}
                     </td>
                     <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       {canNudge && (
@@ -418,7 +426,8 @@ export default function AdminPanel({ adminToken, onExit }) {
                 ['Orders', detail.orders_count || 0],
                 ['Revenue', fmtMoney(detail.revenue)],
                 ['Last seen', fmtAgo(detail.last_event_ts) + ' ago'],
-                ['Installed', detail.installed_days_ago != null ? `${detail.installed_days_ago}d ago` : '—'],
+                ['Kurulum tarihi', `${fmtDate(detail.installed_at)}${detail.installed_days_ago != null ? ` (${detail.installed_days_ago}g önce)` : ''}`],
+                ['Tahmini ilk ücret', detail.installed_at ? `${fmtDate(detail.installed_at + TRIAL_DAYS_EST * 86400)} (kurulum+${TRIAL_DAYS_EST}g)` : '—'],
                 ['Pixel', detail.pixel_ready ? 'Ready ✓' : 'Not installed'],
                 ['Shopify Token', detail.has_token ? 'Valid ✓' : '—'],
                 ['Scopes', detail.granted_scopes || '—'],
