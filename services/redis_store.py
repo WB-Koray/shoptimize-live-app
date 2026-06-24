@@ -532,8 +532,10 @@ class RedisStore:
             await asyncio.to_thread(
                 set_connection_settings, username, brand, "flow", {"settings_json": raw}
             )
+            logger.info("[FLOW] ✓ ayarlar Postgres'e kalıcı kaydedildi: %s:%s (wa_token=%s)",
+                        username, brand, "var" if (settings.get("wa_token")) else "yok")
         except Exception as e:
-            logger.warning("[FLOW] Postgres'e yazılamadı (%s:%s): %s", username, brand, e)
+            logger.warning("[FLOW] ✗ Postgres'e yazılamadı (%s:%s): %s", username, brand, e)
 
     async def get_flow_settings(self, username: str, brand: str) -> dict:
         raw = await self._redis.get(f"flow_settings:{username}:{brand}")
