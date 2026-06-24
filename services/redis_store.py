@@ -523,13 +523,32 @@ class RedisStore:
     # ── Flow ayarları ────────────────────────────────────────────────────────────
 
     async def save_flow_settings(self, username: str, brand: str, settings: dict) -> None:
-        await self._redis.set(
-            f"flow_settings:{username}:{brand}",
-            json.dumps(settings, ensure_ascii=False),
-        )
+        raw = json.dumps(settings, ensure_ascii=False)
+        await self._redis.set(f"flow_settings:{username}:{brand}", raw)
+        # KALICILIK: Postgres'e de yaz — Redis silinse/restart olsa bile WhatsApp
+        # bağlantısı (token/telefon/waba) kaybolmasın. (Aynı integration_connections tablosu)
+        try:
+            from services.db import set_connection_settings
+            await asyncio.to_thread(
+                set_connection_settings, username, brand, "flow", {"settings_json": raw}
+            )
+        except Exception as e:
+            logger.warning("[FLOW] Postgres'e yazılamadı (%s:%s): %s", username, brand, e)
 
     async def get_flow_settings(self, username: str, brand: str) -> dict:
         raw = await self._redis.get(f"flow_settings:{username}:{brand}")
+        if not raw:
+            # Redis'te yok → Postgres'ten kurtar ve Redis'e geri yükle (cache hydrate)
+            try:
+                from services.db import get_setting
+                raw = await asyncio.to_thread(
+                    get_setting, username, brand, "flow", "settings_json", ""
+                )
+                if raw:
+                    await self._redis.set(f"flow_settings:{username}:{brand}", raw)
+                    logger.info("[FLOW] ayarlar Postgres'ten kurtarıldı: %s:%s", username, brand)
+            except Exception as e:
+                logger.warning("[FLOW] Postgres okuma hatası (%s:%s): %s", username, brand, e)
         if not raw:
             return {}
         try:
