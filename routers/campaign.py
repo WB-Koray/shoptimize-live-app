@@ -382,10 +382,17 @@ async def create_campaign_template(
         {"type": "BODY", "text": body_text,
          "example": {"body_text": [preset["sample"] if preset else ["Ahmet", "Kampanya mesajı örneği"]]}},
     ]
+    btns = []
     button_text = body.get("button_text", "")
     button_url = body.get("button_url", "")
     if button_text and button_url:
-        components.append({"type": "BUTTONS", "buttons": [{"type": "URL", "text": button_text, "url": button_url}]})
+        btns.append({"type": "URL", "text": button_text, "url": button_url})
+    # Opsiyonel kupon kodu butonu (copy_code) — örnek kod Meta onayı için gerekli
+    if body.get("coupon_button"):
+        coupon_example = (body.get("coupon_example", "") or "INDIRIM10").strip()
+        btns.append({"type": "COPY_CODE", "example": coupon_example})
+    if btns:
+        components.append({"type": "BUTTONS", "buttons": btns})
 
     payload = {"name": name, "language": language, "category": "MARKETING", "components": components}
     r = _requests.post(

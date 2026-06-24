@@ -2600,6 +2600,9 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [imageUrl, setImageUrl] = useState('');
   const [link, setLink]         = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [createCoupon, setCreateCoupon] = useState(false);
+  const [createCouponExample, setCreateCouponExample] = useState('');
   const [segment, setSegment]   = useState('all');
   const [whenMode, setWhenMode] = useState('now'); // now | later
   const [scheduleAt, setScheduleAt] = useState('');
@@ -2694,14 +2697,18 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
   async function handleSend() {
     if (!message.trim() || !tplName) { showToast(t('campaign.need_msg_tpl')); return; }
-    let scheduled_at = null;
     if (whenMode === 'later') {
       if (!scheduleAt) { showToast(t('campaign.need_time')); return; }
-      scheduled_at = new Date(scheduleAt).getTime();
-      if (scheduled_at < Date.now()) { showToast(t('campaign.time_past')); return; }
+      if (new Date(scheduleAt).getTime() < Date.now()) { showToast(t('campaign.time_past')); return; }
     }
-    const confirmMsg = t('campaign.confirm_send').replace('{n}', targetCount);
-    if (!window.confirm(confirmMsg)) return;
+    // Yanlışlıkla toplu gönderimi önlemek için uygulama içi onay ekranı aç
+    setConfirmSend(true);
+  }
+
+  async function doSend() {
+    setConfirmSend(false);
+    let scheduled_at = null;
+    if (whenMode === 'later' && scheduleAt) scheduled_at = new Date(scheduleAt).getTime();
     setSending(true);
     try {
       const r = await fetch(`${base}/api/campaign/send${qp}`, {
@@ -2726,7 +2733,8 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     try {
       const r = await fetch(`${base}/api/campaign/template${qp}`, {
         method: 'POST', headers: authH,
-        body: JSON.stringify({ preset: createPreset, language: lang, sample_image_url: createSampleUrl.trim() }),
+        body: JSON.stringify({ preset: createPreset, language: lang, sample_image_url: createSampleUrl.trim(),
+          coupon_button: createCoupon, coupon_example: createCouponExample.trim() }),
       });
       const d = await r.json();
       if (d.ok) {
@@ -2751,6 +2759,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
   const approvedList = templates.approved.filter(a => a.status === 'APPROVED');
   const selectedTpl = approvedList.find(a => a.name === tplName) || null;
+  const createPresetObj = (templates.presets || []).find(p => p.name === createPreset) || (templates.presets || [])[0] || null;
   const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute' };
 
   return (
@@ -2758,6 +2767,25 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-surface border border-borderStrong rounded-xl shadow-2xl text-xs font-semibold text-text">
           {toast}
+        </div>
+      )}
+
+      {/* Toplu gönderim onay ekranı (yanlışlıkla tıklamayı önler) */}
+      {confirmSend && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setConfirmSend(false)}>
+          <div className="bg-surface border border-borderStrong rounded-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-text font-bold text-sm flex items-center gap-2"><span>⚠️</span> Gönderimi onayla</h3>
+            <p className="text-xs text-textDim leading-relaxed">
+              <b className="text-text">{targetCount}</b> kişiye <b className="text-text">{tplName}</b> şablonu {whenMode === 'later' ? 'planlanacak' : 'gönderilecek'}.
+              {whenMode !== 'later' && ' Bu işlem geri alınamaz — gönderim hemen başlar.'}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmSend(false)} className="px-4 py-2 text-xs text-textMute hover:text-text">Vazgeç</button>
+              <button onClick={doSend} className="px-4 py-2 bg-green text-bg rounded-lg text-xs font-bold">
+                Evet, {whenMode === 'later' ? 'planla' : `${targetCount} kişiye gönder`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2871,6 +2899,40 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
               placeholder={t('campaign.sample_ph')}
               className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
             <p className="text-[10px] text-textMute">{t('campaign.sample_hint')}</p>
+
+            {/* Kupon kodu butonu seçeneği */}
+            <label className="flex items-center gap-2 text-[11px] text-textDim cursor-pointer select-none">
+              <input type="checkbox" checked={createCoupon} onChange={e => setCreateCoupon(e.target.checked)} />
+              Kupon kodu kopyala butonu ekle
+            </label>
+            {createCoupon && (
+              <input value={createCouponExample} onChange={e => setCreateCouponExample(e.target.value)}
+                placeholder="Örnek kupon kodu (örn. INDIRIM10)"
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
+            )}
+
+            {/* Yeni şablon canlı önizleme */}
+            {createPresetObj && (
+              <div>
+                <div className="text-[10px] text-textMute mb-1">Önizleme</div>
+                <div className="max-w-[270px] bg-[#202c33] rounded-lg overflow-hidden shadow-lg">
+                  {createSampleUrl
+                    ? <img src={createSampleUrl} alt="" className="w-full max-h-36 object-cover" />
+                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">görsel buraya gelecek</div>}
+                  <div className="px-3 py-2 text-[12px] text-white whitespace-pre-wrap break-words">
+                    {(createPresetObj.body || '')
+                      .replace(/\{\{\s*1\s*\}\}/g, 'Müşteri')
+                      .replace(/\{\{\s*2\s*\}\}/g, '(kampanya mesajınız)')}
+                  </div>
+                  {createCoupon && (
+                    <div className="border-t border-white/10 px-3 py-2 text-[12px] text-[#53bdeb] text-center">
+                      📋 {createCouponExample || 'KUPON'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button onClick={handleCreateTemplate} disabled={creating}
                 className="px-3 py-1.5 bg-green text-bg rounded-lg text-xs font-bold disabled:opacity-50">
