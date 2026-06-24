@@ -2750,6 +2750,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   }
 
   const approvedList = templates.approved.filter(a => a.status === 'APPROVED');
+  const selectedTpl = approvedList.find(a => a.name === tplName) || null;
   const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute' };
 
   return (
@@ -2794,6 +2795,69 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             </div>
           )}
         </div>
+
+        {/* Seçili şablon: gerekli alan uyarıları + canlı önizleme */}
+        {selectedTpl && (
+          <div className="space-y-3">
+            {(() => {
+              const warns = [];
+              if (selectedTpl.header_format === 'IMAGE' && !imageUrl.trim())
+                warns.push('Bu şablon GÖRSEL başlık kullanıyor — "Görsel" alanını doldurmalısın.');
+              if (selectedTpl.has_coupon && !couponCode.trim())
+                warns.push('Bu şablonda KUPON butonu var — "Kupon kodu" alanını doldurmalısın.');
+              if (['VIDEO', 'DOCUMENT'].includes(selectedTpl.header_format))
+                warns.push(`Bu şablon ${selectedTpl.header_format} başlık kullanıyor — şu an sadece görsel başlık destekleniyor.`);
+              return warns.length > 0 ? (
+                <div className="bg-amber/10 border border-amber/30 rounded-lg p-3 space-y-1">
+                  {warns.map((w, i) => <div key={i} className="text-[11px] text-amber-400 flex items-start gap-1.5"><span>⚠️</span><span>{w}</span></div>)}
+                </div>
+              ) : (
+                <div className="text-[11px] text-green flex items-center gap-1.5"><CheckCircle size={12} /> Bu şablon için gerekli alanlar tamam.</div>
+              );
+            })()}
+
+            {/* Şablonun kullandığı alanlar */}
+            <div className="flex flex-wrap gap-1.5">
+              <span className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">
+                Başlık: {({ NONE: 'yok', TEXT: 'metin', IMAGE: 'görsel', VIDEO: 'video', DOCUMENT: 'belge' }[selectedTpl.header_format]) || selectedTpl.header_format}
+              </span>
+              <span className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">Değişken: {selectedTpl.body_var_count}</span>
+              {selectedTpl.has_coupon && <span className="px-2 py-0.5 bg-amber/10 border border-amber/30 rounded-md text-[10px] text-amber-400">Kupon butonu</span>}
+              {selectedTpl.buttons.filter(b => b.type !== 'COPY_CODE').map((b, i) => (
+                <span key={i} className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">{b.type === 'URL' ? '🔗' : ''} {b.text}</span>
+              ))}
+            </div>
+
+            {/* WhatsApp önizleme (canlı) */}
+            <div>
+              <div className="text-[10px] text-textMute mb-1">Önizleme</div>
+              <div className="max-w-[270px] bg-[#202c33] rounded-lg overflow-hidden shadow-lg">
+                {selectedTpl.header_format === 'IMAGE' && (
+                  imageUrl
+                    ? <img src={imageUrl} alt="" className="w-full max-h-36 object-cover" />
+                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">görsel buraya gelecek</div>
+                )}
+                {selectedTpl.header_format === 'TEXT' && selectedTpl.header_text && (
+                  <div className="px-3 pt-2 text-[12px] font-bold text-white">{selectedTpl.header_text}</div>
+                )}
+                <div className="px-3 py-2 text-[12px] text-white whitespace-pre-wrap break-words">
+                  {(selectedTpl.body_text || '')
+                    .replace(/\{\{\s*1\s*\}\}/g, 'Müşteri')
+                    .replace(/\{\{\s*2\s*\}\}/g, message || '(mesajınız)')}
+                </div>
+                {selectedTpl.buttons.length > 0 && (
+                  <div className="border-t border-white/10">
+                    {selectedTpl.buttons.map((b, i) => (
+                      <div key={i} className="px-3 py-2 text-[12px] text-[#53bdeb] text-center border-b border-white/10 last:border-0">
+                        {b.type === 'COPY_CODE' ? `📋 ${couponCode || 'KUPON'}` : b.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Şablon oluşturma formu */}
         {showCreate && (

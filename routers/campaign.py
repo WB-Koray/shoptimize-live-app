@@ -256,6 +256,38 @@ def _clean_param(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Endpoint: hazır şablon önerileri + mevcut onaylı görsel şablonlar
 # ---------------------------------------------------------------------------
+def _analyze_template(comps: list) -> dict:
+    """Şablon component'lerini analiz eder → önizleme + form uyarıları için yapı.
+    header_format: NONE|TEXT|IMAGE|VIDEO|DOCUMENT, body_var_count, buttons, has_coupon."""
+    import re as _re
+    header_format = "NONE"
+    header_text = ""
+    body_text = ""
+    var_count = 0
+    buttons = []
+    for c in comps or []:
+        ctype = (c.get("type") or "").upper()
+        if ctype == "HEADER":
+            header_format = (c.get("format") or "TEXT").upper()
+            if header_format == "TEXT":
+                header_text = c.get("text", "") or ""
+        elif ctype == "BODY":
+            body_text = c.get("text", "") or ""
+            nums = _re.findall(r"\{\{\s*(\d+)\s*\}\}", body_text)
+            var_count = len(set(nums))
+        elif ctype == "BUTTONS":
+            for b in c.get("buttons", []) or []:
+                buttons.append({"type": (b.get("type") or "").upper(), "text": b.get("text", "") or ""})
+    return {
+        "header_format": header_format,
+        "header_text": header_text,
+        "body_text": body_text,
+        "body_var_count": var_count,
+        "buttons": buttons,
+        "has_coupon": any(b["type"] == "COPY_CODE" for b in buttons),
+    }
+
+
 @router.get("/templates")
 async def list_campaign_templates(
     username: str = Query(""),
@@ -277,14 +309,17 @@ async def list_campaign_templates(
                 timeout=10,
             )
             for tpl in r.json().get("data", []):
+                if tpl.get("status") != "APPROVED":
+                    continue
                 comps = tpl.get("components", [])
-                has_img = any(c.get("type") == "HEADER" and c.get("format") == "IMAGE" for c in comps)
-                if has_img and tpl.get("category") == "MARKETING":
-                    approved.append({
-                        "name": tpl.get("name"),
-                        "language": tpl.get("language"),
-                        "status": tpl.get("status"),
-                    })
+                analysis = _analyze_template(comps)
+                approved.append({
+                    "name": tpl.get("name"),
+                    "language": tpl.get("language"),
+                    "status": tpl.get("status"),
+                    "category": tpl.get("category"),
+                    **analysis,
+                })
         except Exception as e:
             logger.warning("[CAMPAIGN] şablon listesi alınamadı: %s", e)
 
