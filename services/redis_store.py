@@ -595,6 +595,15 @@ class RedisStore:
 
     async def save_converted_order(self, username: str, brand: str, order_data: dict) -> None:
         key = f"wa_orders:{username}:{brand}"
+        # Mükerrer webhook teslimi (çift abonelik / Shopify retry) aynı siparişi
+        # iki kez eklemesin → order_id bazlı dedup (ciro/sayım da şişmesin).
+        oid = str(order_data.get("order_id") or order_data.get("order_number") or "").strip()
+        if oid:
+            seen_key = f"wa_order_ids:{username}:{brand}"
+            added = await self._redis.sadd(seen_key, oid)
+            await self._redis.expire(seen_key, 86400 * 30)
+            if not added:
+                return  # zaten kayıtlı
         pipe = self._redis.pipeline()
         pipe.lpush(key, json.dumps(order_data, ensure_ascii=False))
         pipe.ltrim(key, 0, 199)
@@ -604,11 +613,19 @@ class RedisStore:
     async def get_converted_orders(self, username: str, brand: str, limit: int = 50) -> list[dict]:
         raws = await self._redis.lrange(f"wa_orders:{username}:{brand}", 0, min(limit, 200) - 1)
         result = []
+        seen = set()
         for r in raws:
             try:
-                result.append(json.loads(r))
+                o = json.loads(r)
             except Exception:
-                pass
+                continue
+            # Geçmişte eklenmiş çiftleri okurken de ele (order_id bazlı)
+            oid = str(o.get("order_id") or o.get("order_number") or "")
+            if oid:
+                if oid in seen:
+                    continue
+                seen.add(oid)
+            result.append(o)
         return result
 
     async def get_wa_roi_stats(self, username: str, brand: str, days: int = 7) -> dict:
