@@ -246,7 +246,7 @@ async def _build_audience(domain: str, token: str, days: int = 180) -> list[dict
 # SMS pazarlama onayı vermiş müşteriler (sipariş şartı YOK) — telefonu olanlar
 _SMS_AUDIENCE_GQL = """
 query SmsAudience($cursor: String) {
-  customers(first: 250, after: $cursor, sortKey: UPDATED_AT, query: "sms_marketing_consent_state:subscribed") {
+  customers(first: 250, after: $cursor, sortKey: UPDATED_AT) {
     pageInfo { hasNextPage endCursor }
     nodes { id displayName phone smsMarketingConsent { marketingState } }
   }
