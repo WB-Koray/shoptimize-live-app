@@ -2674,6 +2674,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const targetCount = !audience ? 0
     : segment === 'all' ? audience.reachable
     : segment === 'high_value' ? (audience.high_value?.count || 0)
+    : segment === 'sms_consent' ? (audience.sms_consent?.reachable ?? audience.sms_consent?.count ?? 0)
     : (audience.segments?.[segment] || 0);
 
   // Seçili segmentin potansiyel cirosu (toplam geçmiş harcama)
@@ -3015,6 +3016,9 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             <option value="all">{t('campaign.aud_all')} {audience ? `(${audience.reachable})` : ''}</option>
             {audience?.high_value?.count > 0 && (
               <option value="high_value">💎 {t('campaign.high_value')} ({audience.high_value.count})</option>
+            )}
+            {audience?.sms_consent?.count > 0 && (
+              <option value="sms_consent">📩 SMS pazarlama onaylı ({audience.sms_consent.reachable ?? audience.sms_consent.count})</option>
             )}
             {SEG_KEYS.filter(s => audience?.segments?.[s]).map(s => (
               <option key={s} value={s}>{t('rfm.seg.' + s)} ({audience.segments[s]})</option>

@@ -243,6 +243,51 @@ async def _build_audience(domain: str, token: str, days: int = 180) -> list[dict
              "monetary": round(c["monetary"], 2), "m_score": c["m_score"]} for c in clist]
 
 
+# SMS pazarlama onayı vermiş müşteriler (sipariş şartı YOK) — telefonu olanlar
+_SMS_AUDIENCE_GQL = """
+query SmsAudience($cursor: String) {
+  customers(first: 250, after: $cursor, sortKey: UPDATED_AT, query: "sms_marketing_consent_state:subscribed") {
+    pageInfo { hasNextPage endCursor }
+    nodes { id displayName phone smsMarketingConsent { marketingState } }
+  }
+}
+"""
+
+
+async def _build_sms_audience(domain: str, token: str, max_pages: int = 20) -> list[dict]:
+    """Shopify'da SMS pazarlama onayı (SUBSCRIBED) vermiş, telefonu olan müşteriler.
+    RFM'den bağımsız — sipariş vermemiş olsalar bile döner. [{phone, name, segment}]"""
+    if not domain or not token:
+        return []
+    gql_url = f"https://{domain.replace('https://','').rstrip('/')}/admin/api/2026-04/graphql.json"
+    headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+    out: dict[str, dict] = {}
+    cursor = None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            for _ in range(max_pages):
+                payload = {"query": _SMS_AUDIENCE_GQL, "variables": {"cursor": cursor}}
+                r = await client.post(gql_url, headers=headers, json=payload)
+                if r.status_code != 200:
+                    break
+                cd = ((r.json().get("data") or {}).get("customers") or {})
+                for n in cd.get("nodes") or []:
+                    phone = _normalize_phone(n.get("phone", ""))
+                    state = ((n.get("smsMarketingConsent") or {}).get("marketingState") or "").upper()
+                    if phone and state == "SUBSCRIBED":
+                        key = n.get("id") or phone
+                        out[key] = {"phone": phone, "name": n.get("displayName", ""),
+                                    "segment": "sms_consent", "monetary": 0.0, "m_score": 0}
+                pi = cd.get("pageInfo") or {}
+                if not pi.get("hasNextPage"):
+                    break
+                cursor = pi.get("endCursor")
+    except Exception as e:
+        logger.warning("[CAMPAIGN] SMS audience sorgu hatası: %s", e)
+        return []
+    return list(out.values())
+
+
 def _first_name(full: str) -> str:
     return (full or "").strip().split(" ")[0] if full else ""
 
@@ -478,6 +523,13 @@ async def get_audience(
         if not await store.is_optout(a["phone"], username, brand):
             reachable += 1
 
+    # SMS pazarlama onaylı müşteriler (sipariş şartından bağımsız ayrı kitle)
+    sms_list = await _build_sms_audience(domain, token)
+    sms_reachable = 0
+    for a in sms_list:
+        if not await store.is_optout(a["phone"], username, brand):
+            sms_reachable += 1
+
     return {
         "ok": True,
         "total": len(audience),
@@ -486,6 +538,7 @@ async def get_audience(
         "segments": seg_counts,
         "segment_revenue": {k: round(v, 2) for k, v in seg_revenue.items()},
         "high_value": {"count": len(high_value), "revenue": round(high_value_revenue, 2)},
+        "sms_consent": {"count": len(sms_list), "reachable": sms_reachable},
         "total_revenue": round(sum(a.get("monetary", 0) for a in audience), 2),
         "days": days,
     }
@@ -503,14 +556,16 @@ async def get_audience_members(
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token = await store.get_online_token(username, brand) \
             or get_setting(username, brand, "shopify", "admin_api_token", "")
-    audience = await _build_audience(domain, token, days)
-
-    if segment == "all":
-        members = audience
-    elif segment == "high_value":
-        members = [a for a in audience if a.get("m_score", 0) >= 4]
+    if segment == "sms_consent":
+        members = await _build_sms_audience(domain, token)
     else:
-        members = [a for a in audience if a["segment"] == segment]
+        audience = await _build_audience(domain, token, days)
+        if segment == "all":
+            members = audience
+        elif segment == "high_value":
+            members = [a for a in audience if a.get("m_score", 0) >= 4]
+        else:
+            members = [a for a in audience if a["segment"] == segment]
 
     members = sorted(members, key=lambda x: -x.get("monetary", 0))[:500]
     out = []
@@ -544,15 +599,17 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     sh_token = await store.get_online_token(username, brand) \
                or get_setting(username, brand, "shopify", "admin_api_token", "")
-    audience = await _build_audience(domain, sh_token, campaign.get("audience_days", 180))
-
     seg = campaign.get("segment", "all")
-    if seg == "all":
-        targets = audience
-    elif seg == "high_value":
-        targets = [a for a in audience if a.get("m_score", 0) >= 4]
+    if seg == "sms_consent":
+        targets = await _build_sms_audience(domain, sh_token)
     else:
-        targets = [a for a in audience if a["segment"] == seg]
+        audience = await _build_audience(domain, sh_token, campaign.get("audience_days", 180))
+        if seg == "all":
+            targets = audience
+        elif seg == "high_value":
+            targets = [a for a in audience if a.get("m_score", 0) >= 4]
+        else:
+            targets = [a for a in audience if a["segment"] == seg]
 
     campaign["status"] = "sending"
     campaign["stats"] = {"total": len(targets), "sent": 0, "failed": 0, "opted_out": 0}
