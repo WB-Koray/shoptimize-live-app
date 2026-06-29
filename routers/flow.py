@@ -17,6 +17,8 @@ META_GRAPH = "https://graph.facebook.com/v19.0"
 # WhatsApp Embedded Signup — bizim Meta app'imizin kimlik bilgileri (code→token exchange için)
 META_APP_ID     = os.getenv("META_APP_ID", "")
 META_APP_SECRET = os.getenv("META_APP_SECRET", "")
+# Embedded Signup yapılandırma kimliği (Meta App → WhatsApp → Configuration'dan alınır)
+META_EMBEDDED_CONFIG_ID = os.getenv("META_EMBEDDED_CONFIG_ID", "")
 
 # Varsayılan şablon tanımları — merchant düzenleyebilir
 _DEFAULT_TEMPLATES = [
@@ -468,6 +470,15 @@ async def wa_connect(
 
     return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id,
             "phone": phone_display, "subscribed": subscribed}
+
+
+@router.get("/api/flow/embedded-config")
+async def embedded_signup_config():
+    """Frontend FB SDK için public Embedded Signup yapılandırması (app_id + config_id).
+    Üçü de doluysa 'Bağla' butonu aktif olur; değilse frontend Hızlı Bağlan'a düşer.
+    Sır içermez (app_id/config_id zaten tarayıcıda görünür)."""
+    enabled = bool(META_APP_ID and META_EMBEDDED_CONFIG_ID and META_APP_SECRET)
+    return {"enabled": enabled, "app_id": META_APP_ID, "config_id": META_EMBEDDED_CONFIG_ID}
 
 
 @router.post("/api/flow/wa-embedded")

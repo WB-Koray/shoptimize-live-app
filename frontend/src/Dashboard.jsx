@@ -22,12 +22,13 @@ const META_APP_ID       = import.meta.env.VITE_META_APP_ID || '';
 const META_ES_CONFIG_ID = import.meta.env.VITE_META_ES_CONFIG_ID || '';
 
 /** Facebook JS SDK'yı bir kez yükler ve init eder. */
-function loadFbSdk() {
+function loadFbSdk(appId) {
   return new Promise((resolve, reject) => {
+    const id = appId || META_APP_ID;
     if (window.FB) { resolve(window.FB); return; }
-    if (!META_APP_ID) { reject(new Error('no_app_id')); return; }
+    if (!id) { reject(new Error('no_app_id')); return; }
     window.fbAsyncInit = function () {
-      window.FB.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+      window.FB.init({ appId: id, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
       resolve(window.FB);
     };
     const s = document.createElement('script');
@@ -3193,7 +3194,18 @@ function FlowPanel({ session, anonymized = false }) {
   const [quickConnecting, setQuickConnecting] = useState(false);
   const [quickMsg, setQuickMsg]             = useState('');
   const [esConnecting, setEsConnecting]     = useState(false);
-  const embeddedAvailable = !!(META_APP_ID && META_ES_CONFIG_ID);
+  // Embedded Signup config'i runtime'da backend'den gelir (Coolify env → rebuild gerekmez).
+  // Vite env varsa onu fallback kullanır.
+  const [esCfg, setEsCfg] = useState({
+    enabled: !!(META_APP_ID && META_ES_CONFIG_ID),
+    app_id: META_APP_ID, config_id: META_ES_CONFIG_ID,
+  });
+  const embeddedAvailable = !!(esCfg.enabled && esCfg.app_id && esCfg.config_id);
+  useEffect(() => {
+    fetch(`${base}/api/flow/embedded-config`).then(r => r.json()).then(d => {
+      if (d && d.app_id && d.config_id) setEsCfg({ enabled: !!d.enabled, app_id: d.app_id, config_id: d.config_id });
+    }).catch(() => {});
+  }, []);
 
   const [testPhone, setTestPhone]     = useState('');
   const [testTemplate, setTestTmpl]  = useState('sepet_hatirlatma');
@@ -3261,7 +3273,7 @@ function FlowPanel({ session, anonymized = false }) {
     };
     window.addEventListener('message', msgHandler);
     try {
-      const FB = await loadFbSdk();
+      const FB = await loadFbSdk(esCfg.app_id);
       FB.login((response) => {
         window.removeEventListener('message', msgHandler);
         const code = response?.authResponse?.code;
@@ -3274,7 +3286,7 @@ function FlowPanel({ session, anonymized = false }) {
           else setQuickMsg('err:' + (d.message || ''));
         }).catch(() => setQuickMsg('err:')).finally(() => setEsConnecting(false));
       }, {
-        config_id: META_ES_CONFIG_ID,
+        config_id: esCfg.config_id,
         response_type: 'code',
         override_default_response_type: true,
         extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
