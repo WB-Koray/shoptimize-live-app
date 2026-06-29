@@ -2618,6 +2618,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   // Şablon oluşturma (görsel header)
   const [showCreate, setShowCreate] = useState(false);
   const [createPreset, setCreatePreset] = useState('kampanya_genel');
+  const [createLang, setCreateLang] = useState(lang === 'en' ? 'en' : 'tr');
   const [createSampleUrl, setCreateSampleUrl] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -2735,7 +2736,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
     try {
       const r = await fetch(`${base}/api/campaign/template${qp}`, {
         method: 'POST', headers: authH,
-        body: JSON.stringify({ preset: createPreset, language: lang, sample_image_url: createSampleUrl.trim(),
+        body: JSON.stringify({ preset: createPreset, language: createLang, sample_image_url: createSampleUrl.trim(),
           coupon_button: createCoupon, coupon_example: createCouponExample.trim() }),
       });
       const d = await r.json();
@@ -2904,10 +2905,18 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
         {showCreate && (
           <div className="bg-surfaceAlt/50 border border-border rounded-lg p-3 space-y-2">
             <p className="text-[11px] font-bold text-textDim">{t('campaign.create_title')}</p>
-            <select value={createPreset} onChange={e => setCreatePreset(e.target.value)}
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text">
-              {templates.presets.map(p => <option key={p.name} value={p.name}>{p.title}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select value={createPreset} onChange={e => setCreatePreset(e.target.value)}
+                className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text">
+                {templates.presets.map(p => <option key={p.name} value={p.name}>{(lang === 'en' ? p.title_en : p.title_tr) || p.title_tr || p.title}</option>)}
+              </select>
+              <select value={createLang} onChange={e => setCreateLang(e.target.value)}
+                title={t('campaign.tpl_lang')}
+                className="w-24 shrink-0 bg-surface border border-border rounded-lg px-2 py-2 text-xs text-text">
+                <option value="tr">🇹🇷 TR</option>
+                <option value="en">🇬🇧 EN</option>
+              </select>
+            </div>
             <input value={createSampleUrl} onChange={e => setCreateSampleUrl(e.target.value)}
               placeholder={t('campaign.sample_ph')}
               className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
@@ -2933,7 +2942,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                     ? <img src={createSampleUrl} alt="" className="w-full max-h-36 object-cover" />
                     : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">{t('campaign.img_placeholder')}</div>}
                   <div className="px-3 py-2 text-[12px] text-white whitespace-pre-wrap break-words">
-                    {(createPresetObj.body || '')
+                    {((createLang === 'en' ? createPresetObj.body_en : createPresetObj.body_tr) || createPresetObj.body_tr || '')
                       .replace(/\{\{\s*1\s*\}\}/g, t('campaign.preview_name'))
                       .replace(/\{\{\s*2\s*\}\}/g, t('campaign.preview_camp_msg'))}
                   </div>

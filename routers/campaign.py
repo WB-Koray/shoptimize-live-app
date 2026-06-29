@@ -43,23 +43,34 @@ _BATCH_DELAY_SEC = 2.0
 CAMPAIGN_PRESETS = [
     {
         "name": "kampanya_genel",
-        "title_tr": "Genel Duyuru",
-        "body": "Merhaba {{1}}! 🎉\n\n{{2}}\n\nBildirim almak istemiyorsanız DUR yazın.",
-        "sample": ["Ahmet", "Mağazamızda yeni sezon ürünleri sizi bekliyor!"],
+        "title_tr": "Genel Duyuru", "title_en": "General Announcement",
+        "body_tr": "Merhaba {{1}}! 🎉\n\n{{2}}\n\nBildirim almak istemiyorsanız DUR yazın.",
+        "body_en": "Hi {{1}}! 🎉\n\n{{2}}\n\nReply STOP to unsubscribe.",
+        "sample_tr": ["Ahmet", "Mağazamızda yeni sezon ürünleri sizi bekliyor!"],
+        "sample_en": ["John", "New season arrivals are waiting for you in our store!"],
     },
     {
         "name": "kampanya_indirim",
-        "title_tr": "İndirim Kampanyası",
-        "body": "Merhaba {{1}}! 🛍️\n\n{{2}}\n\nFırsatı kaçırmayın! Bildirimleri durdurmak için DUR yazın.",
-        "sample": ["Ayşe", "Tüm ürünlerde %30 indirim, sadece bu hafta sonu geçerli!"],
+        "title_tr": "İndirim Kampanyası", "title_en": "Discount Campaign",
+        "body_tr": "Merhaba {{1}}! 🛍️\n\n{{2}}\n\nFırsatı kaçırmayın! Bildirimleri durdurmak için DUR yazın.",
+        "body_en": "Hi {{1}}! 🛍️\n\n{{2}}\n\nDon't miss out! Reply STOP to unsubscribe.",
+        "sample_tr": ["Ayşe", "Tüm ürünlerde %30 indirim, sadece bu hafta sonu geçerli!"],
+        "sample_en": ["Emily", "30% off everything — this weekend only!"],
     },
     {
         "name": "kampanya_yeni_urun",
-        "title_tr": "Yeni Ürün Duyurusu",
-        "body": "Merhaba {{1}}! ✨\n\n{{2}}\n\nHemen inceleyin. Bildirim istemiyorsanız DUR yazın.",
-        "sample": ["Mehmet", "Yeni koleksiyonumuz yayında — ilk görenlerden olun!"],
+        "title_tr": "Yeni Ürün Duyurusu", "title_en": "New Product Announcement",
+        "body_tr": "Merhaba {{1}}! ✨\n\n{{2}}\n\nHemen inceleyin. Bildirim istemiyorsanız DUR yazın.",
+        "body_en": "Hi {{1}}! ✨\n\n{{2}}\n\nCheck it out now. Reply STOP to unsubscribe.",
+        "sample_tr": ["Mehmet", "Yeni koleksiyonumuz yayında — ilk görenlerden olun!"],
+        "sample_en": ["Michael", "Our new collection is live — be among the first to see it!"],
     },
 ]
+
+
+def _preset_lang_key(language: str) -> str:
+    """WhatsApp dil kodundan preset anahtarı: 'en*' → en, aksi halde tr."""
+    return "en" if str(language or "").lower().startswith("en") else "tr"
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +381,8 @@ async def list_campaign_templates(
 
     return {
         "ok": True,
-        "presets": [{"name": p["name"], "title": p["title_tr"], "body": p["body"]} for p in CAMPAIGN_PRESETS],
+        "presets": [{"name": p["name"], "title_tr": p["title_tr"], "title_en": p["title_en"],
+                     "body_tr": p["body_tr"], "body_en": p["body_en"]} for p in CAMPAIGN_PRESETS],
         "approved": approved,
         "wa_ready": bool(wa_token and phone_id),
     }
@@ -399,9 +411,10 @@ async def create_campaign_template(
 
     preset_name = body.get("preset", "")
     preset = next((p for p in CAMPAIGN_PRESETS if p["name"] == preset_name), None)
-    name = (preset["name"] if preset else body.get("name", "")).strip().lower().replace(" ", "_")
-    body_text = preset["body"] if preset else body.get("body_text", "")
     language = body.get("language", "tr")
+    lk = _preset_lang_key(language)
+    name = (preset["name"] if preset else body.get("name", "")).strip().lower().replace(" ", "_")
+    body_text = preset["body_" + lk] if preset else body.get("body_text", "")
     sample_url = body.get("sample_image_url", "").strip()
     if not name or not body_text:
         raise HTTPException(400, "Şablon adı ve metni gerekli")
@@ -425,7 +438,7 @@ async def create_campaign_template(
     components = [
         {"type": "HEADER", "format": "IMAGE", "example": {"header_handle": [handle]}},
         {"type": "BODY", "text": body_text,
-         "example": {"body_text": [preset["sample"] if preset else ["Ahmet", "Kampanya mesajı örneği"]]}},
+         "example": {"body_text": [preset["sample_" + lk] if preset else ["Ahmet", "Kampanya mesajı örneği"]]}},
     ]
     btns = []
     button_text = body.get("button_text", "")
