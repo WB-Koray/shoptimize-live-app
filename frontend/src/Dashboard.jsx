@@ -2787,15 +2787,15 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
       {confirmSend && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setConfirmSend(false)}>
           <div className="bg-surface border border-borderStrong rounded-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-text font-bold text-sm flex items-center gap-2"><span>⚠️</span> Gönderimi onayla</h3>
+            <h3 className="text-text font-bold text-sm flex items-center gap-2"><span>⚠️</span> {t('campaign.confirm_title')}</h3>
             <p className="text-xs text-textDim leading-relaxed">
-              <b className="text-text">{targetCount}</b> kişiye <b className="text-text">{tplName}</b> şablonu {whenMode === 'later' ? 'planlanacak' : 'gönderilecek'}.
-              {whenMode !== 'later' && ' Bu işlem geri alınamaz — gönderim hemen başlar.'}
+              {(whenMode === 'later' ? t('campaign.confirm_schedule') : t('campaign.confirm_send_now'))
+                .replace('{tpl}', tplName).replace('{count}', targetCount)}
             </p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmSend(false)} className="px-4 py-2 text-xs text-textMute hover:text-text">Vazgeç</button>
+              <button onClick={() => setConfirmSend(false)} className="px-4 py-2 text-xs text-textMute hover:text-text">{t('campaign.confirm_cancel')}</button>
               <button onClick={doSend} className="px-4 py-2 bg-green text-bg rounded-lg text-xs font-bold">
-                Evet, {whenMode === 'later' ? 'planla' : `${targetCount} kişiye gönder`}
+                {whenMode === 'later' ? t('campaign.confirm_yes_schedule') : t('campaign.confirm_yes_send').replace('{count}', targetCount)}
               </button>
             </div>
           </div>
@@ -2843,27 +2843,27 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             {(() => {
               const warns = [];
               if (selectedTpl.header_format === 'IMAGE' && !imageUrl.trim())
-                warns.push('Bu şablon GÖRSEL başlık kullanıyor — "Görsel" alanını doldurmalısın.');
+                warns.push(t('campaign.warn_image'));
               if (selectedTpl.has_coupon && !couponCode.trim())
-                warns.push('Bu şablonda KUPON butonu var — "Kupon kodu" alanını doldurmalısın.');
+                warns.push(t('campaign.warn_coupon'));
               if (['VIDEO', 'DOCUMENT'].includes(selectedTpl.header_format))
-                warns.push(`Bu şablon ${selectedTpl.header_format} başlık kullanıyor — şu an sadece görsel başlık destekleniyor.`);
+                warns.push(t('campaign.warn_header_unsupported').replace('{fmt}', selectedTpl.header_format));
               return warns.length > 0 ? (
                 <div className="bg-amber/10 border border-amber/30 rounded-lg p-3 space-y-1">
                   {warns.map((w, i) => <div key={i} className="text-[11px] text-amber-400 flex items-start gap-1.5"><span>⚠️</span><span>{w}</span></div>)}
                 </div>
               ) : (
-                <div className="text-[11px] text-green flex items-center gap-1.5"><CheckCircle size={12} /> Bu şablon için gerekli alanlar tamam.</div>
+                <div className="text-[11px] text-green flex items-center gap-1.5"><CheckCircle size={12} /> {t('campaign.fields_ok')}</div>
               );
             })()}
 
             {/* Şablonun kullandığı alanlar */}
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">
-                Başlık: {({ NONE: 'yok', TEXT: 'metin', IMAGE: 'görsel', VIDEO: 'video', DOCUMENT: 'belge' }[selectedTpl.header_format]) || selectedTpl.header_format}
+                {t('campaign.hdr_label')} {({ NONE: t('campaign.hdr_none'), TEXT: t('campaign.hdr_text'), IMAGE: t('campaign.hdr_image'), VIDEO: t('campaign.hdr_video'), DOCUMENT: t('campaign.hdr_document') }[selectedTpl.header_format]) || selectedTpl.header_format}
               </span>
-              <span className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">Değişken: {selectedTpl.body_var_count}</span>
-              {selectedTpl.has_coupon && <span className="px-2 py-0.5 bg-amber/10 border border-amber/30 rounded-md text-[10px] text-amber-400">Kupon butonu</span>}
+              <span className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">{t('campaign.var_label')} {selectedTpl.body_var_count}</span>
+              {selectedTpl.has_coupon && <span className="px-2 py-0.5 bg-amber/10 border border-amber/30 rounded-md text-[10px] text-amber-400">{t('campaign.coupon_chip')}</span>}
               {selectedTpl.buttons.filter(b => b.type !== 'COPY_CODE').map((b, i) => (
                 <span key={i} className="px-2 py-0.5 bg-surfaceAlt rounded-md border border-border text-[10px] text-textMute">{b.type === 'URL' ? '🔗' : ''} {b.text}</span>
               ))}
@@ -2871,26 +2871,26 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
             {/* WhatsApp önizleme (canlı) */}
             <div>
-              <div className="text-[10px] text-textMute mb-1">Önizleme</div>
+              <div className="text-[10px] text-textMute mb-1">{t('campaign.preview')}</div>
               <div className="max-w-[270px] bg-[#202c33] rounded-lg overflow-hidden shadow-lg">
                 {selectedTpl.header_format === 'IMAGE' && (
                   imageUrl
                     ? <img src={imageUrl} alt="" className="w-full max-h-36 object-cover" />
-                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">görsel buraya gelecek</div>
+                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">{t('campaign.img_placeholder')}</div>
                 )}
                 {selectedTpl.header_format === 'TEXT' && selectedTpl.header_text && (
                   <div className="px-3 pt-2 text-[12px] font-bold text-white">{selectedTpl.header_text}</div>
                 )}
                 <div className="px-3 py-2 text-[12px] text-white whitespace-pre-wrap break-words">
                   {(selectedTpl.body_text || '')
-                    .replace(/\{\{\s*1\s*\}\}/g, 'Müşteri')
-                    .replace(/\{\{\s*2\s*\}\}/g, message || '(mesajınız)')}
+                    .replace(/\{\{\s*1\s*\}\}/g, t('campaign.preview_name'))
+                    .replace(/\{\{\s*2\s*\}\}/g, message || t('campaign.preview_msg'))}
                 </div>
                 {selectedTpl.buttons.length > 0 && (
                   <div className="border-t border-white/10">
                     {selectedTpl.buttons.map((b, i) => (
                       <div key={i} className="px-3 py-2 text-[12px] text-[#53bdeb] text-center border-b border-white/10 last:border-0">
-                        {b.type === 'COPY_CODE' ? `📋 ${couponCode || 'KUPON'}` : b.text}
+                        {b.type === 'COPY_CODE' ? `📋 ${couponCode || t('campaign.coupon_word')}` : b.text}
                       </div>
                     ))}
                   </div>
@@ -2916,30 +2916,30 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             {/* Kupon kodu butonu seçeneği */}
             <label className="flex items-center gap-2 text-[11px] text-textDim cursor-pointer select-none">
               <input type="checkbox" checked={createCoupon} onChange={e => setCreateCoupon(e.target.checked)} />
-              Kupon kodu kopyala butonu ekle
+              {t('campaign.add_coupon_btn')}
             </label>
             {createCoupon && (
               <input value={createCouponExample} onChange={e => setCreateCouponExample(e.target.value)}
-                placeholder="Örnek kupon kodu (örn. INDIRIM10)"
+                placeholder={t('campaign.coupon_example_ph')}
                 className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
             )}
 
             {/* Yeni şablon canlı önizleme */}
             {createPresetObj && (
               <div>
-                <div className="text-[10px] text-textMute mb-1">Önizleme</div>
+                <div className="text-[10px] text-textMute mb-1">{t('campaign.preview')}</div>
                 <div className="max-w-[270px] bg-[#202c33] rounded-lg overflow-hidden shadow-lg">
                   {createSampleUrl
                     ? <img src={createSampleUrl} alt="" className="w-full max-h-36 object-cover" />
-                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">görsel buraya gelecek</div>}
+                    : <div className="w-full h-24 bg-black/30 flex items-center justify-center text-[10px] text-white/40">{t('campaign.img_placeholder')}</div>}
                   <div className="px-3 py-2 text-[12px] text-white whitespace-pre-wrap break-words">
                     {(createPresetObj.body || '')
-                      .replace(/\{\{\s*1\s*\}\}/g, 'Müşteri')
-                      .replace(/\{\{\s*2\s*\}\}/g, '(kampanya mesajınız)')}
+                      .replace(/\{\{\s*1\s*\}\}/g, t('campaign.preview_name'))
+                      .replace(/\{\{\s*2\s*\}\}/g, t('campaign.preview_camp_msg'))}
                   </div>
                   {createCoupon && (
                     <div className="border-t border-white/10 px-3 py-2 text-[12px] text-[#53bdeb] text-center">
-                      📋 {createCouponExample || 'KUPON'}
+                      📋 {createCouponExample || t('campaign.coupon_word')}
                     </div>
                   )}
                 </div>
@@ -2996,11 +2996,11 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
         {/* Kupon kodu (opsiyonel) — şablonda "kupon kodu kopyala" butonu varsa zorunlu */}
         <div>
-          <label className="text-[11px] font-bold text-textDim block mb-1">Kupon kodu (opsiyonel)</label>
+          <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.coupon_label')}</label>
           <input value={couponCode} onChange={e => setCouponCode(e.target.value)}
             placeholder="ANNELER15"
             className="w-full bg-surfaceAlt border border-border rounded-lg px-3 py-2 text-xs text-text" />
-          <p className="text-[10px] text-textMute mt-1">Sadece "kupon kodu kopyala" butonlu şablonlarda gerekir. Müşteri butona basınca bu kod kopyalanır.</p>
+          <p className="text-[10px] text-textMute mt-1">{t('campaign.coupon_hint')}</p>
         </div>
 
         {/* Link (opsiyonel) — tıklama/sipariş atfı için */}
