@@ -413,7 +413,10 @@ async def create_campaign_template(
     preset = next((p for p in CAMPAIGN_PRESETS if p["name"] == preset_name), None)
     language = body.get("language", "tr")
     lk = _preset_lang_key(language)
-    name = (preset["name"] if preset else body.get("name", "")).strip().lower().replace(" ", "_")
+    # Custom ad verilmişse onu kullan (preset seçili olsa bile); yoksa preset adı.
+    raw_name = (body.get("name", "").strip() or (preset["name"] if preset else ""))
+    # WhatsApp şablon adı kuralı: yalnız küçük harf, rakam ve alt çizgi.
+    name = _re.sub(r"[^a-z0-9_]", "", raw_name.lower().replace(" ", "_").replace("-", "_"))
     body_text = preset["body_" + lk] if preset else body.get("body_text", "")
     sample_url = body.get("sample_image_url", "").strip()
     if not name or not body_text:

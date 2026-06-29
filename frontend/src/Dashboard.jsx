@@ -2618,6 +2618,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   // Şablon oluşturma (görsel header)
   const [showCreate, setShowCreate] = useState(false);
   const [campaignStep, setCampaignStep] = useState(1);   // 3 adımlı sihirbaz: 1=şablon 2=içerik+kitle 3=özet+gönder
+  const [createName, setCreateName] = useState('');      // merchant'ın verdiği özel şablon adı
   const [createPreset, setCreatePreset] = useState('kampanya_genel');
   const [createLang, setCreateLang] = useState(lang === 'en' ? 'en' : 'tr');
   const [createSampleUrl, setCreateSampleUrl] = useState('');
@@ -2733,18 +2734,19 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   }
 
   async function handleCreateTemplate() {
+    if (!createName.trim()) { showToast(t('campaign.need_name')); return; }
     if (!createSampleUrl.trim()) { showToast(t('campaign.need_sample')); return; }
     setCreating(true);
     try {
       const r = await fetch(`${base}/api/campaign/template${qp}`, {
         method: 'POST', headers: authH,
-        body: JSON.stringify({ preset: createPreset, language: createLang, sample_image_url: createSampleUrl.trim(),
+        body: JSON.stringify({ preset: createPreset, name: createName.trim(), language: createLang, sample_image_url: createSampleUrl.trim(),
           coupon_button: createCoupon, coupon_example: createCouponExample.trim() }),
       });
       const d = await r.json();
       if (d.ok) {
         showToast(d.status === 'ALREADY_EXISTS' ? t('campaign.tpl_exists') : t('campaign.tpl_submitted'));
-        setShowCreate(false);
+        setShowCreate(false); setCreateName('');
         setTimeout(loadTemplates, 1500);
       } else showToast((d.detail || t('campaign.tpl_fail')));
     } catch { showToast(t('campaign.tpl_fail')); } finally { setCreating(false); }
@@ -2943,6 +2945,15 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
               <p className="text-sm font-bold text-text">{t('campaign.create_title')}</p>
               <button onClick={() => setShowCreate(false)} className="text-textMute hover:text-text text-lg leading-none">✕</button>
             </div>
+            {/* Şablon adı — merchant kendisi verir */}
+            <div>
+              <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.tpl_name')}</label>
+              <input value={createName} onChange={e => setCreateName(e.target.value)}
+                placeholder={t('campaign.tpl_name_ph')}
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text" />
+              <p className="text-[10px] text-textMute mt-1">{t('campaign.tpl_name_hint')}</p>
+            </div>
+            <label className="text-[11px] font-bold text-textDim block">{t('campaign.tpl_content')}</label>
             <div className="flex gap-2">
               <select value={createPreset} onChange={e => setCreatePreset(e.target.value)}
                 className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text">
