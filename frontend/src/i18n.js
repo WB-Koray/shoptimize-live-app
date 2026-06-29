@@ -232,6 +232,7 @@ const translations = {
     'rfm.seg.needs_attention': 'Needs Attention',
     'rfm.seg.at_risk':         'At-Risk',
     'rfm.seg.lost':            'Lost',
+    'rfm.seg.sms_consent':     'SMS marketing consent',
 
     // Abandonment Intelligence Panel
     'abnd.title':    'Abandonment Intelligence',
@@ -429,6 +430,9 @@ const translations = {
     'campaign.st_scheduled':  'Scheduled',
     'campaign.st_failed':     'Failed',
     'campaign.st_draft':      'Draft',
+    'campaign.st_cancelled':  'Cancelled',
+    'campaign.cancelled_ok':  '✅ Campaign cancelled',
+    'campaign.cancel_fail':   'Could not cancel',
     'campaign.wa_needed':     'WhatsApp setup required',
     'campaign.wa_needed_sub': 'Complete your WhatsApp token and phone number in Settings to send campaigns.',
     'campaign.test_sent':     '✅ Test message sent',
@@ -725,6 +729,7 @@ const translations = {
     'rfm.seg.needs_attention': 'İlgi Gerektirir',
     'rfm.seg.at_risk':         'Risk Altında',
     'rfm.seg.lost':            'Kayıp',
+    'rfm.seg.sms_consent':     'SMS pazarlama onaylı',
 
     // Abandonment Intelligence Panel
     'abnd.title':    'Terk Zekası',
@@ -922,6 +927,9 @@ const translations = {
     'campaign.st_scheduled':  'Planlandı',
     'campaign.st_failed':     'Başarısız',
     'campaign.st_draft':      'Taslak',
+    'campaign.st_cancelled':  'İptal edildi',
+    'campaign.cancelled_ok':  '✅ Kampanya iptal edildi',
+    'campaign.cancel_fail':   'İptal edilemedi',
     'campaign.wa_needed':     'WhatsApp kurulumu gerekli',
     'campaign.wa_needed_sub': 'Kampanya göndermek için Ayarlar\'dan WhatsApp token ve telefon numarasını tamamlayın.',
     'campaign.test_sent':     '✅ Test mesajı gönderildi',

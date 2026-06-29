@@ -713,6 +713,30 @@ async def send_campaign(
     return {"ok": True, "campaign_id": cid, "status": "sending"}
 
 
+@router.post("/cancel")
+async def cancel_campaign(
+    body: dict = Body(...),
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Planlanmış (henüz gönderilmemiş) bir kampanyayı iptal eder."""
+    cid = str(body.get("campaign_id", "")).strip()
+    if not cid:
+        raise HTTPException(400, "campaign_id gerekli")
+    camp = await store.get_campaign(username, brand, cid)
+    if not camp:
+        raise HTTPException(404, "Kampanya bulunamadı")
+    if camp.get("status") != "scheduled":
+        return {"ok": False, "error": "not_scheduled",
+                "message": "Yalnızca planlanmış kampanyalar iptal edilebilir."}
+    await store.unschedule_campaign(f"{username}:{brand}:{cid}")
+    camp["status"] = "cancelled"
+    await store.save_campaign(username, brand, camp)
+    logger.info("[CAMPAIGN] iptal edildi: %s:%s %s", username, brand, cid)
+    return {"ok": True, "status": "cancelled"}
+
+
 @router.post("/test")
 async def send_test_campaign(
     body: dict = Body(...),

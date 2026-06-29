@@ -2761,7 +2761,18 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const approvedList = templates.approved.filter(a => a.status === 'APPROVED');
   const selectedTpl = approvedList.find(a => a.name === tplName) || null;
   const createPresetObj = (templates.presets || []).find(p => p.name === createPreset) || (templates.presets || [])[0] || null;
-  const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute' };
+  const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute', cancelled: 'text-textMute' };
+
+  async function cancelCampaign(cid) {
+    try {
+      const r = await fetch(`${base}/api/campaign/cancel${qp}`, {
+        method: 'POST', headers: authH, body: JSON.stringify({ campaign_id: cid }),
+      });
+      const d = await r.json();
+      if (d.ok) { showToast(t('campaign.cancelled_ok') || 'Kampanya iptal edildi'); loadCampaigns(); }
+      else showToast(d.message || (t('campaign.cancel_fail') || 'İptal edilemedi'));
+    } catch { showToast(t('campaign.cancel_fail') || 'İptal edilemedi'); }
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -3122,6 +3133,12 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                       {convRate && <span className="px-1.5 py-px rounded-full bg-greenSoft text-green font-bold">↑ %{convRate} {t('campaign.conv')}</span>}
                     </p>
                   </div>
+                  {c.status === 'scheduled' && (
+                    <button onClick={() => cancelCampaign(c.id)}
+                      className="shrink-0 text-[10px] font-semibold text-rose border border-rose/30 rounded-md px-2 py-1 hover:bg-roseSoft">
+                      İptal
+                    </button>
+                  )}
                 </div>
                 {hasStats && (
                   <div className="flex items-center gap-3 flex-wrap text-[10px] pt-1 border-t border-border/40">
