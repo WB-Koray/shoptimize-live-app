@@ -3915,27 +3915,30 @@ function FlowPanel({ session, anonymized = false }) {
             </button>
             {connOpen && (
               <div className="px-4 pb-4 space-y-3 border-t border-border/60">
-                {/* Embedded Signup — tek tıkla Facebook/Meta ile bağlan (token bile gerekmez) */}
-                {!maskedToken && !anonymized && embeddedAvailable && (
+                {/* Embedded Signup — tek tıkla Facebook/Meta ile bağlan (token bile gerekmez).
+                    Bağlıyken de göster: paste-token'dan ES'e yükseltme / yeniden bağlanma için. */}
+                {!anonymized && embeddedAvailable && (
                   <div className="pt-3 space-y-2">
                     <button onClick={handleEmbeddedSignup} disabled={esConnecting}
                       className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
                       style={{ background: '#1877F2' }}>
                       {esConnecting ? <RefreshCw size={15} className="animate-spin" /> : <MessageCircle size={15} />}
-                      {t('flow.es_connect')}
+                      {maskedToken ? t('flow.es_reconnect') : t('flow.es_connect')}
                     </button>
-                    <p className="text-[10px] text-textMute text-center">{t('flow.es_hint')}</p>
+                    <p className="text-[10px] text-textMute text-center">{maskedToken ? t('flow.es_reconnect_hint') : t('flow.es_hint')}</p>
                     {quickMsg.startsWith('ok:') && (
                       <p className="text-[10px] text-green font-semibold text-center">✅ {t('flow.connected')}</p>
                     )}
                     {quickMsg.startsWith('err:') && (
                       <p className="text-[10px] text-rose text-center">⚠️ {quickMsg.slice(4) || t('flow.qc_fail')}</p>
                     )}
-                    <div className="flex items-center gap-2 py-1">
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-[10px] text-textMute">{t('flow.es_or_token')}</span>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
+                    {!maskedToken && (
+                      <div className="flex items-center gap-2 py-1">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-textMute">{t('flow.es_or_token')}</span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                    )}
                   </div>
                 )}
 
