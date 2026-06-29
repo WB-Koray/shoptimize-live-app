@@ -2617,6 +2617,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
 
   // Şablon oluşturma (görsel header)
   const [showCreate, setShowCreate] = useState(false);
+  const [campaignStep, setCampaignStep] = useState(1);   // 3 adımlı sihirbaz: 1=şablon 2=içerik+kitle 3=özet+gönder
   const [createPreset, setCreatePreset] = useState('kampanya_genel');
   const [createLang, setCreateLang] = useState(lang === 'en' ? 'en' : 'tr');
   const [createSampleUrl, setCreateSampleUrl] = useState('');
@@ -2725,6 +2726,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
       if (d.ok) {
         showToast(d.status === 'scheduled' ? t('campaign.scheduled_ok') : t('campaign.sending_ok'));
         setMessage(''); setImageUrl(''); setLink(''); setCouponCode('');
+        setCampaignStep(1);   // sihirbazı başa al
         setTimeout(loadCampaigns, 1500);
       } else showToast(t('campaign.send_fail'));
     } catch { showToast(t('campaign.send_fail')); } finally { setSending(false); }
@@ -2764,6 +2766,12 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const selectedTpl = approvedList.find(a => a.name === tplName) || null;
   const createPresetObj = (templates.presets || []).find(p => p.name === createPreset) || (templates.presets || [])[0] || null;
   const statusColor = { sent: 'text-green', sending: 'text-blue', scheduled: 'text-amber', failed: 'text-rose', draft: 'text-textMute', cancelled: 'text-textMute' };
+
+  // Sihirbaz adım doğrulaması
+  const tplNeedsImage  = selectedTpl?.header_format === 'IMAGE';
+  const tplNeedsCoupon = !!selectedTpl?.has_coupon;
+  const step1Valid = !!tplName;
+  const step2Valid = !!message.trim() && (!tplNeedsImage || !!imageUrl.trim()) && (!tplNeedsCoupon || !!couponCode.trim());
 
   async function cancelCampaign(cid) {
     try {
@@ -2813,6 +2821,23 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           </div>
         </div>
 
+        {/* Sihirbaz adım göstergesi */}
+        <div className="flex items-center gap-2">
+          {[1, 2, 3].map(n => {
+            const reachable = n === 1 || (n === 2 && step1Valid) || (n === 3 && step1Valid && step2Valid);
+            return (
+              <button key={n} type="button" disabled={!reachable} onClick={() => reachable && setCampaignStep(n)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors ${
+                  campaignStep === n ? 'bg-green text-bg' : campaignStep > n ? 'bg-greenSoft text-green' : 'bg-surfaceAlt text-textMute'} ${reachable ? '' : 'opacity-40 cursor-not-allowed'}`}>
+                <span className="w-4 h-4 rounded-full bg-black/15 flex items-center justify-center text-[9px]">{campaignStep > n ? '✓' : n}</span>
+                {t('campaign.step' + n)}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── ADIM 1: Şablon ── */}
+        {campaignStep === 1 && (<>
         {/* Şablon seçimi */}
         <div>
           <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.template')}</label>
@@ -2901,10 +2926,23 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           </div>
         )}
 
-        {/* Şablon oluşturma formu */}
+        {/* Adım 1 navigasyon */}
+        <div className="flex justify-end pt-1">
+          <button onClick={() => setCampaignStep(2)} disabled={!step1Valid}
+            className="px-5 py-2 bg-green text-bg rounded-lg text-xs font-bold disabled:opacity-50">
+            {t('campaign.next')} →
+          </button>
+        </div>
+        </>)}
+
+        {/* Şablon oluşturma — MODAL (kampanya akışından ayrı) */}
         {showCreate && (
-          <div className="bg-surfaceAlt/50 border border-border rounded-lg p-3 space-y-2">
-            <p className="text-[11px] font-bold text-textDim">{t('campaign.create_title')}</p>
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowCreate(false)}>
+          <div className="bg-surface border border-borderStrong rounded-2xl p-4 max-w-md w-full space-y-2 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-text">{t('campaign.create_title')}</p>
+              <button onClick={() => setShowCreate(false)} className="text-textMute hover:text-text text-lg leading-none">✕</button>
+            </div>
             <div className="flex gap-2">
               <select value={createPreset} onChange={e => setCreatePreset(e.target.value)}
                 className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text">
@@ -2964,8 +3002,11 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
             </div>
             <p className="text-[10px] text-textMute">{t('campaign.approval_note')}</p>
           </div>
+          </div>
         )}
 
+        {/* ── ADIM 2: İçerik & Kitle ── */}
+        {campaignStep === 2 && (<>
         {/* Mesaj */}
         <div>
           <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.message')}</label>
@@ -3079,6 +3120,26 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
           )}
         </div>
 
+        {/* Adım 2 navigasyon */}
+        <div className="flex justify-between pt-1">
+          <button onClick={() => setCampaignStep(1)}
+            className="px-4 py-2 text-textMute hover:text-text rounded-lg text-xs font-bold">← {t('campaign.back')}</button>
+          <button onClick={() => setCampaignStep(3)} disabled={!step2Valid}
+            className="px-5 py-2 bg-green text-bg rounded-lg text-xs font-bold disabled:opacity-50">{t('campaign.next')} →</button>
+        </div>
+        </>)}
+
+        {/* ── ADIM 3: Özet & Gönder ── */}
+        {campaignStep === 3 && (<>
+        {/* Özet kartı */}
+        <div className="bg-surfaceAlt/50 border border-border rounded-lg p-3 space-y-1.5">
+          <p className="text-[11px] font-bold text-textDim mb-1">{t('campaign.review_title')}</p>
+          <div className="flex justify-between text-xs"><span className="text-textMute">{t('campaign.step1')}</span><span className="text-text font-semibold">{tplName || '—'}</span></div>
+          <div className="flex justify-between text-xs"><span className="text-textMute">{t('campaign.message')}</span><span className="text-text font-semibold truncate max-w-[60%] text-right">{message ? message.slice(0, 40) : '—'}</span></div>
+          <div className="flex justify-between text-xs"><span className="text-textMute">{t('campaign.audience')}</span><span className="text-green font-bold">{loadingAud ? '…' : targetCount} {t('campaign.people')}</span></div>
+          {couponCode && <div className="flex justify-between text-xs"><span className="text-textMute">{t('campaign.coupon_label')}</span><span className="text-amber font-semibold">{couponCode}</span></div>}
+        </div>
+
         {/* Zamanlama */}
         <div>
           <label className="text-[11px] font-bold text-textDim block mb-1">{t('campaign.when')}</label>
@@ -3116,6 +3177,10 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
               : <><Megaphone size={14} className="inline" /> {t('campaign.do_send').replace('{n}', targetCount)}</>}
           </button>
         </div>
+        {/* Adım 3 geri */}
+        <button onClick={() => setCampaignStep(2)}
+          className="w-full text-center text-textMute hover:text-text text-xs font-bold py-1">← {t('campaign.back')}</button>
+        </>)}
       </div>
 
       {/* Geçmiş */}
@@ -3146,7 +3211,7 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                   {c.status === 'scheduled' && (
                     <button onClick={() => cancelCampaign(c.id)}
                       className="shrink-0 text-[10px] font-semibold text-rose border border-rose/30 rounded-md px-2 py-1 hover:bg-roseSoft">
-                      İptal
+                      {t('campaign.confirm_cancel')}
                     </button>
                   )}
                 </div>
