@@ -5,9 +5,13 @@ Sequence ayarları, log görüntüleme, test gönderimi, opt-out yönetimi.
 
 import logging
 import os
+import base64
+import hashlib
+import hmac
+import json as _json
 import requests as _requests
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse, HTMLResponse
 from services.auth import get_current_user
 from services.redis_store import store
 from services.wa_sender import send_wa_template
@@ -470,6 +474,58 @@ async def wa_connect(
 
     return {"ok": True, "waba_id": waba_id, "phone_number_id": phone_number_id,
             "phone": phone_display, "subscribed": subscribed}
+
+
+def _b64url_decode(s: str) -> bytes:
+    s += "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s)
+
+
+def _parse_signed_request(signed_request: str, secret: str):
+    """Meta signed_request'i app secret ile doğrular, payload'ı döner (geçersizse None)."""
+    try:
+        sig_enc, payload_enc = signed_request.split(".", 1)
+        sig = _b64url_decode(sig_enc)
+        expected = hmac.new(secret.encode(), payload_enc.encode(), hashlib.sha256).digest()
+        if not hmac.compare_digest(sig, expected):
+            return None
+        return _json.loads(_b64url_decode(payload_enc))
+    except Exception:
+        return None
+
+
+@router.post("/api/meta/data-deletion")
+async def meta_data_deletion(request: Request):
+    """Meta Data Deletion Callback. Bir Facebook kullanıcısı veri silme talep ettiğinde Meta buraya POST eder.
+    Shoptimize, Facebook kullanıcı kimliğine (ASID) bağlı kişisel veri saklamaz (sadece merchant'ın
+    WhatsApp token/WABA bilgisi username/brand bazlı ve müşteri telefonları Shopify'dan tutulur).
+    Bu yüzden silinecek kayıt yoktur; talep loglanır, Meta'nın beklediği onay kodu + durum URL'i döner."""
+    try:
+        form = await request.form()
+        signed_request = str(form.get("signed_request", ""))
+    except Exception:
+        signed_request = ""
+    data = _parse_signed_request(signed_request, META_APP_SECRET) if (signed_request and META_APP_SECRET) else None
+    user_id = str((data or {}).get("user_id", "")) or "unknown"
+    code = hashlib.sha256(f"{user_id}:{signed_request[:24]}".encode()).hexdigest()[:16]
+    logger.info("[META-DEL] veri silme talebi user_id=%s code=%s (FB-ID bazlı veri yok, silinecek kayıt yok)", user_id, code)
+    base = os.getenv("PUBLIC_BASE_URL", "https://live.shoptimize.com.tr").rstrip("/")
+    return {"url": f"{base}/api/meta/data-deletion/status?code={code}", "confirmation_code": code}
+
+
+@router.get("/api/meta/data-deletion/status")
+async def meta_data_deletion_status(code: str = Query("")):
+    """Kullanıcının veri silme talebinin durumunu gösteren basit sayfa (Meta gereği)."""
+    return HTMLResponse(
+        f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+        <title>Data deletion status — Shoptimize</title></head>
+        <body style="font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#222">
+        <h2>Data deletion request received</h2>
+        <p>Shoptimize does not store Facebook personal data tied to user IDs, so there is no
+        Facebook-derived personal data to delete. Your request has been acknowledged.</p>
+        <p>Confirmation code: <code>{code or 'n/a'}</code></p>
+        <p>For any data request, contact <a href="mailto:info@shoptimize.com.tr">info@shoptimize.com.tr</a>.</p>
+        </body></html>""")
 
 
 @router.get("/api/flow/embedded-config")
