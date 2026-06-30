@@ -1495,17 +1495,19 @@ function MonCard({ label, value, accent = 'text-white', sub, pulse }) {
 }
 
 function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, checkoutStats, events,
-  atRiskVisitors, hotProducts, convertedOrders, evStats, soundOn, setSoundOn, onClose, fmtRevenue }) {
+  atRiskVisitors, hotProducts, convertedOrders, evStats, productStats = [], soundOn, setSoundOn, onClose, fmtRevenue }) {
   const { t } = useLang();
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
 
   const waOrders = convertedOrders.length;
   const waRecovered = convertedOrders.reduce((s, o) => s + parseFloat(o.total_price || 0), 0);
+  const waAvg = waOrders > 0 ? Math.round(waRecovered / waOrders) : 0;
   const abandoned = checkoutStats?.abandoned_count ?? 0;
-  const recoveryRate = (waOrders + abandoned) > 0 ? Math.round((waOrders / (waOrders + abandoned)) * 100) : 0;
   const convRate = uniqueVisitorCount > 0 ? ((ordersToday.length / uniqueVisitorCount) * 100).toFixed(1) : '0.0';
   const clock = new Date(now).toLocaleTimeString('tr-TR');
+  const toggleFs = () => { try { document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.(); } catch { /* */ } };
+  const topProducts = [...productStats].sort((a, b) => b.views - a.views).slice(0, 6);
 
   const feedLine = (ev) => {
     const d = ev.data || {};
@@ -1519,7 +1521,9 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
       default:                   return { time, icon: '•', text: (ev.event_type || '').replace(/_/g, ' '), color: 'text-slate-400' };
     }
   };
-  const feed = events.slice(-50).reverse().slice(0, 16);
+  // Feed yalnız anlamlı ticari olaylar (attention_time/scroll/page/collection gürültüsü gizli)
+  const MEANINGFUL = ['checkout_completed', 'checkout_started', 'add_to_cart', 'product_viewed', 'search_submitted'];
+  const feed = events.filter(e => MEANINGFUL.includes(e.event_type)).slice(-60).reverse().slice(0, 16);
   const funnelRows = [
     { label: t('mon.f_views'),    v: evStats['product_viewed'] || 0, c: 'bg-sky-500' },
     { label: t('mon.f_cart'),     v: evStats['add_to_cart'] || 0,    c: 'bg-teal-500' },
@@ -1538,6 +1542,7 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
           className={`px-2.5 py-1 rounded-lg text-sm ${soundOn ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
           {soundOn ? '🔔' : '🔕'}
         </button>
+        <button onClick={toggleFs} title={t('mon.fullscreen')} className="px-2.5 py-1 rounded-lg text-sm bg-white/5 hover:bg-white/15 text-slate-300">⛶</button>
         <button onClick={onClose} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-bold">✕ {t('mon.exit')}</button>
       </div>
 
@@ -1564,10 +1569,26 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
             <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{t('mon.wa_title')}</p>
               <div className="grid grid-cols-2 gap-4 text-center">
-                <div><div className="text-2xl font-extrabold text-orange-300 tabular-nums">{abandoned}</div><div className="text-[11px] text-slate-400">{t('mon.abandoned')}</div></div>
-                <div><div className="text-2xl font-extrabold text-green-300 tabular-nums">{waOrders}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_orders')}</div></div>
-                <div><div className="text-2xl font-extrabold text-emerald-300 tabular-nums">₺{Math.round(waRecovered).toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_rev')}</div></div>
-                <div><div className="text-2xl font-extrabold text-sky-300 tabular-nums">%{recoveryRate}</div><div className="text-[11px] text-slate-400">{t('mon.recovery_rate')}</div></div>
+                <div><div className="text-2xl font-extrabold text-orange-300 tabular-nums">{abandoned}</div><div className="text-[11px] text-slate-400">{t('mon.abandoned')} ({t('mon.today')})</div></div>
+                <div><div className="text-2xl font-extrabold text-green-300 tabular-nums">{waOrders}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_orders')} ({t('mon.total')})</div></div>
+                <div><div className="text-2xl font-extrabold text-emerald-300 tabular-nums">₺{Math.round(waRecovered).toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_rev')} ({t('mon.total')})</div></div>
+                <div><div className="text-2xl font-extrabold text-sky-300 tabular-nums">₺{waAvg.toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.avg_recovered')}</div></div>
+              </div>
+            </div>
+
+            {/* Top ürünler (bugün) */}
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{t('mon.top_products')}</p>
+              <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">
+                {topProducts.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_data')}</p>}
+                {topProducts.map((p, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="text-slate-500 w-4 shrink-0">{i + 1}</span>
+                    <span className="flex-1 truncate text-slate-300">{p.title}</span>
+                    <span className="text-[11px] text-sky-300 font-bold shrink-0">{p.views} 👁</span>
+                    {p.carts > 0 && <span className="text-[11px] text-teal-300 font-bold shrink-0">{p.carts} 🛒</span>}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -4942,6 +4963,17 @@ export default function Dashboard({ session, onLogout }) {
     } catch { /* ses çalınamadı */ }
   }
   function enterLiveMode() {
+    // Shopify iframe içinde requestFullscreen iframe'i aşamaz → gömülüyse yeni sekmede (standalone) aç
+    let embedded = false;
+    try { embedded = window.self !== window.top; } catch { embedded = true; }
+    if (embedded) {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('live', '1');
+        window.open(u.toString(), '_blank', 'noopener');
+        return;
+      } catch { /* URL kurulamadı → in-place'e düş */ }
+    }
     setLiveMode(true);
     try { document.documentElement.requestFullscreen?.(); } catch { /* fullscreen reddedildi */ }
   }
@@ -4953,6 +4985,10 @@ export default function Dashboard({ session, onLogout }) {
     const onFs = () => { if (!document.fullscreenElement) setLiveMode(false); };
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  // ?live=1 ile açıldıysa (yeni sekme) doğrudan Canlı Mod
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get('live') === '1') setLiveMode(true); } catch { /* */ }
   }, []);
   useEffect(() => {
     if (ordersToday.length > prevOrdersRef.current && prevOrdersRef.current > 0 && soundOn && liveMode) playChaching();
@@ -5442,7 +5478,7 @@ export default function Dashboard({ session, onLogout }) {
         <LiveMonitorScreen
           uniqueVisitorCount={uniqueVisitorCount} todayRevenue={todayRevenue} ordersToday={ordersToday}
           checkoutStats={checkoutStats} events={events} atRiskVisitors={atRiskVisitors} hotProducts={hotProducts}
-          convertedOrders={convertedOrders} evStats={evStats} soundOn={soundOn} setSoundOn={setSoundOn}
+          convertedOrders={convertedOrders} evStats={evStats} productStats={productStats} soundOn={soundOn} setSoundOn={setSoundOn}
           onClose={exitLiveMode} fmtRevenue={fmtRevenue}
         />
       )}
