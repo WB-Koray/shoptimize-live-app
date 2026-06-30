@@ -1495,10 +1495,23 @@ function MonCard({ label, value, accent = 'text-white', sub, pulse }) {
 }
 
 function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, checkoutStats, events,
-  atRiskVisitors, hotProducts, convertedOrders, evStats, productStats = [], soundOn, setSoundOn, onClose, fmtRevenue }) {
+  atRiskVisitors, hotProducts, convertedOrders, evStats, productStats = [], trafficStats = [], soundOn, setSoundOn, onClose, fmtRevenue }) {
   const { t } = useLang();
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+
+  // Board (TV auto-rotate)
+  const BOARDS = 2;
+  const [board, setBoard] = useState(0);
+  const [rotate, setRotate] = useState(false);
+  useEffect(() => {
+    if (!rotate) return;
+    const id = setInterval(() => setBoard(b => (b + 1) % BOARDS), 12000);
+    return () => clearInterval(id);
+  }, [rotate]);
+  // Günlük ciro hedefi (localStorage)
+  const [goal, setGoal] = useState(() => { try { return Number(localStorage.getItem('mon_goal')) || 10000; } catch { return 10000; } });
+  const saveGoal = (v) => { setGoal(v); try { localStorage.setItem('mon_goal', String(v)); } catch { /* */ } };
 
   const waOrders = convertedOrders.length;
   const waRecovered = convertedOrders.reduce((s, o) => s + parseFloat(o.total_price || 0), 0);
@@ -1508,6 +1521,28 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
   const clock = new Date(now).toLocaleTimeString('tr-TR');
   const toggleFs = () => { try { document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.(); } catch { /* */ } };
   const topProducts = [...productStats].sort((a, b) => b.views - a.views).slice(0, 6);
+
+  // Bugün vs dün (WA kurtarma — convertedOrders geçmişinden) + saatlik trend + hedef
+  const DAY = 86_400_000;
+  const nowTR = Date.now() + 3 * 3_600_000;
+  const todayStart = (nowTR - (nowTR % DAY)) - 3 * 3_600_000;
+  const yStart = todayStart - DAY;
+  const waToday = convertedOrders.filter(o => o.ts >= todayStart);
+  const waYest  = convertedOrders.filter(o => o.ts >= yStart && o.ts < todayStart);
+  const sumRev = arr => arr.reduce((s, o) => s + parseFloat(o.total_price || 0), 0);
+  const waTodayRev = sumRev(waToday), waYestRev = sumRev(waYest);
+  const delta = (to, ye) => ye > 0 ? Math.round((to - ye) / ye * 100) : (to > 0 ? 100 : 0);
+  const revDelta = delta(waTodayRev, waYestRev);
+  const ordDelta = delta(waToday.length, waYest.length);
+  const hourly = Array(24).fill(0);
+  waToday.forEach(o => { hourly[new Date(o.ts).getHours()] += parseFloat(o.total_price || 0); });
+  const hourlyMax = Math.max(...hourly, 1);
+  const curHour = new Date().getHours();
+  const goalPct = goal > 0 ? Math.min(100, Math.round((todayRevenue / goal) * 100)) : 0;
+  const trafficTop = (trafficStats || []).slice(0, 6);
+  const trafficTotal = (trafficStats || []).reduce((s, x) => s + x.count, 0) || 1;
+  const srcIcon = { Google: '🔍', Instagram: '📸', Facebook: '👍', Direct: '🔗', TikTok: '🎵', YouTube: '▶️', 'Twitter/X': '𝕏', Marketplace: '🛍', Other: '🌐' };
+  const Delta = ({ v }) => <span className={v >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{v >= 0 ? '▲' : '▼'} %{Math.abs(v)}</span>;
 
   const feedLine = (ev) => {
     const d = ev.data || {};
@@ -1538,6 +1573,17 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
         <span className="font-bold text-sm tracking-wide">Shoptimize Live — {t('mon.title')}</span>
         <span className="ml-auto font-mono text-lg tabular-nums">{clock}</span>
+        {/* board noktaları */}
+        <div className="hidden sm:flex items-center gap-1.5 mr-1">
+          {Array.from({ length: BOARDS }).map((_, i) => (
+            <button key={i} onClick={() => { setBoard(i); setRotate(false); }}
+              className={`w-2 h-2 rounded-full transition-colors ${board === i ? 'bg-emerald-400' : 'bg-white/20 hover:bg-white/40'}`} />
+          ))}
+        </div>
+        <button onClick={() => setRotate(r => !r)} title={t('mon.rotate')}
+          className={`px-2.5 py-1 rounded-lg text-sm ${rotate ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
+          {rotate ? '⏸' : '▶'} <span className="hidden md:inline text-xs">{t('mon.rotate')}</span>
+        </button>
         <button onClick={() => setSoundOn(s => !s)} title={t('mon.sound')}
           className={`px-2.5 py-1 rounded-lg text-sm ${soundOn ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
           {soundOn ? '🔔' : '🔕'}
@@ -1555,6 +1601,26 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
           <MonCard label={t('mon.conversion')} value={`%${convRate}`} accent="text-sky-300" />
         </div>
 
+        {/* Günlük ciro hedefi (her zaman görünür) */}
+        <div className="bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">🎯 {t('mon.goal')}</span>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-emerald-300 font-bold">{todayRevenue > 0 ? fmtRevenue(todayRevenue) : '₺0'}</span>
+              <span className="text-slate-500">/</span>
+              <span className="text-slate-400">₺</span>
+              <input type="number" value={goal} onChange={e => saveGoal(Number(e.target.value) || 0)}
+                className="w-24 bg-white/5 border border-white/10 rounded-md px-2 py-0.5 text-sm text-white text-right" />
+              <span className="font-bold text-sky-300 tabular-nums w-12 text-right">%{goalPct}</span>
+            </div>
+          </div>
+          <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all" style={{ width: `${goalPct}%` }} />
+          </div>
+        </div>
+
+        {/* ══ BOARD 0: Canlı operasyon ══ */}
+        {board === 0 && (<>
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-5">
           <div className="space-y-5">
             <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
@@ -1573,22 +1639,6 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
                 <div><div className="text-2xl font-extrabold text-green-300 tabular-nums">{waOrders}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_orders')} ({t('mon.total')})</div></div>
                 <div><div className="text-2xl font-extrabold text-emerald-300 tabular-nums">₺{Math.round(waRecovered).toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_rev')} ({t('mon.total')})</div></div>
                 <div><div className="text-2xl font-extrabold text-sky-300 tabular-nums">₺{waAvg.toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.avg_recovered')}</div></div>
-              </div>
-            </div>
-
-            {/* Top ürünler (bugün) */}
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{t('mon.top_products')}</p>
-              <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">
-                {topProducts.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_data')}</p>}
-                {topProducts.map((p, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-500 w-4 shrink-0">{i + 1}</span>
-                    <span className="flex-1 truncate text-slate-300">{p.title}</span>
-                    <span className="text-[11px] text-sky-300 font-bold shrink-0">{p.views} 👁</span>
-                    {p.carts > 0 && <span className="text-[11px] text-teal-300 font-bold shrink-0">{p.carts} 🛒</span>}
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -1641,6 +1691,90 @@ function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, chec
             </div>
           </div>
         </div>
+        </>)}
+
+        {/* ══ BOARD 1: Performans ══ */}
+        {board === 1 && (<>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Saatlik trend */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">📊 {t('mon.hourly')}</p>
+            <div className="flex items-end gap-1 h-40">
+              {hourly.map((v, h) => (
+                <div key={h} className="flex-1 flex flex-col items-center justify-end h-full group">
+                  <div className={`w-full rounded-t ${h === curHour ? 'bg-emerald-400' : v > 0 ? 'bg-sky-500' : 'bg-white/5'}`}
+                    style={{ height: `${Math.max((v / hourlyMax) * 100, v > 0 ? 6 : 2)}%` }}
+                    title={`${h}:00 — ₺${Math.round(v).toLocaleString('tr-TR')}`} />
+                  {h % 6 === 0 && <span className="text-[8px] text-slate-600 mt-1">{h}</span>}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2 text-center">{t('mon.hourly_sub')}</p>
+          </div>
+
+          {/* Bugün vs dün */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">📈 {t('mon.vs_yesterday')}</p>
+            <div className="space-y-4">
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-[11px] text-slate-400">{t('mon.recovered_rev')} ({t('mon.today')})</div>
+                  <div className="text-3xl font-extrabold text-emerald-300 tabular-nums">₺{Math.round(waTodayRev).toLocaleString('tr-TR')}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold"><Delta v={revDelta} /></div>
+                  <div className="text-[10px] text-slate-500">{t('mon.yesterday')}: ₺{Math.round(waYestRev).toLocaleString('tr-TR')}</div>
+                </div>
+              </div>
+              <div className="flex items-end justify-between border-t border-white/10 pt-4">
+                <div>
+                  <div className="text-[11px] text-slate-400">{t('mon.recovered_orders')} ({t('mon.today')})</div>
+                  <div className="text-3xl font-extrabold text-green-300 tabular-nums">{waToday.length}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold"><Delta v={ordDelta} /></div>
+                  <div className="text-[10px] text-slate-500">{t('mon.yesterday')}: {waYest.length}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Trafik kaynakları */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🚦 {t('mon.traffic')}</p>
+            <div className="space-y-2.5">
+              {trafficTop.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_data')}</p>}
+              {trafficTop.map((s, i) => (
+                <div key={i}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-slate-300">{srcIcon[s.source] || '🌐'} {s.source}</span>
+                    <span className="font-bold tabular-nums">{s.count} <span className="text-slate-500 text-[11px]">%{Math.round(s.count / trafficTotal * 100)}</span></span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-purple-400 rounded-full" style={{ width: `${(s.count / trafficTotal) * 100}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top ürünler */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🏆 {t('mon.top_products')}</p>
+            <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+              {topProducts.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_data')}</p>}
+              {topProducts.map((p, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm">
+                  <span className="text-slate-500 w-4 shrink-0">{i + 1}</span>
+                  <span className="flex-1 truncate text-slate-300">{p.title}</span>
+                  <span className="text-[11px] text-sky-300 font-bold shrink-0">{p.views} 👁</span>
+                  {p.carts > 0 && <span className="text-[11px] text-teal-300 font-bold shrink-0">{p.carts} 🛒</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        </>)}
       </div>
     </div>
   );
@@ -5478,7 +5612,7 @@ export default function Dashboard({ session, onLogout }) {
         <LiveMonitorScreen
           uniqueVisitorCount={uniqueVisitorCount} todayRevenue={todayRevenue} ordersToday={ordersToday}
           checkoutStats={checkoutStats} events={events} atRiskVisitors={atRiskVisitors} hotProducts={hotProducts}
-          convertedOrders={convertedOrders} evStats={evStats} productStats={productStats} soundOn={soundOn} setSoundOn={setSoundOn}
+          convertedOrders={convertedOrders} evStats={evStats} productStats={productStats} trafficStats={trafficStats} soundOn={soundOn} setSoundOn={setSoundOn}
           onClose={exitLiveMode} fmtRevenue={fmtRevenue}
         />
       )}
