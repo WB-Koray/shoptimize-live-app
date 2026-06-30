@@ -8,7 +8,7 @@ import {
   Clock, Phone, FileText, XCircle, AlertCircle,
   ShoppingBag, Ban, UserX, Plus, Minus, Flame, EyeOff, Settings, ExternalLink,
   User, Megaphone, Image as ImageIcon, Calendar, Users as UsersIcon,
-  Download,
+  Download, Maximize2,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
 import { useLang, LangSwitch } from './LangContext';
@@ -1480,6 +1480,151 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
 }
 
 // ── StockDemandWidget — #5 Stok-Talep Alarm ──────────────────────────────────
+// ───────────────────────── CANLI MOD (tam ekran komuta merkezi) ─────────────────────────
+function MonCard({ label, value, accent = 'text-white', sub, pulse }) {
+  return (
+    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 flex flex-col justify-center min-h-[110px]">
+      <div className="flex items-center gap-2">
+        {pulse && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
+        <span className="text-[11px] uppercase tracking-wider text-slate-400">{label}</span>
+      </div>
+      <div className={`text-4xl xl:text-5xl font-extrabold tabular-nums mt-1 ${accent}`}>{value}</div>
+      {sub && <div className="text-[11px] text-slate-500 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function LiveMonitorScreen({ uniqueVisitorCount, todayRevenue, ordersToday, checkoutStats, events,
+  atRiskVisitors, hotProducts, convertedOrders, evStats, soundOn, setSoundOn, onClose, fmtRevenue }) {
+  const { t } = useLang();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+
+  const waOrders = convertedOrders.length;
+  const waRecovered = convertedOrders.reduce((s, o) => s + parseFloat(o.total_price || 0), 0);
+  const abandoned = checkoutStats?.abandoned_count ?? 0;
+  const recoveryRate = (waOrders + abandoned) > 0 ? Math.round((waOrders / (waOrders + abandoned)) * 100) : 0;
+  const convRate = uniqueVisitorCount > 0 ? ((ordersToday.length / uniqueVisitorCount) * 100).toFixed(1) : '0.0';
+  const clock = new Date(now).toLocaleTimeString('tr-TR');
+
+  const feedLine = (ev) => {
+    const d = ev.data || {};
+    const time = new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    switch (ev.event_type) {
+      case 'checkout_completed': return { time, icon: '✅', text: `${t('mon.order')}${d.total_price ? ' — ₺' + Number(d.total_price).toLocaleString('tr-TR') : ''}`, color: 'text-emerald-400' };
+      case 'checkout_started':   return { time, icon: '💳', text: t('mon.checkout_started'), color: 'text-yellow-400' };
+      case 'add_to_cart':        return { time, icon: '🛒', text: `${t('mon.new_cart')}${d.product_title ? ' — ' + d.product_title : ''}`, color: 'text-teal-300' };
+      case 'product_viewed':     return { time, icon: '👁', text: `${t('mon.viewing')}${d.product_title ? ' — ' + d.product_title : ''}`, color: 'text-sky-300' };
+      case 'search_submitted':   return { time, icon: '🔍', text: `${t('mon.search')}${d.query ? ' "' + d.query + '"' : ''}`, color: 'text-purple-300' };
+      default:                   return { time, icon: '•', text: (ev.event_type || '').replace(/_/g, ' '), color: 'text-slate-400' };
+    }
+  };
+  const feed = events.slice(-50).reverse().slice(0, 16);
+  const funnelRows = [
+    { label: t('mon.f_views'),    v: evStats['product_viewed'] || 0, c: 'bg-sky-500' },
+    { label: t('mon.f_cart'),     v: evStats['add_to_cart'] || 0,    c: 'bg-teal-500' },
+    { label: t('mon.f_checkout'), v: checkoutStats?.started_count ?? 0, c: 'bg-yellow-500' },
+    { label: t('mon.f_orders'),   v: ordersToday.length,             c: 'bg-emerald-500' },
+  ];
+  const funnelMax = Math.max(...funnelRows.map(r => r.v), 1);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-[#0a0e16] text-white overflow-y-auto">
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-white/10 sticky top-0 bg-[#0a0e16]/95 backdrop-blur z-10">
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="font-bold text-sm tracking-wide">Shoptimize Live — {t('mon.title')}</span>
+        <span className="ml-auto font-mono text-lg tabular-nums">{clock}</span>
+        <button onClick={() => setSoundOn(s => !s)} title={t('mon.sound')}
+          className={`px-2.5 py-1 rounded-lg text-sm ${soundOn ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
+          {soundOn ? '🔔' : '🔕'}
+        </button>
+        <button onClick={onClose} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-bold">✕ {t('mon.exit')}</button>
+      </div>
+
+      <div className="p-6 space-y-5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          <MonCard label={t('mon.live_visitors')} value={uniqueVisitorCount} accent="text-purple-300" pulse />
+          <MonCard label={t('mon.today_revenue')} value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : '—'} accent="text-emerald-300" />
+          <MonCard label={t('mon.wa_recovered')} value={waRecovered > 0 ? '₺' + Math.round(waRecovered).toLocaleString('tr-TR') : '—'} accent="text-green-300" sub={`${waOrders} ${t('mon.orders')}`} />
+          <MonCard label={t('mon.today_orders')} value={ordersToday.length} accent="text-emerald-300" />
+          <MonCard label={t('mon.conversion')} value={`%${convRate}`} accent="text-sky-300" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-5">
+          <div className="space-y-5">
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{t('mon.funnel')}</p>
+              {funnelRows.map((row, i) => (
+                <div key={i} className="mb-2.5">
+                  <div className="flex justify-between text-sm mb-1"><span className="text-slate-300">{row.label}</span><span className="font-bold tabular-nums">{row.v}</span></div>
+                  <div className="h-2 rounded-full bg-white/5 overflow-hidden"><div className={`h-full ${row.c} rounded-full transition-all`} style={{ width: `${(row.v / funnelMax) * 100}%` }} /></div>
+                </div>
+              ))}
+            </div>
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{t('mon.wa_title')}</p>
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div><div className="text-2xl font-extrabold text-orange-300 tabular-nums">{abandoned}</div><div className="text-[11px] text-slate-400">{t('mon.abandoned')}</div></div>
+                <div><div className="text-2xl font-extrabold text-green-300 tabular-nums">{waOrders}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_orders')}</div></div>
+                <div><div className="text-2xl font-extrabold text-emerald-300 tabular-nums">₺{Math.round(waRecovered).toLocaleString('tr-TR')}</div><div className="text-[11px] text-slate-400">{t('mon.recovered_rev')}</div></div>
+                <div><div className="text-2xl font-extrabold text-sky-300 tabular-nums">%{recoveryRate}</div><div className="text-[11px] text-slate-400">{t('mon.recovery_rate')}</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> {t('mon.live_feed')}</p>
+            <div className="space-y-1 max-h-[46vh] overflow-y-auto custom-scrollbar">
+              {feed.length === 0 && <p className="text-slate-500 text-sm py-8 text-center">{t('mon.waiting')}</p>}
+              {feed.map((ev, i) => {
+                const l = feedLine(ev);
+                return (
+                  <div key={i} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-white/5">
+                    <span className="text-base">{l.icon}</span>
+                    <span className={`flex-1 text-sm truncate ${l.color}`}>{l.text}</span>
+                    <span className="text-[11px] text-slate-500 font-mono shrink-0">{l.time}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white/[0.03] border border-amber-500/20 rounded-2xl p-5">
+            <p className="text-xs font-bold text-amber-300 uppercase tracking-wider mb-3">⚠ {t('mon.at_risk')} ({atRiskVisitors.length})</p>
+            <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar">
+              {atRiskVisitors.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_risk')}</p>}
+              {atRiskVisitors.slice(0, 6).map((p, i) => {
+                const idle = Math.round((Date.now() - p.lastTs) / 60000);
+                return (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0 ${p.stage === 'checkout' ? 'bg-orange-500/20 text-orange-300' : 'bg-teal-500/20 text-teal-300'}`}>{p.stage === 'checkout' ? t('mon.in_checkout') : t('mon.in_cart')}</span>
+                    <span className="flex-1 truncate text-slate-300">{p.lastProduct || '—'}</span>
+                    <span className="text-[11px] text-slate-500 shrink-0">{idle} {t('mon.min_idle')}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-rose-500/20 rounded-2xl p-5">
+            <p className="text-xs font-bold text-rose-300 uppercase tracking-wider mb-3">🔥 {t('mon.hot')} ({hotProducts.length})</p>
+            <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar">
+              {hotProducts.length === 0 && <p className="text-slate-500 text-sm">{t('mon.no_hot')}</p>}
+              {hotProducts.slice(0, 6).map((p, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm">
+                  <span className="flex-1 truncate text-slate-300">{p.title}</span>
+                  <span className="text-[11px] text-rose-300 font-bold shrink-0">{p.viewers} {t('mon.viewers')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Aynı anda 2+ ziyaretçinin baktığı ürünleri gösterir
 
 function StockDemandWidget({ hotProducts }) {
@@ -4401,6 +4546,9 @@ export default function Dashboard({ session, onLogout }) {
   const [anonymized, setAnonymized] = useState(false);
   const [activeView, setActiveView] = useState('live');
   const [liveTab, setLiveTab]           = useState('realtime');
+  const [liveMode, setLiveMode]         = useState(false);   // tam ekran Canlı Mod
+  const [soundOn, setSoundOn]           = useState(true);    // yeni siparişte cha-ching
+  const prevOrdersRef = useRef(0);
   const [prodOpen, setProdOpen]         = useState(true);
   const [collOpen, setCollOpen]         = useState(false);
   const [searchOpen, setSearchOpen]     = useState(false);
@@ -4773,6 +4921,43 @@ export default function Dashboard({ session, onLogout }) {
     }
     return { total: visitorProfiles.length, product, cart, checkout, converted };
   }, [visitorProfiles]);
+
+  // ── Canlı Mod: tam ekran aç/kapa + yeni siparişte ses ──
+  function playChaching() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const t0 = ctx.currentTime;
+      [880, 1320].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        o.connect(g); g.connect(ctx.destination);
+        const s = t0 + i * 0.12;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.3, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.25);
+        o.start(s); o.stop(s + 0.26);
+      });
+    } catch { /* ses çalınamadı */ }
+  }
+  function enterLiveMode() {
+    setLiveMode(true);
+    try { document.documentElement.requestFullscreen?.(); } catch { /* fullscreen reddedildi */ }
+  }
+  function exitLiveMode() {
+    setLiveMode(false);
+    try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch { /* */ }
+  }
+  useEffect(() => {
+    const onFs = () => { if (!document.fullscreenElement) setLiveMode(false); };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  useEffect(() => {
+    if (ordersToday.length > prevOrdersRef.current && prevOrdersRef.current > 0 && soundOn && liveMode) playChaching();
+    prevOrdersRef.current = ordersToday.length;
+  }, [ordersToday.length, soundOn, liveMode]);
 
   const productStats = useMemo(() => {
     const map = {};
@@ -5234,7 +5419,7 @@ export default function Dashboard({ session, onLogout }) {
       </div>
 
       {/* Inner tab switcher */}
-      <div className="flex justify-center">
+      <div className="flex justify-center items-center gap-2 relative">
         <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-xl p-1">
           <button onClick={() => setLiveTab('realtime')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${liveTab === 'realtime' ? 'bg-surface border border-border text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
@@ -5245,7 +5430,22 @@ export default function Dashboard({ session, onLogout }) {
             <BarChart2 size={11} /> {t('nav.analytics')}
           </button>
         </div>
+        <button onClick={enterLiveMode}
+          className="sm:absolute sm:right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-green to-teal text-bg shadow-sm hover:opacity-90"
+          title={t('mon.enter')}>
+          <Maximize2 size={12} /> {t('mon.enter')}
+        </button>
       </div>
+
+      {/* ── CANLI MOD (tam ekran) ── */}
+      {liveMode && (
+        <LiveMonitorScreen
+          uniqueVisitorCount={uniqueVisitorCount} todayRevenue={todayRevenue} ordersToday={ordersToday}
+          checkoutStats={checkoutStats} events={events} atRiskVisitors={atRiskVisitors} hotProducts={hotProducts}
+          convertedOrders={convertedOrders} evStats={evStats} soundOn={soundOn} setSoundOn={setSoundOn}
+          onClose={exitLiveMode} fmtRevenue={fmtRevenue}
+        />
+      )}
 
       {/* ── CANLI TAB ── */}
       {liveTab === 'realtime' && (
