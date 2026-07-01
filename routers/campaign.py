@@ -329,7 +329,7 @@ def _analyze_template(comps: list) -> dict:
                 header_text = c.get("text", "") or ""
         elif ctype == "BODY":
             body_text = c.get("text", "") or ""
-            nums = _re.findall(r"\{\{\s*(\d+)\s*\}\}", body_text)
+            nums = re.findall(r"\{\{\s*(\d+)\s*\}\}", body_text)
             var_count = len(set(nums))
         elif ctype == "BUTTONS":
             for b in c.get("buttons", []) or []:
@@ -416,7 +416,7 @@ async def create_campaign_template(
     # Custom ad verilmişse onu kullan (preset seçili olsa bile); yoksa preset adı.
     raw_name = (body.get("name", "").strip() or (preset["name"] if preset else ""))
     # WhatsApp şablon adı kuralı: yalnız küçük harf, rakam ve alt çizgi.
-    name = _re.sub(r"[^a-z0-9_]", "", raw_name.lower().replace(" ", "_").replace("-", "_"))
+    name = re.sub(r"[^a-z0-9_]", "", raw_name.lower().replace(" ", "_").replace("-", "_"))
     body_text = preset["body_" + lk] if preset else body.get("body_text", "")
     sample_url = body.get("sample_image_url", "").strip()
     if not name or not body_text:
