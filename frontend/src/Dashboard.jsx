@@ -2914,6 +2914,18 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
   const [sending, setSending]   = useState(false);
   const [testing, setTesting]   = useState(false);
   const [toast, setToast]       = useState('');
+  const [recipModal, setRecipModal]   = useState(null);   // kişi bazlı detay: {cid} | null
+  const [recipData, setRecipData]     = useState([]);
+  const [recipLoading, setRecipLoading] = useState(false);
+
+  async function openRecipients(cid) {
+    setRecipModal({ cid }); setRecipLoading(true); setRecipData([]);
+    try {
+      const r = await fetch(`${base}/api/campaign/recipients${qp}${qp.includes('?') ? '&' : '?'}cid=${encodeURIComponent(cid)}`, { headers: authH });
+      const d = await r.json();
+      setRecipData(d.recipients || []);
+    } catch { setRecipData([]); } finally { setRecipLoading(false); }
+  }
 
   // Şablon oluşturma (görsel header)
   const [showCreate, setShowCreate] = useState(false);
@@ -3109,6 +3121,61 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                 {whenMode === 'later' ? t('campaign.confirm_yes_schedule') : t('campaign.confirm_yes_send').replace('{count}', targetCount)}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kişi bazlı detay modalı */}
+      {recipModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setRecipModal(null)}>
+          <div className="bg-surface border border-borderStrong rounded-2xl p-5 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-text font-bold text-sm flex items-center gap-2"><UsersIcon size={15} /> {t('campaign.details')}
+                {!recipLoading && <span className="text-textMute font-normal">({recipData.length})</span>}
+              </h3>
+              <button onClick={() => setRecipModal(null)} className="text-textMute hover:text-text text-lg leading-none">✕</button>
+            </div>
+            {/* özet */}
+            {!recipLoading && recipData.length > 0 && (
+              <div className="flex items-center gap-4 flex-wrap text-[11px] mb-2 pb-2 border-b border-border">
+                <span>📬 <b className="text-blue">{recipData.filter(r => r.delivered).length}</b> {t('campaign.m_delivered')}</span>
+                <span>👁 <b className="text-green">{recipData.filter(r => r.read).length}</b> {t('campaign.m_read')}</span>
+                <span>🛍 <b className="text-amber">{recipData.filter(r => r.ordered).length}</b> {t('campaign.m_orders')}</span>
+                <span className="text-green font-bold ml-auto">₺{recipData.reduce((s, r) => s + (r.revenue || 0), 0).toLocaleString('tr-TR')}</span>
+              </div>
+            )}
+            <div className="overflow-y-auto custom-scrollbar flex-1">
+              {recipLoading && <p className="text-textMute text-xs text-center py-6">…</p>}
+              {!recipLoading && recipData.length === 0 && <p className="text-textMute text-xs text-center py-6">{t('campaign.no_recipients')}</p>}
+              {!recipLoading && recipData.length > 0 && (
+                <table className="w-full text-[11px]">
+                  <thead className="text-textMute sticky top-0 bg-surface">
+                    <tr className="text-left border-b border-border/60">
+                      <th className="py-1.5 font-semibold">{t('campaign.col_person')}</th>
+                      <th className="py-1.5 font-semibold text-center">📬</th>
+                      <th className="py-1.5 font-semibold text-center">👁</th>
+                      <th className="py-1.5 font-semibold">🛍 {t('campaign.col_product')}</th>
+                      <th className="py-1.5 font-semibold text-right">₺</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {recipData.map((r, i) => (
+                      <tr key={i} className={r.ordered ? 'bg-greenSoft/20' : ''}>
+                        <td className="py-1.5">
+                          <span className="text-text">{r.name ? (anonymized ? maskName(r.name) : r.name) : <span className="text-textMute">—</span>}</span>
+                          <span className="text-textMute font-mono ml-1.5">{anonymized ? maskPhone(r.phone) : r.phone}</span>
+                        </td>
+                        <td className="text-center">{r.delivered ? '✅' : <span className="text-textMute/40">·</span>}</td>
+                        <td className="text-center">{r.read ? '✅' : <span className="text-textMute/40">·</span>}</td>
+                        <td className="py-1.5 text-textDim truncate max-w-[180px]">{r.ordered ? (r.product || '✔') : <span className="text-textMute/40">—</span>}</td>
+                        <td className="text-right text-amber font-semibold">{r.revenue > 0 ? '₺' + r.revenue.toLocaleString('tr-TR') : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <p className="text-[10px] text-textMute mt-2 pt-2 border-t border-border/40">{t('campaign.recip_note')}</p>
           </div>
         </div>
       )}
@@ -3523,6 +3590,12 @@ function CampaignPanel({ session, waSettings, anonymized = false }) {
                     <button onClick={() => cancelCampaign(c.id)}
                       className="shrink-0 text-[10px] font-semibold text-rose border border-rose/30 rounded-md px-2 py-1 hover:bg-roseSoft">
                       {t('campaign.confirm_cancel')}
+                    </button>
+                  )}
+                  {(c.status === 'sent' || c.status === 'sending') && (
+                    <button onClick={() => openRecipients(c.id)}
+                      className="shrink-0 text-[10px] font-semibold text-blue border border-blue/30 rounded-md px-2 py-1 hover:bg-blueSoft flex items-center gap-1">
+                      <UsersIcon size={11} /> {t('campaign.details')}
                     </button>
                   )}
                 </div>

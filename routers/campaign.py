@@ -663,8 +663,11 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
             opted += 1
         elif res.get("ok"):
             sent += 1
-            if res.get("message_id"):
-                await store.link_campaign_message(res["message_id"], username, brand, campaign["id"])
+            mid = res.get("message_id", "")
+            if mid:
+                await store.link_campaign_message(mid, username, brand, campaign["id"])
+            # Kişi bazlı takip için alıcıyı kaydet (telefon → isim + msg_id)
+            await store.add_campaign_recipient(username, brand, campaign["id"], phone, t.get("name", ""), mid)
         else:
             failed += 1
         if (i + 1) % _BATCH_SIZE == 0:
@@ -837,6 +840,51 @@ async def list_campaigns(
         c["stats"]["revenue"] = round(sum(rev_by_vid.get(v, 0) for v in order_vids), 2)
 
     return {"ok": True, "campaigns": campaigns}
+
+
+@router.get("/recipients")
+async def campaign_recipients(
+    cid: str = Query(""),
+    username: str = Query(""),
+    brand: str = Query("default"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Kişi bazlı kampanya takibi: her alıcı için iletildi/okundu/sipariş (+ürün +ciro)."""
+    if not cid:
+        raise HTTPException(400, "cid gerekli")
+    recips = await store.get_campaign_recipients(username, brand, cid)
+    delivered_set, read_set = await store.get_campaign_delivery_sets(username, brand, cid)
+    camp = await store.get_campaign(username, brand, cid) or {}
+    sent_at = camp.get("sent_at") or camp.get("created_at") or 0
+
+    # Siparişleri telefona göre indeksle (gönderimden -1s .. +14g penceresi)
+    orders = await store.get_converted_orders(username, brand, limit=200)
+    def _norm(p):
+        return re.sub(r"\D", "", str(p or ""))[-10:]
+    window_end = sent_at + 14 * 86400 * 1000
+    orders_by_phone = {}
+    for o in orders:
+        k = _norm(o.get("phone", ""))
+        ots = o.get("ts", 0)
+        if k and (sent_at == 0 or (ots >= sent_at - 3600 * 1000 and ots <= window_end)):
+            orders_by_phone.setdefault(k, o)  # liste yeni→eski; ilk eşleşen en yeni
+
+    out = []
+    for r in recips:
+        mid = r.get("msg_id", "")
+        order = orders_by_phone.get(_norm(r.get("phone", "")))
+        li = (order or {}).get("line_items") or []
+        out.append({
+            "phone": r.get("phone", ""),
+            "name": r.get("name", ""),
+            "delivered": bool(mid) and mid in delivered_set,
+            "read": bool(mid) and mid in read_set,
+            "ordered": bool(order),
+            "product": (li[0].get("title", "") if li else "") if order else "",
+            "revenue": float((order or {}).get("total_price", 0) or 0) if order else 0,
+        })
+    out.sort(key=lambda x: (x["ordered"], x["read"], x["delivered"]), reverse=True)
+    return {"ok": True, "recipients": out, "count": len(out)}
 
 
 # ---------------------------------------------------------------------------

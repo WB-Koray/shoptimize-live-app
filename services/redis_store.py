@@ -465,6 +465,33 @@ class RedisStore:
         read = await self._redis.scard(f"camp_read:{username}:{brand}:{cid}")
         return {"delivered": delivered or 0, "read": read or 0}
 
+    async def add_campaign_recipient(self, username: str, brand: str, cid: str,
+                                     phone: str, name: str, message_id: str) -> None:
+        """Kampanya alıcısını kaydeder (kişi bazlı takip: telefon → isim + msg_id)."""
+        if not phone:
+            return
+        key = f"camp_recips:{username}:{brand}:{cid}"
+        await self._redis.hset(key, phone, json.dumps({"name": name or "", "msg_id": message_id or ""}, ensure_ascii=False))
+        await self._redis.expire(key, self._CAMP_MSG_TTL)
+
+    async def get_campaign_recipients(self, username: str, brand: str, cid: str) -> list[dict]:
+        """Kampanyanın tüm alıcıları: [{phone, name, msg_id}]."""
+        data = await self._redis.hgetall(f"camp_recips:{username}:{brand}:{cid}")
+        out = []
+        for phone, raw in (data or {}).items():
+            try:
+                d = json.loads(raw)
+            except Exception:
+                d = {}
+            out.append({"phone": phone, "name": d.get("name", ""), "msg_id": d.get("msg_id", "")})
+        return out
+
+    async def get_campaign_delivery_sets(self, username: str, brand: str, cid: str):
+        """(delivered_set, read_set) — msg_id kümeleri (kişi bazlı durum için)."""
+        delivered = await self._redis.smembers(f"camp_delivered:{username}:{brand}:{cid}")
+        read = await self._redis.smembers(f"camp_read:{username}:{brand}:{cid}")
+        return set(delivered or []), set(read or [])
+
     async def schedule_campaign(self, username: str, brand: str, cid: str, send_at_ms: int) -> None:
         """Planlı gönderim kuyruğuna ekler (sorted set, score=zaman)."""
         await self._redis.zadd("campaign_schedule", {f"{username}:{brand}:{cid}": send_at_ms})
