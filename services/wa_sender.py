@@ -1,6 +1,7 @@
 """WhatsApp Cloud API — template mesaj gönderici."""
 
 import logging
+import os
 
 import httpx
 
@@ -41,6 +42,22 @@ _CART_PARAM_COUNT = {
     "sepet_hatirlatma_2": 1,
     "sepet_hatirlatma_3": 2,
 }
+
+
+def _build_cart_permalink(products: list | None) -> str:
+    """Sepet ürünlerinden Shopify cart permalink son ekini kurar: 'variant:qty,variant:qty'.
+    Dinamik URL butonlu şablonda {{1}} olarak gider → link her cihazda sepeti yeniden kurar.
+    variant_id yoksa boş döner."""
+    if not products:
+        return ""
+    parts = []
+    for p in products:
+        vid = str(p.get("variant_id", "")).strip()
+        if not vid:
+            continue
+        qty = p.get("quantity", 1) or 1
+        parts.append(f"{vid}:{qty}")
+    return ",".join(parts)
 
 
 def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "", products: list | None = None) -> list:
@@ -246,6 +263,18 @@ async def send_wa_template(
             template_name, name=name, product=product,
             order_number=order_number, products=products,
         )
+        # Cihazlar arası sepet kurtarma: dinamik URL butonuna cart permalink son eki geç.
+        # GÜVENLİK: yalnız CART_PERMALINK_BUTTON=1 iken (şablon DİNAMİK URL butonlu olmalı — Faz B).
+        # Statik butonlu şablonda parametre göndermek Meta hatası verir; o yüzden env ile kapalı gelir.
+        if os.getenv("CART_PERMALINK_BUTTON") == "1" and template_name in _CART_PARAM_COUNT:
+            perma = _build_cart_permalink(products)
+            if perma:
+                components.append({
+                    "type": "button",
+                    "sub_type": "url",
+                    "index": "0",
+                    "parameters": [{"type": "text", "text": perma}],
+                })
 
     payload = {
         "messaging_product": "whatsapp",
