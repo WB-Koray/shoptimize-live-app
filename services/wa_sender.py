@@ -277,6 +277,13 @@ async def send_wa_template(
                     "index": "0",
                     "parameters": [{"type": "text", "text": perma}],
                 })
+            else:
+                # variant_id yok (ör. eski bekleyen sepet) → dinamik buton parametresi kurulamaz.
+                # #131008 yerine STATİK eşdeğer şablona düş (isimden _link çıkar) — mesaj yine gider.
+                fallback = template_name.replace("_link", "")
+                logger.warning("[WA] permalink yok (variant_id bulunamadı) → statik şablona düşülüyor: %s → %s",
+                               template_name, fallback)
+                template_name = fallback
 
     payload = {
         "messaging_product": "whatsapp",
