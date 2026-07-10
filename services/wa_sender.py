@@ -62,7 +62,7 @@ def _build_cart_permalink(products: list | None) -> str:
 
 def _build_params(template_name: str, name: str = "", product: str = "", order_number: str = "", products: list | None = None) -> list:
     """Her şablon için doğru body parametrelerini döner."""
-    if template_name in _CART_PARAM_COUNT:
+    if template_name in _CART_PARAM_COUNT or template_name.startswith("sepet"):
         # Varsayılan ad+ürün (2 param). Şablonun gerçek değişken sayısı farklıysa
         # send_wa_template #132000 hatasından beklenen sayıyı okuyup otomatik düzeltir.
         return [
@@ -266,7 +266,7 @@ async def send_wa_template(
         # Cihazlar arası sepet kurtarma: dinamik URL butonuna cart permalink son eki geç.
         # GÜVENLİK: yalnız CART_PERMALINK_BUTTON=1 iken (şablon DİNAMİK URL butonlu olmalı — Faz B).
         # Statik butonlu şablonda parametre göndermek Meta hatası verir; o yüzden env ile kapalı gelir.
-        if os.getenv("CART_PERMALINK_BUTTON") == "1" and template_name in _CART_PARAM_COUNT:
+        if os.getenv("CART_PERMALINK_BUTTON") == "1" and (template_name in _CART_PARAM_COUNT or template_name.startswith("sepet")):
             perma = _build_cart_permalink(products)
             if perma:
                 components.append({

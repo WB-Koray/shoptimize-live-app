@@ -173,10 +173,12 @@ def _create_template(waba_id: str, token: str, name: str, body: str, language: s
         body_comp["example"] = {"body_text": body_ex}   # Meta: değişkenli body'de zorunlu
     components.append(body_comp)
     if button_text and button_url:
-        components.append({
-            "type": "BUTTONS",
-            "buttons": [{"type": "URL", "text": button_text, "url": button_url}]
-        })
+        btn = {"type": "URL", "text": button_text, "url": button_url}
+        # Dinamik URL butonu ({{1}} içeriyorsa) — Meta tam URL örneği ister (cihazlar arası sepet permalink)
+        if "{{1}}" in button_url or "{{ 1 }}" in button_url:
+            sample = button_url.replace("{{1}}", "44444444:1").replace("{{ 1 }}", "44444444:1")
+            btn["example"] = [sample]
+        components.append({"type": "BUTTONS", "buttons": [btn]})
     payload = {
         "name": name,
         "language": language,
