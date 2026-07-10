@@ -266,7 +266,9 @@ async def send_wa_template(
         # Cihazlar arası sepet kurtarma: dinamik URL butonuna cart permalink son eki geç.
         # GÜVENLİK: yalnız CART_PERMALINK_BUTTON=1 iken (şablon DİNAMİK URL butonlu olmalı — Faz B).
         # Statik butonlu şablonda parametre göndermek Meta hatası verir; o yüzden env ile kapalı gelir.
-        if os.getenv("CART_PERMALINK_BUTTON") == "1" and (template_name in _CART_PARAM_COUNT or template_name.startswith("sepet")):
+        # Permalink butonu YALNIZ adında "link" geçen DİNAMİK şablonlara eklenir.
+        # Böylece statik butonlu sepet_hatirlatma vb. bozulmaz; kademeli geçiş güvenli.
+        if os.getenv("CART_PERMALINK_BUTTON") == "1" and "link" in template_name.lower():
             perma = _build_cart_permalink(products)
             if perma:
                 components.append({
