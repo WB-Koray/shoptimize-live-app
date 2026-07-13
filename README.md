@@ -67,13 +67,15 @@ shoptimize-live-app/
 │   ├── auth.py                # Shopify OAuth install/callback, JWT token, billing trigger
 │   ├── billing.py             # Shopify subscription (GraphQL appSubscriptionCreate)
 │   ├── flow.py                # WA otomasyon ayarları, log, ROI, opt-out
-│   ├── admin.py               # Operator paneli — merchant listesi, token yönetimi
+│   ├── campaign.py            # Toplu WA kampanya broadcast — şablon, hedef kitle, gönderim
+│   ├── admin.py               # Operator paneli — merchant listesi, token yönetimi, sağlık
 │   └── gdpr.py                # GDPR webhook'ları (data_request, redact, app/uninstalled)
 │
 ├── services/
 │   ├── redis_store.py         # Tüm Redis operasyonları (RedisStore sınıfı)
 │   ├── db.py                  # PostgreSQL — get_setting, set_connection_settings
 │   ├── auth.py                # JWT encode/decode, get_current_user dependency
+│   ├── notify.py              # Operatör WhatsApp bildirimleri (dedupe + cooldown)
 │   └── wa_sender.py           # WhatsApp Business API mesaj gönderme
 │
 ├── extensions/
@@ -134,6 +136,23 @@ shoptimize-live-app/
 | `GET /api/flow/optouts` | Opt-out listesi |
 | `GET /api/flow/template-status` | Meta'daki şablon onay durumları |
 
+### `campaign.py` — Toplu WA Kampanya
+| Endpoint | Açıklama |
+|----------|----------|
+| `GET /api/campaign/templates` | Hazır şablon önerileri + Meta'da onaylı IMAGE-header MARKETING şablonları |
+| `POST /api/campaign/template` | Görsel header'lı MARKETING şablonu oluştur → Meta onayına gönder |
+| `POST /api/campaign/media` | Görsel upload yedeği (base64 → Redis, public URL) |
+| `GET /api/campaign/audience` | Hedef kitle sayıları — RFM segment, yüksek harcayan, SMS onaylı, ulaşılabilir |
+| `GET /api/campaign/audience/members` | Seçili segmentteki kişiler (isim, telefon, harcama, opt-out) |
+| `POST /api/campaign/send` | Kampanya oluştur → şimdi gönder veya planla |
+| `POST /api/campaign/cancel` | Planlanmış kampanyayı iptal et |
+| `POST /api/campaign/test` | Kendi numarana test gönderimi |
+| `GET /api/campaign/list` | Kampanya geçmişi + teslim/okundu + tıklama/sipariş atfı |
+| `GET /api/campaign/recipients` | Kişi bazlı takip (iletildi/okundu/sipariş +ürün +ciro) |
+| `GET /campaign-media/{id}` | Upload yedeği görsel servisi (ayrı router) |
+
+Kampanya kitlesi opt-out filtreli, batch (20'lik) + rate-limit'li (2 sn) gönderilir — WhatsApp kalite puanını korumak için. Hedef kitle: son N günde sipariş veren (RFM segmentli) ya da SMS pazarlama onayı vermiş müşteriler.
+
 ### `billing.py` — Abonelik
 | Endpoint | Açıklama |
 |----------|----------|
@@ -144,7 +163,12 @@ shoptimize-live-app/
 | Endpoint | Açıklama |
 |----------|----------|
 | `GET /merchants` | Tüm merchant listesi + billing durumu |
+| `GET /health` | Mağaza sağlık monitörü (ölü token, eksik şablon, kayıtsız webhook, kapalı akış, eksik pixel) |
+| `POST /test-alert` | Operatör bildirim hattını test et |
+| `POST /setup-operator-template` | Operatör WA şablonunu kur |
+| `POST /nudge` | Merchant'a hatırlatma bildirimi gönder |
 | `POST /set-shopify-token` | Merchant'a token ata |
+| `GET /shopify-records` | Ham DB kayıtlarını incele |
 | `POST /copy-shopify-token` | Token kopyala (mağaza geçişi) |
 
 ---
@@ -208,14 +232,26 @@ RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip e
 
 ---
 
-## Abandoned Checkout Worker
+## Arka Plan Worker'ları
 
-`main.py`'de `lifespan` içinde başlayan arka plan task'ı:
+`main.py`'de `lifespan` içinde başlayan üç arka plan task'ı:
 
-- Her 60 saniyede `store.get_pending_checkouts_before(now)` ile işlem zamanı gelen checkout'ları kontrol eder.
+### 1. Abandoned Checkout Worker (`_abandoned_checkout_worker`, her 60 sn)
+- `store.get_pending_checkouts_before(now)` ile işlem zamanı gelen checkout'ları kontrol eder.
 - `flow.py` sequence ayarlarına göre sıralı WA mesajları gönderir.
 - Gönderim penceresi (UTC+3), minimum sepet tutarı ve telefon bazlı cooldown kontrolü yapar.
 - Sequence tamamlanınca veya müşteri satın alırsa pending listesinden kaldırır.
+- Kritik token hatasında (#190/#401) operatöre anlık WA bildirimi atar (mağaza başına saatte 1).
+
+### 2. Scheduled Campaign Worker (`_scheduled_campaign_worker`, her 30 sn)
+- `store.get_due_campaigns(now)` ile gönderim zamanı gelen planlı kampanyaları bulur.
+- `campaign.execute_campaign(...)` çağırarak toplu WA broadcast'i tetikler.
+
+### 3. Health Monitor Worker (`_health_monitor_worker`, varsayılan 6 saatte bir)
+- Her mağaza için `compute_store_health(...)` çalıştırır.
+- Boru hattı bozulunca (ölü token, eksik şablon, kayıtsız webhook) operatöre WA bildirimi atar; düzelince "düzeldi" bildirimi gönderir (durum geçişlerinde tek sefer).
+- Trial'ı biten mağazalar için (son 24 saat) uyarı gönderir.
+- Aralık `HEALTH_MONITOR_INTERVAL_SEC` ile ayarlanır.
 
 ---
 
@@ -240,7 +276,10 @@ RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip e
 | `BILLING_TEST_MODE` | — | `true`/`false`, test abonelik için |
 | `OPERATOR_WA_TOKEN` | — | Operator WA bildirimleri (yeni kayıt) |
 | `OPERATOR_WA_PHONE_ID` | — | Operator WA phone number ID |
+| `OPERATOR_ALERT_PHONE` | — | Operatör bildirimlerinin gönderileceği telefon |
+| `HEALTH_MONITOR_INTERVAL_SEC` | — | Sağlık monitörü aralığı (default `21600` = 6 saat) |
 | `WA_WEBHOOK_VERIFY_TOKEN` | — | Meta WA webhook doğrulama token'ı |
+| `ENABLE_DOCS` | — | `true` ise Swagger/ReDoc/OpenAPI açılır (default kapalı) |
 
 ---
 
