@@ -331,30 +331,41 @@ Health check: `GET /health` → `{"ok": true, "service": "shoptimize-live"}`
 
 ## Geliştirme Ortamı
 
+**Bağımlılık servisleri (Redis + PostgreSQL) Docker ile:**
 ```bash
-# Backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8001
+docker compose -f docker-compose.dev.yml up -d     # Redis :6379 + Postgres :5432
+# scripts/dev-schema.sql ilk açılışta integration_connections tablosunu kurar
+# ve bir test merchant'ı (dev@localhost, TID spt_devtest0001) seed'ler.
+docker compose -f docker-compose.dev.yml down       # durdur (veri kalır)
+docker compose -f docker-compose.dev.yml down -v     # veriyi de sil
+```
 
-# Frontend (ayrı terminal)
+**Backend:**
+```bash
+python -m venv .venv && .venv/Scripts/activate     # Windows; Linux: source .venv/bin/activate
+pip install -r requirements.txt
+# ÖNEMLİ: kodda load_dotenv YOK — .env'i uvicorn'a açıkça vermek gerekir:
+uvicorn main:app --env-file .env --port 8001 --reload
+```
+
+**Frontend (ayrı terminal):**
+```bash
 cd frontend
 npm install
 npm run dev      # Vite dev server :5173
-
-# Gerekli servisler
-redis-server     # :6379
-# PostgreSQL DSN → .env dosyasına DATABASE_URL
+# veya production build: npm run build → frontend/dist/
 ```
 
-`.env` örneği:
+`.env` örneği (Docker compose ile birebir uyumlu):
 ```env
 REDIS_URL=redis://localhost:6379
-DATABASE_URL=postgresql://user:pass@localhost/shoptimize
+DATABASE_URL=postgresql://shoptimize:shoptimize@localhost:5432/shoptimize
 AUTH_TOKEN_SECRET=super-secret-key-min-32-chars
-SHOPIFY_CLIENT_ID=...
-SHOPIFY_CLIENT_SECRET=...
+SHOPIFY_CLIENT_ID=1e80272ad8faa2261f770841ddee0377
 SHOPIFY_APP_URL=http://localhost:8001
 BILLING_ENABLED=false
+ENABLE_DOCS=true
+DASHBOARD_PASSWORD=devpassword
 ```
 
 ---
@@ -366,4 +377,4 @@ BILLING_ENABLED=false
 - Pixel script **cache'lenir** (`Cache-Control: public, max-age=300`). TID değişirse eski script 5 dakika daha çalışabilir.
 - GDPR `app/uninstalled` webhook veri temizliğini yapar (billing iptali, token boşaltma, Redis event/visitor/flow verisi). `wa_step:*` ve `wa_phone_active:*` anahtarları TTL'e bırakılır; Postgres satırı silinmez.
 - `app/uninstalled` ve `checkouts/*` webhook'ları `shopify.app.toml`'da deklare **edilmez** — yalnız OAuth/token-exchange sırasında runtime'da GraphQL ile kaydedilir.
-- Cihazlar arası sepet kurtarma (cart permalink) kodda hazır ama `CART_PERMALINK_BUTTON=1` bayrağıyla kapalı gelir; açmadan önce şablonun dinamik URL butonlu olması gerekir (bkz. TODOLIST.md 5.5).
+- Cihazlar arası sepet kurtarma (cart permalink) canlıda çalışıyor (`CART_PERMALINK_BUTTON=1`). Permalink yalnız adında "link" geçen dinamik URL butonlu şablonlara eklenir; statik butonlu şablonlar (ör. `sepet_hatirlatma`) etkilenmez — devreye alım merchant bazlı (bkz. TODOLIST.md 5.5).

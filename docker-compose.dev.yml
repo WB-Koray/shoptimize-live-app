@@ -1,0 +1,48 @@
+# Yerel geliştirme bağımlılıkları — Redis + PostgreSQL.
+# Production'da (Coolify) bu servisler ayrıca sağlanır; bu dosya yalnız geliştirme içindir.
+#
+# Kullanım:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down        # durdur (veri kalır)
+#   docker compose -f docker-compose.dev.yml down -v     # veriyi de sil
+#
+# Uygulama .env'i kendisi YÜKLEMEZ (kodda load_dotenv yok, Coolify env enjekte eder).
+# Yerelde çalıştırırken: uvicorn main:app --env-file .env --port 8001
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: shoptimize-dev-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: shoptimize-dev-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: shoptimize
+      POSTGRES_PASSWORD: shoptimize
+      POSTGRES_DB: shoptimize
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      # İlk açılışta şemayı kurar (yalnız pg-data boşken çalışır)
+      - ./scripts/dev-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shoptimize -d shoptimize"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis-data:
+  pg-data:
