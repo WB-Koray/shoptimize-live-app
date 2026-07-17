@@ -1480,10 +1480,42 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
 }
 
 // ── StockDemandWidget — #5 Stok-Talep Alarm ──────────────────────────────────
-// Aynı anda 2+ ziyaretçinin baktığı ürünleri gösterir
+// Aynı anda 2+ ziyaretçinin baktığı ürünleri, kalan stoklarıyla birlikte gösterir.
+// Talep stoğu yakaladığında (viewers >= available) kritik işaretlenir.
 
-function StockDemandWidget({ hotProducts }) {
+function StockDemandWidget({ hotProducts, session }) {
   const { t } = useLang();
+  const { token, username, brand } = session;
+  const [stock, setStock] = useState({});   // handle → { title, available, image }
+
+  // Popüler ürünlerin stok seviyesi. Talep tek başına alarm değil — asıl sinyal
+  // "kaç kişi bakıyor" ile "kaç adet kaldı" arasındaki oran.
+  const handleKey = useMemo(
+    () => [...new Set(hotProducts.map(p => p.handle).filter(Boolean))].sort().join(','),
+    [hotProducts]
+  );
+
+  useEffect(() => {
+    if (!handleKey || !username) return;
+    let cancelled = false;
+    // hotProducts her SSE event'inde yeniden hesaplanıyor; popüler ürün seti
+    // oynadıkça Shopify Admin API'ye arka arkaya sormamak için debounce.
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}` +
+          `&brand=${encodeURIComponent(brand)}&handles=${encodeURIComponent(handleKey)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const d = await r.json();
+        if (!cancelled && d.ok) setStock(d.products || {});
+      } catch {
+        // Stok çekilemezse widget talep tarafıyla çalışmaya devam eder
+      }
+    }, 2000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [handleKey, username, brand, token]);
+
   if (!hotProducts.length) return null;
 
   return (
@@ -1501,6 +1533,12 @@ function StockDemandWidget({ hotProducts }) {
       <div className="divide-y divide-border/40">
         {hotProducts.map(p => {
           const heat = p.viewers >= 5 ? 'text-rose' : p.viewers >= 3 ? 'text-amber-400' : 'text-textDim';
+          // available null → mağaza o üründe stok takibi yapmıyor; sayı gösterme.
+          const available = stock[p.handle]?.available;
+          const tracked   = typeof available === 'number';
+          const soldOut   = tracked && available === 0;
+          // Kritik: talep eldeki stoğu yakaladı ya da geçti → kaçan sipariş riski
+          const critical  = tracked && available > 0 && p.viewers >= available;
           return (
             <div key={p.title} className="flex items-center gap-3 px-4 py-2.5">
               <div className={`flex items-center gap-1 shrink-0 font-bold text-xs tabular-nums ${heat}`}>
@@ -1512,6 +1550,22 @@ function StockDemandWidget({ hotProducts }) {
                 <div className="flex items-center gap-1 shrink-0 text-[10px] font-bold text-green">
                   <ShoppingCart size={10} />
                   <span>{p.cartAdders}</span>
+                </div>
+              )}
+              {soldOut && (
+                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose/15 text-rose">
+                  {t('stock.soldout')}
+                </span>
+              )}
+              {tracked && !soldOut && (
+                <div
+                  className={`flex items-center gap-1 shrink-0 text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ${
+                    critical ? 'bg-rose/15 text-rose' : 'text-textMute'
+                  }`}
+                  title={critical ? t('stock.critical') : undefined}
+                >
+                  {critical && <AlertCircle size={10} />}
+                  <span>{available} {t('stock.left')}</span>
                 </div>
               )}
             </div>
@@ -4749,7 +4803,11 @@ export default function Dashboard({ session, onLogout }) {
       else if (ev.event_type === 'checkout_started' && p.stage !== 'converted') p.stage = 'checkout';
       else if ((ev.event_type === 'cart_viewed' || ev.event_type === 'add_to_cart') && !['checkout','converted'].includes(p.stage)) p.stage = 'cart';
       else if (ev.event_type === 'product_viewed' && p.stage === 'browsing') p.stage = 'product';
-      if (ev.event_type === 'product_viewed' && ev.data?.product_title) p.lastProduct = ev.data.product_title;
+      if (ev.event_type === 'product_viewed' && ev.data?.product_title) {
+        p.lastProduct = ev.data.product_title;
+        // handle stok sorgusu için gerekli (/api/shopify/products/stock handle ile çalışır)
+        if (ev.data?.product_handle) p.lastProductHandle = ev.data.product_handle;
+      }
       // Scroll depth — en yüksek değeri tut
       if (ev.event_type === 'scroll_depth' && ev.data?.depth) {
         if (!p.maxScrollDepth || ev.data.depth > p.maxScrollDepth) p.maxScrollDepth = ev.data.depth;
@@ -4806,8 +4864,9 @@ export default function Dashboard({ session, onLogout }) {
     visitorProfiles
       .filter(p => now - p.lastTs < 30 * 60 * 1000 && p.stage !== 'converted' && p.lastProduct)
       .forEach(p => {
-        if (!counts[p.lastProduct]) counts[p.lastProduct] = { viewers: 0, cartAdders: 0 };
+        if (!counts[p.lastProduct]) counts[p.lastProduct] = { viewers: 0, cartAdders: 0, handle: '' };
         counts[p.lastProduct].viewers++;
+        if (!counts[p.lastProduct].handle && p.lastProductHandle) counts[p.lastProduct].handle = p.lastProductHandle;
         if (['cart', 'checkout'].includes(p.stage)) counts[p.lastProduct].cartAdders++;
       });
     return Object.entries(counts)
@@ -5367,7 +5426,7 @@ export default function Dashboard({ session, onLogout }) {
             <HiddenCartPanel visitors={hiddenCartVisitors} customerNames={customerNames} />
 
             {/* #5 Stok-Talep Alarm */}
-            <StockDemandWidget hotProducts={hotProducts} />
+            <StockDemandWidget hotProducts={hotProducts} session={session} />
 
             {/* Conversion funnel */}
             {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}

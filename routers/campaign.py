@@ -802,13 +802,27 @@ async def list_campaigns(
     """Kampanya geçmişi + istatistikler (teslim/okundu + tıklama/sipariş atfı)."""
     campaigns = await store.list_campaigns(username, brand)
 
-    # Pixel event'lerinden tıklama/sipariş atfı (utm_campaign == kampanya id)
     tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
-    click_vids: dict[str, set] = {}   # cid → tıklayan vid'ler
-    purchase_vids: set = set()        # satın alan vid'ler
-    rev_by_vid: dict[str, float] = {} # vid → ciro
+
+    # Atıf yazma anında kalıcı sayaçlara işleniyor (redis_store._record_attribution),
+    # o yüzden burada sadece okunuyor — event penceresinden bağımsız.
+    attr: dict[str, dict] = {}
     if tid:
+        for c in campaigns:
+            cid = c.get("id", "")
+            if cid:
+                attr[cid] = await store.get_campaign_attribution(tid, cid)
+
+    # Sayacı olmayan kampanyalar sayaç sistemi devreye girmeden önce gönderilmiş →
+    # eski yöntemle (event penceresi taraması) doldur ki geçmiş raporlar boşalmasın.
+    # Pencere dolduğunda bu yol kendiliğinden kurur ve tarama tamamen kalkar.
+    legacy_cids = {c.get("id", "") for c in campaigns
+                   if c.get("id") and not attr.get(c.get("id", ""), {}).get("has_data")}
+    if tid and legacy_cids:
         try:
+            click_vids: dict[str, set] = {}   # cid → tıklayan vid'ler
+            purchase_vids: set = set()        # satın alan vid'ler
+            rev_by_vid: dict[str, float] = {} # vid → ciro
             events = await store.get_recent_events(tid, limit=5000)
             for ev in events:
                 vid = ev.get("vid", "")
@@ -824,20 +838,27 @@ async def list_campaigns(
                         rev_by_vid[vid] = float(val)
                     except (TypeError, ValueError):
                         pass
+            for cid in legacy_cids:
+                clickers = click_vids.get(cid, set())
+                order_vids = clickers & purchase_vids
+                attr[cid] = {
+                    "clicks": len(clickers),
+                    "orders": len(order_vids),
+                    "revenue": round(sum(rev_by_vid.get(v, 0) for v in order_vids), 2),
+                }
         except Exception as e:
-            logger.warning("[CAMPAIGN] atıf hesabı hatası: %s", e)
+            logger.warning("[CAMPAIGN] eski atıf taraması hatası: %s", e)
 
     for c in campaigns:
         cid = c.get("id", "")
         delivery = await store.get_campaign_delivery(username, brand, cid)
+        a = attr.get(cid) or {}
         c.setdefault("stats", {})
         c["stats"]["delivered"] = delivery["delivered"]
         c["stats"]["read"] = delivery["read"]
-        clickers = click_vids.get(cid, set())
-        order_vids = clickers & purchase_vids
-        c["stats"]["clicks"] = len(clickers)
-        c["stats"]["orders"] = len(order_vids)
-        c["stats"]["revenue"] = round(sum(rev_by_vid.get(v, 0) for v in order_vids), 2)
+        c["stats"]["clicks"] = a.get("clicks", 0)
+        c["stats"]["orders"] = a.get("orders", 0)
+        c["stats"]["revenue"] = a.get("revenue", 0)
 
     return {"ok": True, "campaigns": campaigns}
 

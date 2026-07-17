@@ -496,7 +496,14 @@ async def receive_event(request: Request):
     vid = str(body.get("vid", ""))[:32]
     event_type = str(body.get("event_type", ""))[:64]
     url = str(body.get("url", ""))[:512]
-    if await store.is_duplicate(tid, vid, event_type, url):
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+
+    # scroll_depth milestone'ları (25/50/75/100) aynı URL'de saniyeler içinde art arda
+    # gelir — dedup anahtarına milestone'u katmazsak %25'ten sonraki %50 "duplicate"
+    # sanılıp düşer. Yalnız bu event tipine özel: genel payload hash'i add_to_cart'ın
+    # çift sayılmasına yol açar.
+    disc = str(data.get("depth", ""))[:8] if event_type == "scroll_depth" else ""
+    if await store.is_duplicate(tid, vid, event_type, url, disc=disc):
         return JSONResponse({"ok": True, "skipped": "duplicate"})
 
     event = {
@@ -511,7 +518,7 @@ async def receive_event(request: Request):
         "ip": raw_ip[:64] if raw_ip else "",
         "utm": body.get("utm") if isinstance(body.get("utm"), dict) else {},
         "customer_id": str(body.get("customer_id", ""))[:64],
-        "data": body.get("data") if isinstance(body.get("data"), dict) else {},
+        "data": data,
     }
 
     await store.push_event(tid, event)

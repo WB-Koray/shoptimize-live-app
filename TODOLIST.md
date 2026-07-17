@@ -1,7 +1,7 @@
 # 🗺️ Shoptimize Live — Tam Roadmap
 
 > Son güncelleme: 2026-07-17 · Baz commit: `9f05290`
-> Durum: 60 maddenin 36'sı tamam, 5'i kısmi, 19'u açık
+> Durum: 60 maddenin 40'ı tamam, 2'si kısmi, 18'i açık
 > Bu liste kodla doğrulanmıştır — her satırdaki durum `dosya:satır` kanıtına dayanır.
 
 **İşaretler:** ✅ tamam · 🟡 kısmi (aşağıda notu var) · ⏳ açık
@@ -54,7 +54,7 @@
 
 | # | Veri | Zorluk | Durum | Kanıt / Not |
 |---|------|--------|-------|-------------|
-| 2.1 | **Scroll depth** (0–100%) | Orta | 🟡 | `live.py:364-387` — çalışıyor ama **yalnız `/products/` sayfalarında** (`:366`), 0-100 sürekli değil 4 kademeli (25/50/75/100). Ayrıca dedup hatası milestone düşürüyor (aşağıya bak) |
+| 2.1 | **Scroll depth** (0–100%) | Orta | 🟡 | `live.py:364-387` — çalışıyor ama **yalnız `/products/` sayfalarında** (`:366`), 0-100 sürekli değil 4 kademeli (25/50/75/100). Milestone'ları düşüren dedup hatası düzeltildi (`live.py:505`) |
 | 2.2 | **Attention time** | Orta | ✅ | `live.py:389-423` — `visibilitychange` + timer + `beforeunload`/`pagehide`, min 3sn eşiği, tüm sayfa tipleri |
 | 2.3 | **Exit intent** | Kolay | ⏳ | `mousemove`/`mouseleave` listener'ı yok |
 | 2.4 | **Rage click** | Orta | ⏳ | Tek `click` listener'ı (`live.py:347-358`) yalnız checkout linki tespiti yapıyor |
@@ -85,14 +85,14 @@
 | 2 | **Checkout Drop-off Haritası** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:425` (`ConversionFunnelWidget`), veri `:4839` |
 | 3 | **CustomerJourney → Sipariş Filmi** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:781` (`OrderJourneyModal`); backend `live.py:869` |
 | 4 | **Scroll depth + Attention time pixel** | 🔥🔥 | ✅ | Uçtan uca zincir tam: pixel `live.py:364-422` → `Dashboard.jsx:4754-4759` → badge `:329-346`. (Scroll'un kapsam sınırı için 2.1'e bak) |
-| 5 | **Stok-Talep Alarm** | 🔥🔥🔥 | 🟡 | `Dashboard.jsx:1485` — yalnız **talep** tarafı (30dk'da 2+ eşzamanlı bakan). **Stok seviyesi hiç sorgulanmıyor**; `/api/shopify/products/stock` (`live.py:1425`, `totalInventory`) mevcut ama widget'a bağlı değil |
+| 5 | **Stok-Talep Alarm** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:1485` — talep + **stok** birlikte. `/api/shopify/products/stock` (`live.py:1425`) bağlandı; `viewers >= available` ise kritik işaretlenir, stok takibi kapalı üründe sayı gizlenir |
 | 6 | **WA → Sipariş ROI zinciri** | 🔥🔥🔥 | ✅ | `flow.py:747` `/api/flow/roi`; atıf kaynağı `live.py:1555-1568`; panel `Dashboard.jsx:3812` |
 | 7 | **RFM Segmentasyon** | 🔥🔥 | ✅ | `live.py:1246` + `Dashboard.jsx:1068`; 7 segment |
 | 8 | **"Almost Buyer" Radar** | 🔥🔥🔥🔥 | ✅ | `Dashboard.jsx:1627`, risk `:1601`; cart/checkout + 3dk sessizlik |
 | 9 | **Cross-store Benchmarking** | 🔥🔥🔥🔥 | ⏳ | Kodda sıfır iz — gerçekten açık |
 | 10 | **Görünmez Sepet Dedektörü** | 🔥🔥 | ✅ | `Dashboard.jsx:1529`, veri `:4821-4837` |
 
-**Katman 3: 8 ✅ · 1 🟡 · 1 ⏳ (10 madde)**
+**Katman 3: 9 ✅ · 1 ⏳ (10 madde)**
 
 ---
 
@@ -105,12 +105,12 @@
 | 4.3 | **Trial bitiş kontrolü** | ✅ | `auth.py:126-135`. ⚠️ `BILLING_TRIAL_DAYS` varsayılanı **0** (`auth.py:40`) — trial artık Shopify Managed Pricing'de |
 | 4.4 | **Rate limiting** — `/api/live/event` | ✅ | `live.py:491-494` (429); TID 500/60sn, IP 200/60sn (`redis_store.py:54`) |
 | 4.5 | **App/Uninstalled webhook** — veri temizliği | ✅ | `gdpr.py:76-108` — **yapıldı** (2026-06-01). Redis `events:{tid}`, `visitor:*`, `flow_logs:`, `wa_orders:` siliniyor. Eksik: `wa_step:*`/`wa_phone_active:*` TTL'e bırakılmış, Postgres satırı silinmiyor |
-| 4.6 | **Shopify App Store hazırlığı** | 🟡 | Scopes senkron, GDPR webhook'ları toml'da (`:11-21`), privacy sayfası `main.py:529`, kurulum rehberi `main.py:351`. **Eksik:** `app/uninstalled` toml'da yok; listing asset/metni repo'da yok |
-| 4.7 | **Test credentials** — reviewer hesabı | ⏳ | Kodda hiç yok |
+| 4.6 | **Shopify App Store hazırlığı** | ✅ | Uygulama **yayında ve canlı** (Managed Pricing ile). Scopes senkron, GDPR webhook'ları toml'da (`:11-21`), privacy sayfası `main.py:529`, kurulum rehberi `main.py:351`. Listing metni/asset'i Partner Dashboard'da tutulur — repo'da olmaması normal |
+| 4.7 | **Test credentials** — reviewer hesabı | ✅ | Partner Dashboard'da yönetilir, kod deposunda tutulmaz. Review süreci tamamlanmış |
 | 4.8 | **ErrorBoundary** | ✅ | `ErrorBoundary.jsx:4`, `main.jsx:11-17` — ağacın en dışında |
 | 4.9 | **Reauth DB lookup** | ✅ | `auth.py:515` + `lookup_username_by_shop` `:533-540` |
 
-**Katman 4: 7 ✅ · 1 🟡 · 1 ⏳ (9 madde)**
+**Katman 4: 9 ✅ (9 madde)**
 
 ---
 
@@ -124,7 +124,7 @@
 | 5.2 | **WhatsApp kurulum** — Embedded Signup (Facebook ile bağla), Hızlı Bağlan (sadece token), şablon yöneticisi | ✅ | `flow.py:362` (wa-connect), `:534-560` (ES config+exchange), WaTemplateManager. ES yalnız 3 env dolu ise görünür |
 | 5.3 | **Admin/operatör paneli** — sağlık monitörü, anlık WA bildirimleri, MRR/dönüşüm, nudge, CSV | ✅ | `admin.py` (8 endpoint), `notify.py`, `AdminPanel.jsx`, health worker `main.py:232` |
 | 5.4 | **Billing → Shopify Managed Pricing** geçişi | ✅ | `auth.py:42-52`, `:917-919`. ⚠️ `billing.py`'de legacy ölü kod kaldı |
-| 5.5 | **Cihazlar arası sepet kurtarma** (cart permalink) | 🟡 | `wa_sender.py:47-60`, `:266-286`; `live.py:1701`; `flow.py:177`. **Kod hazır, env bayrağıyla kapalı — en net açık madde** |
+| 5.5 | **Cihazlar arası sepet kurtarma** (cart permalink) | ✅ | `wa_sender.py:47-60`, `:266-286`; `live.py:1701`; `flow.py:177`. **Canlıda çalışıyor** — `CART_PERMALINK_BUTTON=1` açık, `_link` şablonları Meta onaylı. Devreye alma merchant bazlı: sekansı `_link` şablonuna bakan merchant permalink alır (welcomebaby), statik şablonda kalan güvenle eski davranışta kalır (soley). Müşteri masaüstünde sepete atsa da mobilde linke tıklayınca sepet yeniden kuruluyor, üyelik gerekmiyor |
 | 5.6 | **GDPR + Meta Data Deletion Callback** | ✅ | `gdpr.py` (4 webhook, gerçek temizlik), `flow.py:499-525` |
 | 5.7 | **Güvenlik sertleştirme** — `/docs` production'da kapalı, güvenlik başlıkları, HMAC + legacy secret fallback, 404 gürültü susturma | ✅ | `main.py:29-51`, `:302-333`; `gdpr.py:26-35`. CORS `*` pixel için bilinçli |
 | 5.8 | **i18n TR/EN + slate tema + KVKK anonimleştirme** | ✅ | `i18n.js` (509/509 anahtar, TR/EN farkı yok), `ThemeContext.jsx`, `Dashboard.jsx:43` (`maskName`) |
@@ -137,7 +137,7 @@
 
 > **Canlı Mod** (tam ekran izleme) 2026-06-30'da eklenip **2026-07-01'de revert edildi** (`61a6b61`) — ihtiyaç kalmadı. Kodda iz yok, roadmap maddesi değil.
 
-**Katman 5: 13 ✅ · 1 🟡 (14 madde)**
+**Katman 5: 14 ✅ (14 madde)**
 
 ---
 
@@ -147,11 +147,11 @@ Roadmap maddesi değil ama kodda duran, kanıtlanmış açıklar:
 
 | Konu | Yer | Not |
 |------|-----|-----|
-| **Cart permalink bayrağı kapalı** | `wa_sender.py:271` | `os.getenv("CART_PERMALINK_BUTTON") == "1"` — katı karşılaştırma, `true`/`yes` çalışmaz (`BILLING_ENABLED`'ın toleranslı parse'ının aksine). Ayrıca şablon adında "link" geçme şartı var. Açmadan önce dinamik URL butonlu şablon Meta onayından geçmeli |
-| **Dedup, scroll milestone'larını düşürüyor** | `redis_store.py:86-90` | Dedup anahtarı `data` payload'ını içermiyor → aynı URL'de 10sn içindeki 2. `scroll_depth` (örn. %25 sonra %50) "duplicate" sayılıp atılıyor. 2.1'i fiilen kısmi tutan sebep |
+| **Yeni merchant `_link` şablonu almıyor** | `flow.py:28-55` | `_DEFAULT_TEMPLATES` hâlâ statik butonlu şablon üretiyor (`button_url: .../cart`), `DEFAULT_SEQUENCE` (`flow.py:264-268`) de statik adlara bakıyor. Şablonlar merchant'ın kendi WABA'sında oluştuğu için her yeni mağazada `_link` varyantını elle kurmak gerekiyor. Cart permalink'in yayılmasını yavaşlatan tek engel |
+| **Cart permalink bayrağı katı parse** | `wa_sender.py:271` | `os.getenv("CART_PERMALINK_BUTTON") == "1"` — `true`/`yes` çalışmaz (`BILLING_ENABLED`'ın toleranslı parse'ının aksine). Şu an `1` set edildiği için sorun çıkarmıyor, ama ileride tuzak |
 | **`billing.py` ölü kod (~12KB)** | `billing.py:46-149` | `create_charge()` hiçbir yerden çağrılmıyor; `/billing/callback` de onun `return_url`'iydi → o da yetim. Managed Pricing geçişinden kalma. Frontend'in kullandığı tek endpoint `/billing/info` |
 | **Trial uyarısı fiilen ölü** | `main.py:245`, `:270` | `BILLING_TRIAL_DAYS` varsayılanı 0 → `if TRIAL_DAYS > 0` bloğu hiç çalışmıyor |
-| **Kampanya atıf tavanı** | `campaign.py:815` | `get_recent_events(tid, limit=5000)` — yoğun mağazada eski event düşer, atıf sessizce eksilir. `/recipients` ayrıca `orders limit=200` + 14 gün penceresiyle sınırlı. Atıf vid-kesişimine dayanıyor, doğrudan `order_id` bağı yok |
+| **`/recipients` atıf penceresi** | `campaign.py` | Kişi bazlı takip hâlâ `orders limit=200` + 14 gün penceresiyle sınırlı. `/list` kalıcı sayaçlara geçti ama `/recipients` Shopify sipariş eşleştirmesi yaptığı için ayrı mekanizma — büyük mağazada eksik gösterebilir |
 | **Worker süpervizyonu yok** | `main.py:294-296` | Üçü de `asyncio.create_task` fire-and-forget; döngü içi `try/except` var ama task ölürse yeniden başlatan yok |
 | **Ölü i18n anahtarları** | `i18n.js:450-497`, `:1039-1086` | Canlı Mod'dan kalan 96 `mon.*` anahtarı (48 EN + 48 TR), hiçbir `.jsx` kullanmıyor. Revert commit'i bilinçli bıraktı |
 | **Kullanılmayan Polaris component'leri** | `frontend/src/components/` | `ConversionFunnel.jsx`, `EventFeed.jsx`, `LiveVisitors.jsx`, `ProductStats.jsx`, `UTMSources.jsx` + `hooks/useSSE.js` hiçbir yerden import edilmiyor — Dashboard kendi inline widget'larını kullanıyor |
@@ -162,22 +162,20 @@ Roadmap maddesi değil ama kodda duran, kanıtlanmış açıklar:
 ## 🎯 Önerilen Sıradaki Adımlar
 
 ### Kısa vadeli
-1. **`5.5` Cart permalink'i canlıya al** — kod hazır; dinamik URL butonlu şablonu Meta onayına gönder, sonra `CART_PERMALINK_BUTTON=1` bayrağını aç. En düşük eforlu en yüksek getiri
-2. **Dedup hatasını düzelt** (`redis_store.py:86-90`) — anahtara milestone değerini kat; 2.1 tam ✅ olur
-3. **`4.6` App Store hazırlığı** — `app/uninstalled`'ı `shopify.app.toml`'a ekle, listing metnini yaz
-4. **`4.7` Reviewer test hesabı** — App Store başvurusunun ön şartı
+1. **Cart permalink'i yeni merchant'lara yay** — `_DEFAULT_TEMPLATES` + `DEFAULT_SEQUENCE`'i `_link` varyantlarına çevir, böylece her yeni mağaza elle kurulum gerektirmeden cihazlar arası sepet kurtarma alsın
+2. **`2.1` Scroll depth'i tüm sayfa tiplerine yay** — şu an yalnız `/products/`; dedup düzeltildikten sonra tek kalan sınır bu
+3. **`1.1` `checkouts/update` ayrımı** — `x-shopify-topic` header'ını oku, create'ten ayır (checkout adım adım takibi bundan kaybediliyor)
 
 ### Orta vadeli
-5. **`3.5` Stok-Talep Alarmı'nı tamamla** — `/api/shopify/products/stock` zaten var, widget'a bağla (küçük iş, 🔥🔥🔥 etki)
-6. **`2.1` Scroll depth'i tüm sayfa tiplerine yay** — şu an yalnız `/products/`
-7. **`1.1` `checkouts/update` ayrımı** — `x-shopify-topic` header'ını oku, create'ten ayır
-8. **Ölü kod temizliği** — `billing.py` legacy, `mon.*` i18n, kullanılmayan Polaris component'leri
-9. **`2.3` Exit intent** — Katman 2'nin en kolay maddesi
+4. **Ölü kod temizliği** — `billing.py` legacy (~12KB), `mon.*` i18n (96 anahtar), kullanılmayan 5 Polaris component'i
+5. **`/recipients` atıf penceresi** — `/list` kalıcı sayaçlara geçti, kişi bazlı takip hâlâ 200 sipariş / 14 gün ile sınırlı
+6. **`2.3` Exit intent** — Katman 2'nin en kolay maddesi, bir `mouseleave` listener'ı
+7. **Worker süpervizyonu** — üç worker da fire-and-forget; task ölürse yeniden başlatan yok
 
 ### Uzun vadeli
-10. **`3.9` Cross-store benchmarking** — SaaS avantajı, en yüksek etki
-11. **`1.2` `predictedSpendTier`** entegrasyonu — Shopify ML'i RFM'e kat
-12. **`1.1` Gerçek zamanlı sepet** (`carts/create` + `carts/update`) — pixel'e bağımlılığı azaltır
+8. **`3.9` Cross-store benchmarking** — SaaS avantajı, en yüksek etki (🔥🔥🔥🔥), Katman 3'ün son açık maddesi
+9. **`1.2` `predictedSpendTier`** entegrasyonu — Shopify ML'i RFM'e kat
+10. **`1.1` Gerçek zamanlı sepet** (`carts/create` + `carts/update`) — pixel'e bağımlılığı azaltır
 
 ---
 
@@ -187,7 +185,9 @@ Roadmap maddesi değil ama kodda duran, kanıtlanmış açıklar:
 |--------|--------|-----|-----|-----|
 | Katman 1 (Shopify API) | 17 | 7 | 1 | 9 |
 | Katman 2 (Pixel) | 10 | 1 | 1 | 8 |
-| Katman 3 (Analytics) | 10 | 8 | 1 | 1 |
-| Katman 4 (Altyapı) | 9 | 7 | 1 | 1 |
-| Katman 5 (26 Mayıs sonrası) | 14 | 13 | 1 | 0 |
-| **Toplam** | **60** | **36** | **5** | **19** |
+| Katman 3 (Analytics) | 10 | 9 | 0 | 1 |
+| Katman 4 (Altyapı) | 9 | 9 | 0 | 0 |
+| Katman 5 (26 Mayıs sonrası) | 14 | 14 | 0 | 0 |
+| **Toplam** | **60** | **40** | **2** | **18** |
+
+Kalan 18 açık maddenin 8'i Katman 2 (pixel davranış sinyalleri), 9'u Katman 1 (ek scope isteyen webhook'lar + Shopify ML alanları), 1'i Katman 3 (cross-store benchmarking). Altyapı ve 26 Mayıs sonrası iş kollarında açık madde kalmadı.

@@ -19,6 +19,11 @@ _MAX_EVENTS = 5000
 _VISITOR_TTL = 600       # 10 dakika
 _EVENTS_TTL  = 86400 * 7  # 7 gün
 
+# Kampanya atıf sayaçları — event listesi 5000'de kırpıldığı ve 7 günde düştüğü için
+# atıf okuma anında türetilemez; yazma anında bu kalıcı anahtarlara işlenir.
+_ATTR_TTL     = 86400 * 180  # kampanya sayaçlarının rapor ömrü (6 ay)
+_VID_CAMP_TTL = 86400 * 30   # tıklama → sipariş atıf penceresi
+
 
 class RedisStore:
     def __init__(self):
@@ -83,9 +88,19 @@ class RedisStore:
         except Exception:
             pass
 
-    async def is_duplicate(self, tid: str, vid: str, event_type: str, url: str, window_sec: int = 10) -> bool:
+    async def is_duplicate(self, tid: str, vid: str, event_type: str, url: str,
+                           window_sec: int = 10, disc: str = "") -> bool:
+        """Aynı ziyaretçiden aynı URL'de kısa sürede tekrarlayan event'i eler.
+
+        disc: aynı URL'de bilinçli olarak art arda gelen event'leri ayırmak için
+        (ör. scroll_depth milestone'ları). Boş bırakılırsa event tipi + URL yeter.
+        DİKKAT: disc'i payload'ın tamamından türetme — add_to_cart 4 ayrı yoldan
+        tetikleniyor ve çift saymayı engelleyen tek şey bu dedup.
+        """
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
         key = f"dedup:{tid}:{vid}:{event_type}:{url_hash}"
+        if disc:
+            key = f"{key}:{disc}"
         result = await self._redis.set(key, "1", ex=window_sec, nx=True)
         return result is None
 
@@ -104,6 +119,91 @@ class RedisStore:
             await self._redis.setex(f"visitor:{tid}:{vid}", _VISITOR_TTL, "1")
 
         await self._redis.publish(f"live:{tid}", raw)
+        await self._record_attribution(tid, event)
+
+    # ── Kampanya atfı ────────────────────────────────────────────────────────
+    # Atıf yazma anında hesaplanır. Okuma anında event listesinden türetmek
+    # 5000 event / 7 gün tavanına takılıyor ve eski kampanyalar sessizce 0
+    # sipariş gösteriyordu. push_event tüm event yollarının (pixel + orders/create
+    # webhook) tek geçiş noktası olduğu için kanca burada.
+
+    async def _record_attribution(self, tid: str, event: dict) -> None:
+        vid = event.get("vid", "")
+        if not vid:
+            return
+        utm = event.get("utm") or {}
+        # Yalnız uygulamanın kendi ürettiği kampanya linkleri (campaign.py:
+        # "utm_source=whatsapp&utm_medium=campaign&utm_campaign={id}").
+        # Pixel, fbclid/gclid gördüğünde utm_campaign'i "Facebook Ads"/"Google Ads"
+        # diye kendisi de dolduruyor — o trafiğe sayaç açmak çöp anahtar üretirdi.
+        # Bu filtre ayrıca sıcak yolu korur: UTM sessionStorage'da saklanıp HER
+        # event'te gönderiliyor, yoksa her ziyaretçi her event'te sayaca yazardı.
+        if utm.get("utm_medium") == "campaign":
+            cid = str(utm.get("utm_campaign", ""))[:64]
+            if cid:
+                await self.record_campaign_click(tid, cid, vid)
+        if event.get("event_type") == "checkout_completed":
+            d = event.get("data") or {}
+            val = d.get("value") or d.get("total") or d.get("total_price") or d.get("price") or 0
+            try:
+                rev = float(val)
+            except (TypeError, ValueError):
+                rev = 0.0
+            await self.record_campaign_purchase(tid, vid, rev)
+
+    async def record_campaign_click(self, tid: str, cid: str, vid: str) -> None:
+        """Kampanya linkine tıklayanı kalıcı olarak işaretler + ters indeksi kurar."""
+        if not (tid and cid and vid):
+            return
+        try:
+            pipe = self._redis.pipeline()
+            pipe.sadd(f"camp_clickers:{tid}:{cid}", vid)
+            pipe.expire(f"camp_clickers:{tid}:{cid}", _ATTR_TTL)
+            # Ters indeks: sipariş geldiğinde bu vid hangi kampanyalara atfedilecek?
+            pipe.sadd(f"vid_camps:{tid}:{vid}", cid)
+            pipe.expire(f"vid_camps:{tid}:{vid}", _VID_CAMP_TTL)
+            await pipe.execute()
+        except Exception as e:
+            logger.warning("[ATTR] tıklama kaydı hatası (tid=%s cid=%s): %s", tid[:16], cid, e)
+
+    async def record_campaign_purchase(self, tid: str, vid: str, revenue: float) -> None:
+        """Satın almayı, ziyaretçinin tıkladığı her kampanyaya sipariş + ciro olarak işler.
+        Aynı vid aynı kampanyada iki kez sayılmaz (set semantiği — eski davranışla aynı)."""
+        if not (tid and vid):
+            return
+        try:
+            cids = await self._redis.smembers(f"vid_camps:{tid}:{vid}")
+            for cid in cids or []:
+                added = await self._redis.sadd(f"camp_orders:{tid}:{cid}", vid)
+                await self._redis.expire(f"camp_orders:{tid}:{cid}", _ATTR_TTL)
+                if added and revenue:
+                    await self._redis.hincrbyfloat(f"camp_rev:{tid}", cid, revenue)
+                    await self._redis.expire(f"camp_rev:{tid}", _ATTR_TTL)
+        except Exception as e:
+            logger.warning("[ATTR] sipariş kaydı hatası (tid=%s vid=%s): %s", tid[:16], vid[:8], e)
+
+    async def get_campaign_attribution(self, tid: str, cid: str) -> dict:
+        """Kalıcı sayaçlardan kampanya atfı.
+        has_data=False → kampanya bu sistem devreye girmeden önce gönderilmiş;
+        çağıran eski event taraması yoluna düşmeli."""
+        empty = {"clicks": 0, "orders": 0, "revenue": 0.0, "has_data": False}
+        if not (tid and cid):
+            return empty
+        try:
+            pipe = self._redis.pipeline()
+            pipe.scard(f"camp_clickers:{tid}:{cid}")
+            pipe.scard(f"camp_orders:{tid}:{cid}")
+            pipe.hget(f"camp_rev:{tid}", cid)
+            clicks, orders, rev = await pipe.execute()
+            return {
+                "clicks": int(clicks or 0),
+                "orders": int(orders or 0),
+                "revenue": round(float(rev or 0), 2),
+                "has_data": bool(clicks or orders),
+            }
+        except Exception as e:
+            logger.warning("[ATTR] okuma hatası (tid=%s cid=%s): %s", tid[:16], cid, e)
+            return empty
 
     async def get_recent_events(self, tid: str, limit: int = 200) -> list[dict]:
         limit = min(limit, _MAX_EVENTS)

@@ -245,6 +245,9 @@ const translations = {
     // #5 Stock Demand Alert
     'stock.title':   'Hot Products',
     'stock.subtitle':'2+ simultaneous viewers',
+    'stock.left':    'left',
+    'stock.soldout': 'Sold out',
+    'stock.critical':'Demand has caught up with stock — risk of lost orders',
 
     // #10 Hidden Cart Detector
     'hcart.title':        'Hidden Cart',
@@ -838,6 +841,9 @@ const translations = {
     // #5 Stok-Talep Alarm
     'stock.title':   'Popüler Ürünler',
     'stock.subtitle':'Eş zamanlı 2+ ziyaretçi',
+    'stock.left':    'adet',
+    'stock.soldout': 'Tükendi',
+    'stock.critical':'Talep stoğu yakaladı — kaçan sipariş riski',
 
     // #10 Görünmez Sepet Dedektörü
     'hcart.title':        'Görünmez Sepet',
