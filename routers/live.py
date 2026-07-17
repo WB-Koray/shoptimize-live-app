@@ -892,7 +892,7 @@ async def get_order_journey(
     oid = str(order_id).strip()
     gid = oid if oid.startswith("gid://") else f"gid://shopify/Order/{oid}"
 
-    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    gql_url = f"https://{domain.replace('https://', '').replace('http://', '').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
     headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
 
     try:
@@ -1290,7 +1290,7 @@ async def get_rfm_segments(
         return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı — admin API token gerekli"}, status_code=400)
 
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    gql_url = f"https://{domain.replace('https://', '').replace('http://', '').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
     headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
     q_filter = f"created_at:>{since}"
 
@@ -1411,6 +1411,9 @@ async def get_rfm_segments(
 # Ürün stok endpoint'i — AdProductGrid widget için
 # ---------------------------------------------------------------------------
 
+# NOT: Yalnız Product alanları sorgulanır (read_products yeterli). ProductVariant.
+# inventoryQuantity read_inventory ister ve endpoint onu kullanmıyordu — çıkarıldı ki
+# ek scope gerekmesin.
 _PRODUCTS_STOCK_GQL = """
 query ProductsStock($query: String!) {
   products(first: 30, query: $query) {
@@ -1420,9 +1423,6 @@ query ProductsStock($query: String!) {
       totalInventory
       tracksInventory
       featuredImage { url }
-      variants(first: 1) {
-        nodes { inventoryQuantity }
-      }
     }
   }
 }
@@ -1447,7 +1447,7 @@ async def get_products_stock(
     if not handle_list:
         return {"ok": True, "products": {}}
 
-    gql_url = f"https://{domain.lstrip('https://').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+    gql_url = f"https://{domain.replace('https://', '').replace('http://', '').rstrip('/')}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
     headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
     handle_filter = " OR ".join(f"handle:{h}" for h in handle_list)
 
@@ -1458,6 +1458,16 @@ async def get_products_stock(
             if r.status_code != 200:
                 return JSONResponse({"ok": False, "error": f"Shopify {r.status_code}"}, status_code=502)
             data = r.json()
+            # GraphQL access-denied HTTP 200 + {"errors":[...], "data":null} döner.
+            # Eskiden sessizce "boş stok" gibi görünüyordu; scope eksikse (read_products
+            # yoksa) burada yüzeye çıkar ve teşhis kolaylaşır.
+            if data.get("errors"):
+                logger.warning("[STOCK] GraphQL hata (scope eksik olabilir — read_products?): %s",
+                               str(data["errors"])[:400])
+                return JSONResponse(
+                    {"ok": False, "error": "graphql_error", "detail": data["errors"]},
+                    status_code=502,
+                )
             nodes = ((data.get("data") or {}).get("products") or {}).get("nodes", [])
             products = {}
             for node in nodes:

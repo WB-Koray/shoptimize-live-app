@@ -34,7 +34,7 @@ DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 OPERATOR_WA_TOKEN    = os.getenv("OPERATOR_WA_TOKEN", "")
 OPERATOR_WA_PHONE_ID = os.getenv("OPERATOR_WA_PHONE_ID", "")
 
-SCOPES = "read_checkouts,read_customers,read_orders"
+SCOPES = "read_checkouts,read_customers,read_orders,read_products"
 BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
 # Managed Pricing: deneme süresi Shopify plan'ında yönetilir → app tarafı 0 (kapalı).
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))

@@ -85,14 +85,14 @@
 | 2 | **Checkout Drop-off Haritası** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:425` (`ConversionFunnelWidget`), veri `:4839` |
 | 3 | **CustomerJourney → Sipariş Filmi** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:781` (`OrderJourneyModal`); backend `live.py:869` |
 | 4 | **Scroll depth + Attention time pixel** | 🔥🔥 | ✅ | Uçtan uca zincir tam: pixel `live.py:364-422` → `Dashboard.jsx:4754-4759` → badge `:329-346`. (Scroll'un kapsam sınırı için 2.1'e bak) |
-| 5 | **Stok-Talep Alarm** | 🔥🔥🔥 | ✅ | `Dashboard.jsx:1485` — talep + **stok** birlikte. `/api/shopify/products/stock` (`live.py:1425`) bağlandı; `viewers >= available` ise kritik işaretlenir, stok takibi kapalı üründe sayı gizlenir |
+| 5 | **Stok-Talep Alarm** | 🔥🔥🔥 | 🟡 | `Dashboard.jsx:1485` — talep + **stok** birlikte. Kod tam ve doğru; endpoint (`live.py:1432`) çalışıyor. **AMA `read_products` scope'u gerektiriyor** — eklendi (`shopify.app.toml:25`), her merchant re-consent verene kadar stok sayıları boş kalır. Scope gelince sayılar görünür, `viewers >= available` ise kritik işaretlenir |
 | 6 | **WA → Sipariş ROI zinciri** | 🔥🔥🔥 | ✅ | `flow.py:747` `/api/flow/roi`; atıf kaynağı `live.py:1555-1568`; panel `Dashboard.jsx:3812` |
 | 7 | **RFM Segmentasyon** | 🔥🔥 | ✅ | `live.py:1246` + `Dashboard.jsx:1068`; 7 segment |
 | 8 | **"Almost Buyer" Radar** | 🔥🔥🔥🔥 | ✅ | `Dashboard.jsx:1627`, risk `:1601`; cart/checkout + 3dk sessizlik |
 | 9 | **Cross-store Benchmarking** | 🔥🔥🔥🔥 | ⏳ | Kodda sıfır iz — gerçekten açık |
 | 10 | **Görünmez Sepet Dedektörü** | 🔥🔥 | ✅ | `Dashboard.jsx:1529`, veri `:4821-4837` |
 
-**Katman 3: 9 ✅ · 1 ⏳ (10 madde)**
+**Katman 3: 8 ✅ · 1 🟡 · 1 ⏳ (10 madde)** — #5 kod tam, `read_products` re-consent'ine bağlı
 
 ---
 
@@ -185,9 +185,16 @@ Roadmap maddesi değil ama kodda duran, kanıtlanmış açıklar:
 |--------|--------|-----|-----|-----|
 | Katman 1 (Shopify API) | 17 | 7 | 1 | 9 |
 | Katman 2 (Pixel) | 10 | 1 | 1 | 8 |
-| Katman 3 (Analytics) | 10 | 9 | 0 | 1 |
+| Katman 3 (Analytics) | 10 | 8 | 1 | 1 |
 | Katman 4 (Altyapı) | 9 | 9 | 0 | 0 |
 | Katman 5 (26 Mayıs sonrası) | 14 | 14 | 0 | 0 |
-| **Toplam** | **60** | **40** | **2** | **18** |
+| **Toplam** | **60** | **39** | **3** | **18** |
+
+> ⚠️ **Deploy notu — `read_products` scope eklendi:** Stok-Talep Alarmı (#3.5) için
+> `shopify.app.toml` ve `auth.py`'ye `read_products` eklendi. Bu **tüm merchant'ların
+> uygulamayı yeniden onaylamasını** gerektirir — Shopify bir sonraki açılışta yeni izin
+> için onay ekranı gösterir. Onay verilene kadar o merchant'ta stok sayıları boş kalır
+> (widget talep tarafıyla çalışmaya devam eder). Aynı scope RFM/attribution gibi ürün
+> verisi isteyen gelecek özelliklere de kapı açar.
 
 Kalan 18 açık maddenin 8'i Katman 2 (pixel davranış sinyalleri), 9'u Katman 1 (ek scope isteyen webhook'lar + Shopify ML alanları), 1'i Katman 3 (cross-store benchmarking). Altyapı ve 26 Mayıs sonrası iş kollarında açık madde kalmadı.
