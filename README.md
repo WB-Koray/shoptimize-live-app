@@ -364,4 +364,6 @@ BILLING_ENABLED=false
 - PostgreSQL bağlantısı **sync** (psycopg2) — her `get_setting` çağrısı yeni bağlantı açar. Yoğun endpoint'lerde async driver geçişi düşünülmeli.
 - Online token (OAuth) **short-lived** — süresi dolunca 403 döner. Token öncelik sırası her Shopify API endpoint'inde mutlaka uygulanmalı.
 - Pixel script **cache'lenir** (`Cache-Control: public, max-age=300`). TID değişirse eski script 5 dakika daha çalışabilir.
-- GDPR `app/uninstalled` webhook henüz veri temizliği yapmıyor (bkz. TODOLIST.md 4.5).
+- GDPR `app/uninstalled` webhook veri temizliğini yapar (billing iptali, token boşaltma, Redis event/visitor/flow verisi). `wa_step:*` ve `wa_phone_active:*` anahtarları TTL'e bırakılır; Postgres satırı silinmez.
+- `app/uninstalled` ve `checkouts/*` webhook'ları `shopify.app.toml`'da deklare **edilmez** — yalnız OAuth/token-exchange sırasında runtime'da GraphQL ile kaydedilir.
+- Cihazlar arası sepet kurtarma (cart permalink) kodda hazır ama `CART_PERMALINK_BUTTON=1` bayrağıyla kapalı gelir; açmadan önce şablonun dinamik URL butonlu olması gerekir (bkz. TODOLIST.md 5.5).
