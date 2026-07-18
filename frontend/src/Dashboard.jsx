@@ -230,10 +230,47 @@ function StatCard({ label, sub, value, icon: Icon, color = 'blue', pulse, onClic
   );
 }
 
+// ── useStockLevels — handle listesi için Shopify stok seviyesi ─────────────────
+// /api/shopify/products/stock endpoint'inden {handle: {available, ...}} döner.
+// read_products scope gerektirir; scope yoksa endpoint 502 döner ve boş kalır.
+// hotProducts/productStats her SSE event'inde degistiginden fetch 2sn debounce'lu.
+function useStockLevels(handles, session) {
+  const { token, username, brand } = session || {};
+  const [stock, setStock] = useState({});
+  const handleKey = useMemo(
+    () => [...new Set((handles || []).filter(Boolean))].sort().join(','),
+    [handles]
+  );
+  useEffect(() => {
+    if (!handleKey || !username) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}` +
+          `&brand=${encodeURIComponent(brand || 'default')}&handles=${encodeURIComponent(handleKey)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const d = await r.json();
+        if (!cancelled && d.ok) setStock(d.products || {});
+      } catch {
+        // Stok cekilemezse tuketen bilesenler stok gostermeden calismaya devam eder
+      }
+    }, 2000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [handleKey, username, brand, token]);
+  return stock;
+}
+
+
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
-function ProductCard({ product, flash }) {
+function ProductCard({ product, flash, available }) {
   const { t } = useLang();
+  // available: sayi -> stok takibi var; undefined/null -> takip yok veya scope yok.
+  const tracked  = typeof available === 'number';
+  const soldOut  = tracked && available === 0;
+  const lowStock = tracked && available > 0 && available <= 5;
   return (
     <div className={`bg-surfaceSoft border rounded-xl overflow-hidden transition-all duration-300
       ${flash ? 'border-purple/50 shadow-lg' : 'border-border'}`}>
@@ -249,6 +286,14 @@ function ProductCard({ product, flash }) {
           <Eye size={10} className="text-purple" />
           <span className={`text-xs font-bold tabular-nums ${flash ? 'text-purple' : 'text-text'}`}>{product.views}</span>
         </div>
+        {/* Stok rozeti — sol üst köşe (görüntüleme rozetinin karşısı) */}
+        {tracked && (
+          <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 backdrop-blur-sm px-2 py-0.5 rounded-full
+            ${soldOut ? 'bg-rose/85 text-white' : lowStock ? 'bg-amber-500/85 text-white' : 'bg-bg/80 text-text'}`}>
+            <Package size={10} className={soldOut || lowStock ? 'text-white' : 'text-textDim'} />
+            <span className="text-xs font-bold tabular-nums">{soldOut ? t('stock.soldout') : available}</span>
+          </div>
+        )}
       </div>
       <div className="p-2.5 space-y-1.5">
         <p className="text-text text-[11px] font-semibold leading-tight line-clamp-2" title={product.title}>{product.title}</p>
@@ -1485,36 +1530,9 @@ function AdProductGrid({ utmStats, session, customerNames = {} }) {
 
 function StockDemandWidget({ hotProducts, session }) {
   const { t } = useLang();
-  const { token, username, brand } = session;
-  const [stock, setStock] = useState({});   // handle → { title, available, image }
-
   // Popüler ürünlerin stok seviyesi. Talep tek başına alarm değil — asıl sinyal
   // "kaç kişi bakıyor" ile "kaç adet kaldı" arasındaki oran.
-  const handleKey = useMemo(
-    () => [...new Set(hotProducts.map(p => p.handle).filter(Boolean))].sort().join(','),
-    [hotProducts]
-  );
-
-  useEffect(() => {
-    if (!handleKey || !username) return;
-    let cancelled = false;
-    // hotProducts her SSE event'inde yeniden hesaplanıyor; popüler ürün seti
-    // oynadıkça Shopify Admin API'ye arka arkaya sormamak için debounce.
-    const timer = setTimeout(async () => {
-      try {
-        const r = await fetch(
-          `${API_URL}/api/shopify/products/stock?username=${encodeURIComponent(username)}` +
-          `&brand=${encodeURIComponent(brand)}&handles=${encodeURIComponent(handleKey)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const d = await r.json();
-        if (!cancelled && d.ok) setStock(d.products || {});
-      } catch {
-        // Stok çekilemezse widget talep tarafıyla çalışmaya devam eder
-      }
-    }, 2000);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [handleKey, username, brand, token]);
+  const stock = useStockLevels(hotProducts.map(p => p.handle), session);
 
   if (!hotProducts.length) return null;
 
@@ -4913,7 +4931,8 @@ export default function Dashboard({ session, onLogout }) {
       const d = ev.data || {};
       if (ev.event_type === 'product_viewed' && (d.product_title || d.product_handle)) {
         const key = d.product_id || d.product_handle || d.product_title;
-        if (!map[key]) map[key] = { key, title: d.product_title || key, image: d.product_image || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
+        if (!map[key]) map[key] = { key, title: d.product_title || key, handle: d.product_handle || '', image: d.product_image || '', price: d.product_price || '', vendor: d.product_vendor || '', views: 0, carts: 0, lastTs: ev.ts };
+        if (!map[key].handle && d.product_handle) map[key].handle = d.product_handle;  // handle sonraki event'te gelmişse yakala
         map[key].views++;
         if (ev.ts > map[key].lastTs) map[key].lastTs = ev.ts;
       }
@@ -4930,6 +4949,14 @@ export default function Dashboard({ session, onLogout }) {
     }
     return Object.values(map).sort((a, b) => b.views - a.views).slice(0, 12);
   }, [events]);
+
+  // En çok görüntülenen ürünlerin stok seviyesi (ProductCard köşe rozeti için).
+  // Yalnız Analiz sekmesi açıkken sorgula — diğer sekmelerde bu grid görünmüyor,
+  // boş handle geçerek gereksiz Shopify isteğini önlüyoruz.
+  const prodStock = useStockLevels(
+    activeView === 'live' && liveTab === 'analytics' ? productStats.map(p => p.handle) : [],
+    session
+  );
 
   const searchStats = useMemo(() => {
     const map = {};
@@ -5530,7 +5557,7 @@ export default function Dashboard({ session, onLogout }) {
               {prodOpen && (
                 productStats.length > 0
                   ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
-                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} />)}
+                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} available={prodStock[p.handle]?.available} />)}
                     </div>
                   : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_products')}</p>
               )}
