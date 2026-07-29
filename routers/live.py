@@ -1859,9 +1859,14 @@ async def wa_webhook_verify(
 ):
     import os
     expected = os.getenv("WA_WEBHOOK_VERIFY_TOKEN", "shoptimize_wa_verify")
-    if hub_mode == "subscribe" and hub_verify_token == expected:
-        return Response(content=hub_challenge, media_type="text/plain")
-    return JSONResponse({"ok": False}, status_code=403)
+    # Meta doğrulaması: hub.mode=subscribe + doğru token → challenge döndür.
+    if hub_mode == "subscribe":
+        if hub_verify_token == expected:
+            return Response(content=hub_challenge, media_type="text/plain")
+        return JSONResponse({"ok": False}, status_code=403)  # gerçek doğrulama, yanlış token
+    # Parametresiz düz GET (uptime/health probe) — 200 dön ki log 403 seliyle
+    # dolmasın ve poller'lar memnun olsun. Veri sızmaz; Meta bu yolu kullanmaz.
+    return JSONResponse({"ok": True})
 
 
 @router.post("/api/wa/webhook")
