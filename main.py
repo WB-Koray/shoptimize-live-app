@@ -343,7 +343,17 @@ app.include_router(campaign.media_router)
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "shoptimize-live"}
+    # pixel_sha: calisan kodun pixel sablonunun kisa hash'i. Deploy'un gercekten
+    # yeni kodu aldigini dogrulamak icin — "push ettim ama canlida yok" durumunu
+    # tahmin etmeden ayirt eder. Yerelde ayni degeri su komutla hesaplarsin:
+    #   python scripts/pixel-sha.py
+    try:
+        import hashlib
+        from routers.live import _PIXEL_JS_TEMPLATE
+        pixel_sha = hashlib.sha256(_PIXEL_JS_TEMPLATE.encode("utf-8")).hexdigest()[:12]
+    except Exception:
+        pixel_sha = "?"
+    return {"ok": True, "service": "shoptimize-live", "pixel_sha": pixel_sha}
 
 
 @app.get("/start", response_class=HTMLResponse)
