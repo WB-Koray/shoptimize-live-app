@@ -142,7 +142,16 @@ def cmd_apply():
         return
 
     guncellenen_uuidler = []
+    atlanan = []
     for ad, uuid, key, deger in bulunan:
+        # Eski sifre icinde kodlanmamis '@' varsa regex ilk '@'te durur ve
+        # sifrenin kalani host'a karisir. group(3) zaten '@' ile basladigi icin
+        # esik 1: birden fazlaysa DSN belirsiz. Sessizce bozmaktansa atla.
+        eslesme = _DSN_RE.search(deger)
+        if eslesme and eslesme.group(3).count("@") > 1:
+            atlanan.append((ad, key))
+            print(f"  ATLANDI: {ad} / {key} — DSN'de birden fazla '@', elle duzeltilmeli")
+            continue
         yeni = _DSN_RE.sub(lambda m: m.group(1) + NEW_PW + m.group(3), deger)
         sonuc = api("PATCH", f"/applications/{uuid}/environment-variables",
                     json={"key": key, "value": yeni})
@@ -152,6 +161,11 @@ def cmd_apply():
         print(f"  guncellendi: {ad} / {key}")
         if uuid not in guncellenen_uuidler:
             guncellenen_uuidler.append(uuid)
+
+    if atlanan:
+        print(f"\n{len(atlanan)} degisken ATLANDI — bunlari elle duzelt:")
+        for ad, key in atlanan:
+            print(f"  {ad} / {key}")
 
     if not guncellenen_uuidler:
         print("\nHicbir degisken guncellenemedi. Redeploy yapilmadi.")
