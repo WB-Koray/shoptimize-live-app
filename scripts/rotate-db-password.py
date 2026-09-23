@@ -43,7 +43,7 @@ NEW_PW = os.getenv("NEW_DB_PASSWORD", "").strip()
 _DSN_RE = re.compile(r"(postgres(?:ql)?://[^:@/\s]+:)([^@\s]+)(@\S+)")
 
 
-def api(method, path, **kw):
+def api(method, path, quiet=False, **kw):
     url = f"{BASE}/api/v1{path}"
     r = requests.request(
         method, url,
@@ -51,12 +51,36 @@ def api(method, path, **kw):
         timeout=30, **kw,
     )
     if r.status_code >= 400:
-        print(f"  HATA {r.status_code} {method} {path}: {r.text[:200]}")
+        if not quiet:
+            print(f"  HATA {r.status_code} {method} {path}: {r.text[:200]}")
         return None
     try:
         return r.json()
     except Exception:
         return {}
+
+
+# Coolify surumleri env ucunu farkli adlandirdi. Dokumantasyon guncel surume
+# ait; eski beta'larda /envs kullaniliyor. Hangisinin tuttugunu deneyerek bul.
+_ENV_YOL_ADAYLARI = [
+    "/applications/{uuid}/envs",
+    "/applications/{uuid}/environment-variables",
+    "/applications/{uuid}/environment_variables",
+]
+_env_yolu = None
+
+
+def env_yolu_bul(ornek_uuid):
+    """Calisan env yolu kalibini doner, bulamazsa None."""
+    global _env_yolu
+    if _env_yolu:
+        return _env_yolu
+    for kalip in _ENV_YOL_ADAYLARI:
+        if api("GET", kalip.format(uuid=ornek_uuid), quiet=True) is not None:
+            _env_yolu = kalip
+            print(f"  (env ucu: {kalip})")
+            return kalip
+    return None
 
 
 def maskele(dsn):
@@ -74,11 +98,23 @@ def dsn_iceren_degiskenler():
         print("Uygulama listesi alinamadi.")
         sys.exit(1)
 
+    if not apps:
+        print("Hic uygulama donmedi.")
+        sys.exit(1)
+
+    kalip = env_yolu_bul(apps[0].get("uuid", ""))
+    if not kalip:
+        print("\nEnv ucu bulunamadi. Denenen yollar:")
+        for k in _ENV_YOL_ADAYLARI:
+            print(f"  {k}")
+        print("Token'da 'read:sensitive' izni var mi kontrol et; yoksa da 404/403 gelebilir.")
+        sys.exit(1)
+
     bulunan = []
     for app in apps:
         uuid = app.get("uuid", "")
         ad = app.get("name") or uuid
-        envs = api("GET", f"/applications/{uuid}/environment-variables") or []
+        envs = api("GET", kalip.format(uuid=uuid)) or []
         for e in envs if isinstance(envs, list) else []:
             deger = str(e.get("value") or "")
             if _DSN_RE.search(deger):
@@ -153,7 +189,7 @@ def cmd_apply():
             print(f"  ATLANDI: {ad} / {key} — DSN'de birden fazla '@', elle duzeltilmeli")
             continue
         yeni = _DSN_RE.sub(lambda m: m.group(1) + NEW_PW + m.group(3), deger)
-        sonuc = api("PATCH", f"/applications/{uuid}/environment-variables",
+        sonuc = api("PATCH", _env_yolu.format(uuid=uuid),
                     json={"key": key, "value": yeni})
         if sonuc is None:
             print(f"  BASARISIZ: {ad} / {key}  — devam ediliyor, sonunda ozet var")
