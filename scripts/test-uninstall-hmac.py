@@ -57,6 +57,17 @@ def main():
         print("HATA: TEST_SECRET ortam degiskeni gerekli.")
         sys.exit(1)
 
+    # Kesilmis degerle test etmek yaniltici 401 uretir: sorun secret'ta sanilir
+    # ama aslinda deger eksiktir. Panolardan kopyalarken sik yapilan hata.
+    if SECRET.endswith("...") or SECRET.endswith("…"):
+        print("HATA: TEST_SECRET kesilmis gorunuyor (sonu '...').")
+        print("      Shopify Admin > Develop apps > uygulaman > API credentials >")
+        print("      'API secret key' altindaki TAM degeri kullan.")
+        sys.exit(1)
+    if len(SECRET) < 24:
+        print(f"HATA: TEST_SECRET fazla kisa ({len(SECRET)} karakter) — eksik kopyalanmis olabilir.")
+        sys.exit(1)
+
     print(f"\nHedef : {APP_URL}/webhooks/app/uninstalled")
     print(f"Magaza: {SAHTE_DOMAIN}  (var olmayan — hicbir veri etkilenmez)\n")
 
