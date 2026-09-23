@@ -961,6 +961,21 @@ async def _build_local_journey(order_id: str) -> Optional[dict]:
     if not steps:
         return None
 
+    # Aynı event'in mükerrer webhook teslimi ya da pixel'in çift göndermesi
+    # yüzünden çizelgeye iki kez düşmesini engelle. Yalnız ardışık, aynı tip,
+    # aynı URL ve 2 dakika içindeki adımlar birleştirilir — farklı sayfadaki
+    # gerçek tekrarlar (ör. iki ayrı ürün görüntüleme) korunur.
+    collapsed = []
+    for st in steps:
+        prev = collapsed[-1] if collapsed else None
+        if (prev
+                and prev["event_type"] == st["event_type"]
+                and prev["url"] == st["url"]
+                and abs(st.get("ts", 0) - prev.get("ts", 0)) <= 120_000):
+            continue
+        collapsed.append(st)
+    steps = collapsed
+
     # Atıf ilk ziyarette yakalanır; ilk dolu UTM/referrer'ı al.
     utm, referrer = {}, ""
     for ev in events:
