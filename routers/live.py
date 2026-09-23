@@ -124,12 +124,36 @@ window._spt_loaded = true;
     );
   } catch(e) {}
 
+  // Cart token — sipariş/checkout webhook'larıyla ziyaretçiyi eşleştiren köprü.
+  // Checkout sayfasına tema script'i giremediği için checkout token'ı görülemez;
+  // cart token ise storefront'ta okunabilir ve iki webhook da payload'ında taşır.
+  var CART_TOKEN = '';
+  function readCartCookie() {
+    try {
+      var m = document.cookie.match(/(?:^|;\s*)cart=([^;]+)/);
+      if (m && m[1]) CART_TOKEN = decodeURIComponent(m[1]).split('?')[0];
+    } catch (e) {}
+    return CART_TOKEN;
+  }
+  function refreshCartToken() {
+    // Cookie anlık; yoksa /cart.js'e tek istek. Cookie fonksiyonel olduğu için
+    // çerez onayı reddedilse de mevcut olur.
+    if (readCartCookie()) return;
+    try {
+      fetch('/cart.js', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (c) { if (c && c.token) CART_TOKEN = String(c.token).split('?')[0]; })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  refreshCartToken();
+
   function send(event_type, data) {
     var payload = JSON.stringify({
       tid: TID, vid: VID, event_type: event_type,
       url: location.href, referrer: document.referrer || '',
       ts: Date.now(), ua: UA, sw: SW,
-      utm: UTM, customer_id: CID,
+      utm: UTM, customer_id: CID, ct: readCartCookie() || CART_TOKEN,
       data: data || {}
     });
     try {
@@ -494,6 +518,7 @@ async def receive_event(request: Request):
         return JSONResponse({"ok": False, "error": "rate_limited"}, status_code=429)
 
     vid = str(body.get("vid", ""))[:32]
+    cart_token = str(body.get("ct", ""))[:64]
     event_type = str(body.get("event_type", ""))[:64]
     url = str(body.get("url", ""))[:512]
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
@@ -522,6 +547,15 @@ async def receive_event(request: Request):
     }
 
     await store.push_event(tid, event)
+
+    # Cart token → ziyaretçi köprüsü. Yalnız sepet/checkout event'lerinde yazılır;
+    # her page_view'da yazmak aktif trafikte gereksiz Redis yükü olurdu.
+    if cart_token and vid and event_type in ("add_to_cart", "cart_viewed", "checkout_started"):
+        await store.set_cart_visitor(cart_token, tid, vid)
+        if event_type == "checkout_started":
+            logger.info("[BRIDGE] cart_vid yazildi cart=%s vid=%s", cart_token[:12], vid)
+    elif event_type == "checkout_started" and not cart_token:
+        logger.warning("[BRIDGE] checkout_started geldi ama cart_token bos vid=%s", vid)
 
     owner = await store.get_tid_owner(tid)
 
@@ -873,6 +907,69 @@ query OrderJourney($id: ID!) {
 }
 """
 
+# Zaman çizelgesinde adım sayılan event tipleri. scroll_depth / attention_time
+# sinyal olarak değerli ama adım değil — çizelgeyi boğarlar.
+_JOURNEY_STEP_TYPES = (
+    "page_viewed", "product_viewed", "collection_viewed", "cart_viewed",
+    "search_submitted", "add_to_cart", "checkout_started", "checkout_completed",
+)
+
+
+async def _build_local_journey(order_id: str) -> Optional[dict]:
+    """Shopify yolculuk verisi boşsa kendi pixel event'lerimizden yolculuk kurar.
+
+    Shopify'ın customer journey'si kendi analytics çerezine bağlı; çerez onayı
+    reddedilince (CMP) veya uygulama içi tarayıcıda boş kalıyor. Bizim pixel o
+    mekanizmadan bağımsız çalıştığı için veri çoğu zaman elimizde oluyor.
+    Eşleme orders/create anında cart_token köprüsünden kuruluyor.
+    """
+    mapping = await store.get_order_visitor(str(order_id or "").strip())
+    if not mapping:
+        return None
+    tid, vid = mapping.get("tid", ""), mapping.get("vid", "")
+    events = await store.get_visitor_events(tid, vid, limit=120)
+    if not events:
+        return None
+
+    steps = []
+    for ev in events:
+        if ev.get("event_type") not in _JOURNEY_STEP_TYPES:
+            continue
+        data = ev.get("data") if isinstance(ev.get("data"), dict) else {}
+        steps.append({
+            "event_type": ev.get("event_type", ""),
+            "url": ev.get("url", ""),
+            "ts": ev.get("ts", 0),
+            "title": str(
+                data.get("title") or data.get("product_title") or data.get("query") or ""
+            )[:120],
+        })
+    if not steps:
+        return None
+
+    # Atıf ilk ziyarette yakalanır; ilk dolu UTM/referrer'ı al.
+    utm, referrer = {}, ""
+    for ev in events:
+        if not utm and isinstance(ev.get("utm"), dict) and ev.get("utm"):
+            utm = ev["utm"]
+        if not referrer and ev.get("referrer"):
+            referrer = ev["referrer"]
+        if utm and referrer:
+            break
+
+    return {
+        "source": "shoptimize_pixel",
+        "vid": vid,
+        "first_seen": events[0].get("ts", 0),
+        "last_seen": events[-1].get("ts", 0),
+        "event_count": len(events),
+        "utm": utm,
+        "referrer": referrer,
+        # Satın almaya yakın adımlar daha anlamlı — kuyruğu al, sırayı koru.
+        "steps": steps[-40:],
+    }
+
+
 @router.get("/api/shopify/order-journey")
 async def get_order_journey(
     order_id: str = Query(...),
@@ -924,7 +1021,18 @@ async def get_order_journey(
             "firstVisit": None, "lastVisit": None, "moments": {"nodes": []},
         }
 
-    return {"ok": True, "order": order_data}
+    # Shopify'da yolculuk yoksa kendi verimizden kurmayı dene
+    cjs = order_data.get("customerJourneySummary") or {}
+    has_moments = bool(((cjs.get("moments") or {}).get("nodes")) or [])
+    local_journey = None
+    if not has_moments:
+        numeric_oid = oid.rsplit("/", 1)[-1] if oid.startswith("gid://") else oid
+        try:
+            local_journey = await _build_local_journey(numeric_oid)
+        except Exception:
+            logger.exception("[JOURNEY] yerel yolculuk kurulamadi")
+
+    return {"ok": True, "order": order_data, "local_journey": local_journey}
 
 
 # ---------------------------------------------------------------------------
@@ -1608,7 +1716,34 @@ async def shopify_orders_webhook(
                 template_name=tmpl,
             )
 
-    session_info = _customer_to_tid.get(customer_id) if customer_id else None
+    # Sipariş → ziyaretçi eşlemesi. Öncelik cart_token köprüsünde: misafir
+    # alışverişlerde customer_id pixel'e hiç ulaşmadığı için _customer_to_tid
+    # boş kalır, ayrıca o dict in-memory olduğundan restart'ta silinir.
+    session_info = None
+    order_cart_token = str(order.get("cart_token") or "").strip()
+    if order_cart_token:
+        session_info = await store.get_cart_visitor(order_cart_token)
+    else:
+        # Köprünün birincil varsayımı bu alan. Gelmiyorsa hangi anahtarlar var, görelim.
+        logger.warning("[ORDER] cart_token yok — payload anahtarlari: %s", sorted(order.keys()))
+    # İkinci yol: checkouts/create sırasında checkout_token'a bağlanmış eşleme.
+    if not session_info and checkout_token:
+        session_info = await store.get_cart_visitor(f"co:{checkout_token}")
+    _bridge_hit = bool(session_info)
+    if not session_info and customer_id:
+        session_info = _customer_to_tid.get(customer_id)
+    logger.info(
+        "[ORDER] vid eslesme: siparis=%s cart=%s kopru=%s fallback=%s",
+        order_number, order_cart_token[:12] or "-", _bridge_hit,
+        bool(session_info) and not _bridge_hit,
+    )
+
+    # Eşlemeyi sipariş id'sine sabitle — Sipariş Yolculuğu ekranı order_id ile
+    # sorgulanıyor, cart token o noktadan sonra hiçbir yerde görünmüyor.
+    if session_info:
+        await store.set_order_visitor(
+            str(order.get("id", "")), session_info.get("tid", ""), session_info.get("vid", "")
+        )
 
     line_items = []
     for item in (order.get("line_items") or [])[:15]:
@@ -1699,9 +1834,26 @@ async def shopify_checkouts_webhook(
         digits = "".join(c for c in phone if c.isdigit())
         phone = f"+9{digits}" if digits.startswith("0") else f"+90{digits}"
 
+    checkout_token = str(checkout.get("token") or checkout.get("id") or "").strip()
+
     matched_vid = None
-    if customer_id and customer_id in _customer_to_tid:
-        matched_vid = _customer_to_tid[customer_id].get("vid")
+    matched_tid = ""
+    co_cart_token = str(checkout.get("cart_token") or "").strip()
+    if co_cart_token:
+        _cv = await store.get_cart_visitor(co_cart_token) or {}
+        matched_vid = _cv.get("vid") or None
+        matched_tid = _cv.get("tid") or ""
+    if not matched_vid and customer_id and customer_id in _customer_to_tid:
+        _ct = _customer_to_tid[customer_id]
+        matched_vid = _ct.get("vid")
+        matched_tid = matched_tid or _ct.get("tid", "")
+
+    # Checkout token'a da bağla: orders/create payload'ında cart_token gelmese
+    # bile o webhook checkout_token'ı kesin taşıyor (zaten okunuyor). İkinci yol.
+    if matched_vid and checkout_token:
+        _bridge_tid = matched_tid or get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+        await store.set_cart_visitor(f"co:{checkout_token}", _bridge_tid, matched_vid)
+        logger.info("[BRIDGE] co_vid yazildi checkout=%s vid=%s", checkout_token[:12], matched_vid)
 
     if matched_vid:
         _vid_to_phone[matched_vid] = phone
@@ -1712,7 +1864,6 @@ async def shopify_checkouts_webhook(
         if customer_name:
             _email_to_name[email] = customer_name
 
-    checkout_token = str(checkout.get("token") or checkout.get("id") or "").strip()
     line_items = checkout.get("line_items") or []
     product = line_items[0].get("title", "") if line_items else ""
     # variant_id de saklanır → cihazlar arası sepet kurtarma (cart permalink) için gerekli
@@ -1731,7 +1882,7 @@ async def shopify_checkouts_webhook(
             "username": username,
             "brand": brand,
             "vid": matched_vid or "",
-            "tid": pixel_tid or "",
+            "tid": matched_tid or pixel_tid or "",
             "ts": int(time.time() * 1000),
         })
         if customer_name:

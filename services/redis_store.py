@@ -225,6 +225,29 @@ class RedisStore:
                 pass
         return events
 
+    async def get_visitor_events(self, tid: str, vid: str, limit: int = 100) -> list[dict]:
+        """Tek ziyaretçinin event geçmişi — eskiden yeniye sıralı.
+
+        Event listesi tid bazlı tutulduğu için buffer taranıp vid Python tarafında
+        filtrelenir; liste 5000'de kırpıldığından maliyet sabit.
+        """
+        if not tid or not vid:
+            return []
+        raws = await self._redis.lrange(f"events:{tid}", 0, _MAX_EVENTS - 1)
+        out: list[dict] = []
+        for r in raws:
+            try:
+                ev = json.loads(r)
+            except Exception:
+                continue
+            if ev.get("vid") != vid:
+                continue
+            out.append(ev)
+            if len(out) >= limit:
+                break
+        out.reverse()  # lpush yeniden eskiye yazar; yolculuk eskiden yeniye okunur
+        return out
+
     async def count_events(self, tid: str) -> int:
         return await self._redis.llen(f"events:{tid}")
 
@@ -329,6 +352,61 @@ class RedisStore:
     async def mark_checkout_completed(self, checkout_token: str) -> None:
         await self._redis.setex(f"checkout_done:{checkout_token}", self._CHECKOUT_TTL, "1")
         await self._redis.zrem("pending_checkouts", checkout_token)
+
+    # ── Cart token → ziyaretçi köprüsü ─────────────────────────────────────────
+    # Shopify checkout sayfasına tema script'i giremediği için pixel checkout
+    # token'ını göremez. Ama cart token'ını storefront'ta okuyabiliyor ve hem
+    # checkouts/create hem orders/create webhook'u payload'ında cart_token taşıyor.
+    # Bu köprü customer_id gerektirmediği için misafir alışverişlerde de çalışır ve
+    # in-memory _customer_to_tid dict'inin aksine restart'a dayanır.
+
+    _CART_VID_TTL = 86400 * 7  # event geçmişiyle aynı ömür
+
+    async def set_cart_visitor(self, cart_token: str, tid: str, vid: str) -> None:
+        if not cart_token or not tid or not vid:
+            return
+        await self._redis.setex(
+            f"cart_vid:{cart_token}",
+            self._CART_VID_TTL,
+            json.dumps({"tid": tid, "vid": vid}, ensure_ascii=False),
+        )
+
+    async def get_cart_visitor(self, cart_token: str) -> dict | None:
+        if not cart_token:
+            return None
+        raw = await self._redis.get(f"cart_vid:{cart_token}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    # Sipariş → ziyaretçi. Yolculuk ekranı sipariş id'siyle sorgulandığı için
+    # cart_vid eşlemesi orders/create anında buraya sabitlenir; cart token o
+    # noktadan sonra bir daha görünmez.
+
+    _ORDER_VID_TTL = 86400 * 30
+
+    async def set_order_visitor(self, order_id: str, tid: str, vid: str) -> None:
+        if not order_id or not tid or not vid:
+            return
+        await self._redis.setex(
+            f"order_vid:{order_id}",
+            self._ORDER_VID_TTL,
+            json.dumps({"tid": tid, "vid": vid}, ensure_ascii=False),
+        )
+
+    async def get_order_visitor(self, order_id: str) -> dict | None:
+        if not order_id:
+            return None
+        raw = await self._redis.get(f"order_vid:{order_id}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
 
     # ── Checkout analitik indeksi (CHECKOUT/ABANDONED kartlari icin — TUM checkout'lar) ──
     async def index_checkout(self, username: str, brand: str, token: str, ts: int, meta: dict | None = None) -> None:

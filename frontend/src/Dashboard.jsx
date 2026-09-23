@@ -823,10 +823,58 @@ function VisitStep({ visit, index, isLast }) {
   );
 }
 
+// Shopify yolculuk verisi yokken kendi pixel event'lerimizden kurulan adım
+const LOCAL_STEP_ICONS = {
+  page_viewed: Eye,
+  product_viewed: Package,
+  collection_viewed: Layers,
+  cart_viewed: ShoppingCart,
+  search_submitted: Search,
+  add_to_cart: ShoppingCart,
+  checkout_started: CreditCard,
+  checkout_completed: CheckCircle,
+};
+
+function LocalJourneyStep({ step, isLast, t }) {
+  const Icon = LOCAL_STEP_ICONS[step.event_type] || Globe;
+  const isConv = step.event_type === 'checkout_completed';
+  const label = t('ojrn.ev.' + step.event_type);
+  const ts = step.ts
+    ? new Date(step.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+  let detail = step.title || '';
+  if (!detail && step.url) {
+    try { detail = decodeURIComponent(new URL(step.url).pathname); } catch (e) { detail = step.url; }
+  }
+  return (
+    <div className="flex gap-2.5">
+      <div className="flex flex-col items-center shrink-0 pt-1">
+        <div className={isConv ? 'w-2 h-2 rounded-full bg-green shrink-0' : 'w-2 h-2 rounded-full bg-blue shrink-0'} />
+        {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+      </div>
+      <div className={!isLast ? 'flex-1 min-w-0 flex items-start justify-between gap-2 pb-2' : 'flex-1 min-w-0 flex items-start justify-between gap-2'}>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <Icon size={11} className={isConv ? 'text-green shrink-0' : 'text-textDim shrink-0'} />
+            <span className={isConv ? 'text-[11px] font-semibold text-green' : 'text-[11px] font-semibold text-text'}>{label}</span>
+          </div>
+          {detail && (
+            <p className="text-[10px] text-textMute truncate ml-4 mt-0.5 max-w-[210px]" title={detail}>
+              {detail.slice(0, 70)}
+            </p>
+          )}
+        </div>
+        {ts && <span className="text-[10px] text-textMute whitespace-nowrap shrink-0">{ts}</span>}
+      </div>
+    </div>
+  );
+}
+
 function OrderJourneyModal({ orderId, session, onClose }) {
   const { t } = useLang();
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState(null);
+  const [local, setLocal]     = useState(null);
   const [err, setErr]         = useState('');
 
   useEffect(() => {
@@ -834,6 +882,7 @@ function OrderJourneyModal({ orderId, session, onClose }) {
     setLoading(true);
     setErr('');
     setData(null);
+    setLocal(null);
     const { token, username, brand } = session;
     fetch(
       `${API_URL}/api/shopify/order-journey?order_id=${encodeURIComponent(orderId)}&username=${encodeURIComponent(username)}&brand=${encodeURIComponent(brand)}`,
@@ -841,7 +890,7 @@ function OrderJourneyModal({ orderId, session, onClose }) {
     )
       .then(r => r.json())
       .then(d => {
-        if (d.ok) setData(d.order);
+        if (d.ok) { setData(d.order); setLocal(d.local_journey || null); }
         else {
           const msg = d.error || d.detail || 'Error';
           // Protected Customer Data hatası — anlaşılır mesaj göster
@@ -891,8 +940,9 @@ function OrderJourneyModal({ orderId, session, onClose }) {
           </button>
         </div>
 
-        {/* Stats row */}
-        {journey && (
+        {/* Stats row — journey objesi dolu ama tüm alanları boş olabilir (Shopify
+            ready:true + hiç ziyaret döndürmediğinde); o hâlde boş şerit çizme. */}
+        {journey && (firstVisit?.occurredAt || lastVisit?.occurredAt || daysToConv != null || moments.length > 0) && (
           <div className="flex items-center gap-4 px-4 py-2.5 border-b border-border/60 bg-surfaceAlt/30">
             {firstVisit?.occurredAt && (
               <div className="text-center">
@@ -953,7 +1003,45 @@ function OrderJourneyModal({ orderId, session, onClose }) {
               </div>
             )
           )}
-          {!loading && !err && moments.length === 0 && (
+          {!loading && !err && moments.length === 0 && local && (
+            <div className="space-y-3">
+              <div className="rounded-xl bg-blueSoft border border-blue/20 px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <Zap size={11} className="text-blue shrink-0" />
+                  <span className="text-[11px] font-semibold text-blue">{t('ojrn.local_badge')}</span>
+                </div>
+                <p className="text-[10px] text-textMute leading-relaxed mt-1">{t('ojrn.local_note')}</p>
+              </div>
+
+              {(local.utm?.utm_source || local.referrer) && (
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                  {local.utm?.utm_source && (
+                    <span className="px-2 py-0.5 rounded bg-surfaceAlt border border-border text-textDim">
+                      {local.utm.utm_source}{local.utm.utm_medium ? ' / ' + local.utm.utm_medium : ''}
+                    </span>
+                  )}
+                  {local.utm?.utm_campaign && (
+                    <span className="px-2 py-0.5 rounded bg-blueSoft text-blue">{local.utm.utm_campaign}</span>
+                  )}
+                  {!local.utm?.utm_source && local.referrer && (
+                    <span className="px-2 py-0.5 rounded bg-surfaceAlt border border-border text-textDim truncate max-w-[240px]" title={local.referrer}>
+                      {local.referrer.replace('https://', '').replace('http://', '').replace('www.', '').slice(0, 48)}
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded bg-surfaceAlt border border-border text-textMute">
+                    {local.steps.length} {t('ojrn.steps')}
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-0">
+                {local.steps.map((st, i) => (
+                  <LocalJourneyStep key={i} step={st} isLast={i === local.steps.length - 1} t={t} />
+                ))}
+              </div>
+            </div>
+          )}
+          {!loading && !err && moments.length === 0 && !local && (
             <div className="py-8 text-center space-y-3 px-4">
               <Globe size={22} className="text-textMute mx-auto" />
               <p className="text-text font-semibold text-sm">{t('ojrn.no_data')}</p>
