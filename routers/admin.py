@@ -21,6 +21,12 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 PLAN_TRIAL_DAYS = int(os.getenv("BILLING_TRIAL_DAYS", "0"))  # Managed pricing → Shopify yönetir
 PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
 
+# Pixel sessizlik eşiği (saat). TID'nin ayarlarda durması takibin çalıştığını
+# göstermez: tema değiştirilip App Embed taşınmazsa pixel sessizce susar.
+# Yalnız geçmişte event görmüş mağazalar için uyarı üretilir — hiç trafik
+# görmemiş yeni kurulumlar kapsam dışı, yoksa her yeni merchant alarm verirdi.
+PIXEL_SILENCE_HOURS = int(os.getenv("PIXEL_SILENCE_HOURS", "24"))
+
 
 def _require_admin(token: str):
     if not ADMIN_TOKEN:
@@ -367,6 +373,17 @@ async def compute_store_health(conn: dict) -> dict:
             except Exception:
                 pass
 
+    # Pixel akışı — TID varlığı takibin gerçekten çalıştığını göstermez.
+    pixel_last_ts = 0
+    if tid:
+        try:
+            pixel_last_ts = await store.get_last_event_ts(tid)
+        except Exception:
+            pixel_last_ts = 0
+    pixel_silent_hours = (
+        int((time.time() * 1000 - pixel_last_ts) // 3_600_000) if pixel_last_ts else 0
+    )
+
     problems = []
     if billing_status != "uninstalled":
         if flow_enabled and not wa_connected:
@@ -385,6 +402,8 @@ async def compute_store_health(conn: dict) -> dict:
             problems.append("Shopify webhook kayıtlı değil")
         if flow_enabled and not tid:
             problems.append("Pixel kurulu değil")
+        if pixel_last_ts and pixel_silent_hours >= PIXEL_SILENCE_HOURS:
+            problems.append(f"Pixel {pixel_silent_hours} saattir event göndermiyor")
 
     return {
         "username": username, "brand": brand,
@@ -394,9 +413,13 @@ async def compute_store_health(conn: dict) -> dict:
         "flow_enabled": flow_enabled, "wa_connected": wa_connected,
         "waba_id": waba_id, "phone_id": phone_id,
         "webhooks_registered": webhooks_registered, "pixel_ready": bool(tid),
+        "pixel_last_ts": pixel_last_ts, "pixel_silent_hours": pixel_silent_hours,
         "wa": wa, "problems": problems, "healthy": len(problems) == 0,
-        # worker filtresi için
-        "relevant": (flow_enabled or wa_connected) and billing_status != "uninstalled",
+        # worker filtresi için. Pixel'i akan mağazalar da kapsama alınır: WA
+        # kullanmayan analitik-only merchant'ta da pixel susarsa haber vermeliyiz.
+        # Meta'ya ek istek doğurmaz — _check_wa_health zaten wa_connected'a bağlı.
+        "relevant": (flow_enabled or wa_connected or bool(pixel_last_ts))
+                    and billing_status != "uninstalled",
     }
 
 
