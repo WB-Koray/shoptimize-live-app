@@ -68,7 +68,11 @@ def main():
         print(f"HATA: TEST_SECRET fazla kisa ({len(SECRET)} karakter) — eksik kopyalanmis olabilir.")
         sys.exit(1)
 
-    print(f"\nHedef : {APP_URL}/webhooks/app/uninstalled")
+    # Parmak izi: secret'i aciga cikarmadan hangi degerle test edildigini
+    # ayirt etmeye yarar. Ayni deger her zaman ayni izi verir.
+    iz = hashlib.sha256(SECRET.encode()).hexdigest()[:8]
+    print(f"\nSecret parmak izi: {iz}  (uzunluk {len(SECRET)})")
+    print(f"Hedef : {APP_URL}/webhooks/app/uninstalled")
     print(f"Magaza: {SAHTE_DOMAIN}  (var olmayan — hicbir veri etkilenmez)\n")
 
     dogru = gonder(SECRET, "dogru secret ile")
