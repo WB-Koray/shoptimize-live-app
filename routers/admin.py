@@ -423,6 +423,22 @@ async def compute_store_health(conn: dict) -> dict:
     }
 
 
+@router.get("/bridge-log")
+async def bridge_log(admin_token: str = Query(...), limit: int = Query(25, ge=1, le=50)):
+    """Sipariş → ziyaretçi köprüsünün son kayıtları.
+
+    Her sipariş için hangi yolun tuttuğunu gösterir; log taramadan tarayıcıdan
+    bakılabilsin diye. path alanı: cart_token (birincil yol), checkout_token
+    (ikinci yol), customer_id (eski fallback), yok (hiçbiri tutmadı).
+    """
+    _require_admin(admin_token)
+    rows = await store.get_bridge_log(limit)
+    ozet = {"toplam": len(rows), "eslesen": sum(1 for r in rows if r.get("matched"))}
+    for yol in ("cart_token", "checkout_token", "customer_id", "yok"):
+        ozet[yol] = sum(1 for r in rows if r.get("path") == yol)
+    return {"ok": True, "ozet": ozet, "kayitlar": rows}
+
+
 @router.get("/health")
 async def merchants_health(admin_token: str = Query(...)):
     """Operatör monitöring — her mağaza için WhatsApp/sepet-kurtarma boru hattı

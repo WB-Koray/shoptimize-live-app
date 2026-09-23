@@ -382,6 +382,36 @@ class RedisStore:
         except Exception:
             return None
 
+    # Köprü teşhis kaydı — her siparişte hangi yolun tuttuğu kısa bir listede
+    # birikir. Log taramadan tarayıcıdan bakılabilsin diye (bkz.
+    # GET /api/admin/bridge-log). Yalnız son 50 kayıt tutulur.
+
+    _BRIDGE_LOG_MAX = 50
+    _BRIDGE_LOG_TTL = 86400 * 7
+
+    async def log_bridge_event(self, rec: dict) -> None:
+        try:
+            pipe = self._redis.pipeline()
+            pipe.lpush("bridge_log", json.dumps(rec, ensure_ascii=False))
+            pipe.ltrim("bridge_log", 0, self._BRIDGE_LOG_MAX - 1)
+            pipe.expire("bridge_log", self._BRIDGE_LOG_TTL)
+            await pipe.execute()
+        except Exception:
+            pass  # teşhis kaydı sipariş akışını asla bozmamalı
+
+    async def get_bridge_log(self, limit: int = 50) -> list[dict]:
+        try:
+            raws = await self._redis.lrange("bridge_log", 0, max(1, limit) - 1)
+        except Exception:
+            return []
+        out = []
+        for r in raws:
+            try:
+                out.append(json.loads(r))
+            except Exception:
+                pass
+        return out
+
     # Sipariş → ziyaretçi. Yolculuk ekranı sipariş id'siyle sorgulandığı için
     # cart_vid eşlemesi orders/create anında buraya sabitlenir; cart token o
     # noktadan sonra bir daha görünmez.

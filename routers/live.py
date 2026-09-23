@@ -1720,18 +1720,25 @@ async def shopify_orders_webhook(
     # alışverişlerde customer_id pixel'e hiç ulaşmadığı için _customer_to_tid
     # boş kalır, ayrıca o dict in-memory olduğundan restart'ta silinir.
     session_info = None
+    match_path = "yok"
     order_cart_token = str(order.get("cart_token") or "").strip()
     if order_cart_token:
         session_info = await store.get_cart_visitor(order_cart_token)
+        if session_info:
+            match_path = "cart_token"
     else:
         # Köprünün birincil varsayımı bu alan. Gelmiyorsa hangi anahtarlar var, görelim.
         logger.warning("[ORDER] cart_token yok — payload anahtarlari: %s", sorted(order.keys()))
     # İkinci yol: checkouts/create sırasında checkout_token'a bağlanmış eşleme.
     if not session_info and checkout_token:
         session_info = await store.get_cart_visitor(f"co:{checkout_token}")
+        if session_info:
+            match_path = "checkout_token"
     _bridge_hit = bool(session_info)
     if not session_info and customer_id:
         session_info = _customer_to_tid.get(customer_id)
+        if session_info:
+            match_path = "customer_id"
     logger.info(
         "[ORDER] vid eslesme: siparis=%s cart=%s kopru=%s fallback=%s",
         order_number, order_cart_token[:12] or "-", _bridge_hit,
@@ -1744,6 +1751,19 @@ async def shopify_orders_webhook(
         await store.set_order_visitor(
             str(order.get("id", "")), session_info.get("tid", ""), session_info.get("vid", "")
         )
+
+    # Teşhis kaydı — hangi yolun tuttuğu ve webhook'un gönderdiği cart token.
+    # Pixel'in gördüğü token cart_vid anahtarında duruyor; ikisi uyuşmazsa
+    # match_path "cart_token" yerine "checkout_token" olarak düşer.
+    await store.log_bridge_event({
+        "ts": int(time.time() * 1000),
+        "order": order_number,
+        "webhook_cart_token": order_cart_token or None,
+        "checkout_token": checkout_token or None,
+        "path": match_path,
+        "matched": bool(session_info),
+        "vid": (session_info or {}).get("vid"),
+    })
 
     line_items = []
     for item in (order.get("line_items") or [])[:15]:
