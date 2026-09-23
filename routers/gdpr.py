@@ -39,6 +39,19 @@ async def _read_and_verify(request: Request) -> bytes:
     body = await request.body()
     header = request.headers.get("x-shopify-hmac-sha256", "")
     if not _verify_hmac(body, header):
+        # Sessiz 401 en kötüsüydü: app/uninstalled reddedilirse temizlik hiç
+        # çalışmıyor ve hiçbir iz kalmıyordu. Shopify'ın retry'ları da aynı
+        # duvara çarptığı için sorun fark edilmeden kalıyor. Webhook'u kaydeden
+        # uygulamanın secret'ı SHOPIFY_CLIENT_SECRET ya da _LEGACY ile
+        # eşleşmiyorsa buradan görünür.
+        logger.warning(
+            "[GDPR] HMAC doğrulaması başarısız — yol=%s shop=%s denenen_secret=%d imza_geldi=%s. "
+            "Webhook'u kaydeden uygulamanın secret'ı env'de tanımlı olmayabilir.",
+            request.url.path,
+            request.headers.get("x-shopify-shop-domain", "-"),
+            len([x for x in (SHOPIFY_CLIENT_SECRET, SHOPIFY_CLIENT_SECRET_LEGACY) if x]),
+            bool(header),
+        )
         raise HTTPException(401, "HMAC doğrulaması başarısız")
     return body
 
