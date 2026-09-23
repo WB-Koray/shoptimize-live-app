@@ -441,9 +441,10 @@ async def bridge_log(admin_token: str = Query(...), limit: int = Query(25, ge=1,
     # cart_vid sıfırsa pixel hiç cart token göndermiyor demektir; sorun sunucuda
     # eşleştirmede değil, storefront'ta aranmalı.
     yazma = {
-        "cart_vid_anahtari": await store.count_keys("cart_vid:*"),
-        "co_vid_anahtari": await store.count_keys("cart_vid:co:*"),
-        "order_vid_anahtari": await store.count_keys("order_vid:*"),
+        "sepet_eslemesi": max(0, await store.count_keys("cart_vid:*")
+                              - max(0, await store.count_keys("cart_vid:co:*"))),
+        "checkout_eslemesi": await store.count_keys("cart_vid:co:*"),
+        "siparis_eslemesi": await store.count_keys("order_vid:*"),
     }
     return {"ok": True, "ozet": ozet, "yazma_tarafi": yazma, "kayitlar": rows}
 
