@@ -436,7 +436,16 @@ async def bridge_log(admin_token: str = Query(...), limit: int = Query(25, ge=1,
     ozet = {"toplam": len(rows), "eslesen": sum(1 for r in rows if r.get("matched"))}
     for yol in ("cart_token", "checkout_token", "customer_id", "yok"):
         ozet[yol] = sum(1 for r in rows if r.get("path") == yol)
-    return {"ok": True, "ozet": ozet, "kayitlar": rows}
+
+    # Yazma tarafı — sipariş beklemeden pixel'in çalışıp çalışmadığını gösterir.
+    # cart_vid sıfırsa pixel hiç cart token göndermiyor demektir; sorun sunucuda
+    # eşleştirmede değil, storefront'ta aranmalı.
+    yazma = {
+        "cart_vid_anahtari": await store.count_keys("cart_vid:*"),
+        "co_vid_anahtari": await store.count_keys("cart_vid:co:*"),
+        "order_vid_anahtari": await store.count_keys("order_vid:*"),
+    }
+    return {"ok": True, "ozet": ozet, "yazma_tarafi": yazma, "kayitlar": rows}
 
 
 @router.get("/health")

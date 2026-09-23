@@ -399,6 +399,19 @@ class RedisStore:
         except Exception:
             pass  # teşhis kaydı sipariş akışını asla bozmamalı
 
+    async def count_keys(self, pattern: str, cap: int = 500) -> int:
+        """Desene uyan anahtar sayısı (cap'e kadar). KEYS yerine SCAN — bloklamaz."""
+        n, cursor = 0, 0
+        try:
+            while True:
+                cursor, keys = await self._redis.scan(cursor, match=pattern, count=200)
+                n += len(keys)
+                if cursor == 0 or n >= cap:
+                    break
+        except Exception:
+            return -1  # okunamadı
+        return n
+
     async def get_bridge_log(self, limit: int = 50) -> list[dict]:
         try:
             raws = await self._redis.lrange("bridge_log", 0, max(1, limit) - 1)
