@@ -6,10 +6,11 @@ import os, json, sys
 import psycopg2
 import psycopg2.extras
 
-DSN = os.getenv(
-    "INTEGRATIONS_POSTGRES_DSN",
-    "postgres://postgres:QpsKsXjAruqyT6XMrLJ8xPrZsvZlOD5U2rpQZNzpOdo7j2ZwnPWfmPTOF8h85ikR@rquqtc0hvaxc5nkgzcneczjg:5432/postgres"
-)
+DSN = os.getenv("INTEGRATIONS_POSTGRES_DSN") or os.getenv("DATABASE_URL", "")
+if not DSN:
+    print("INTEGRATIONS_POSTGRES_DSN (veya DATABASE_URL) tanımlı değil.")
+    print("Örnek:  $env:INTEGRATIONS_POSTGRES_DSN = 'postgres://kullanici:sifre@host:5432/db'")
+    sys.exit(1)
 
 def main():
     try:
