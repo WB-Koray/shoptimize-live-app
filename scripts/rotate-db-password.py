@@ -83,6 +83,21 @@ def env_yolu_bul(ornek_uuid):
     return None
 
 
+TARGET_HOST = os.getenv("TARGET_DB_HOST", "").strip()
+
+# DSN'in @'ten sonraki host kismi. Ayni Coolify'da birden fazla veritabani
+# olabilir; sizan olan disindakilere dokunmak onlari baglantisiz birakir.
+_HOST_RE = re.compile(r"@([^:/\s]+)")
+
+
+def dsn_host(dsn):
+    m = _DSN_RE.search(dsn)
+    if not m:
+        return ""
+    h = _HOST_RE.search(m.group(3))
+    return h.group(1) if h else ""
+
+
 def maskele(dsn):
     def _m(m):
         pw = m.group(2)
@@ -130,6 +145,16 @@ def cmd_scan():
     if not bulunan:
         print("\nHicbir uygulamada DSN yok. Token'in tum kaynaklari gorebildiginden emin ol.")
         return
+    hostlar = {}
+    for ad, uuid, key, deger in bulunan:
+        hostlar.setdefault(dsn_host(deger), []).append(ad)
+    if len(hostlar) > 1:
+        print()
+        print("  DIKKAT: birden fazla veritabani var. 'apply' yalniz")
+        print("  TARGET_DB_HOST ile belirttigin hosta dokunur:")
+        for h, adlar in hostlar.items():
+            print(f"    {h}  <- {', '.join(sorted(set(adlar)))}")
+
     son_app = None
     for ad, uuid, key, deger in bulunan:
         if ad != son_app:
@@ -165,9 +190,21 @@ def cmd_apply():
         print("HATA: Sifre DSN'i bozacak karakter iceriyor (@ : / # ? % bosluk).")
         sys.exit(1)
 
-    apps, bulunan = dsn_iceren_degiskenler()
+    if not TARGET_HOST:
+        print("HATA: TARGET_DB_HOST tanimli degil.")
+        print("Ayni Coolify'da birden fazla veritabani olabilir; hangisinin")
+        print("sifresini dondurdugunu acikca belirtmen gerekiyor. Once 'scan'")
+        print("calistir, host listesinden dogru olani sec:")
+        print('    $env:TARGET_DB_HOST = "rquqtc0hvaxc5nkgzcneczjg"')
+        sys.exit(1)
+
+    apps, tum = dsn_iceren_degiskenler()
+    bulunan = [x for x in tum if dsn_host(x[3]) == TARGET_HOST]
+    haric = len(tum) - len(bulunan)
+    if haric:
+        print(f"\n{haric} degisken baska veritabanlarina ait, dokunulmayacak.")
     if not bulunan:
-        print("Guncellenecek degisken bulunamadi.")
+        print(f"'{TARGET_HOST}' hostuna ait degisken bulunamadi.")
         return
 
     print(f"\n{len(bulunan)} degisken guncellenecek:")
