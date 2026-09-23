@@ -148,12 +148,25 @@ window._spt_loaded = true;
   }
   refreshCartToken();
 
+  // ct'yi her event'te gondermek gereksiz Redis yazmasi demek; hic gondermemek
+  // ise sepeti olan ama yalniz sayfa gezen ziyaretciyi kaciriyor. Sepet
+  // olaylarinda her zaman, diger event'lerde yalniz token degistiyse gonder.
+  var CT_SENT = '';
+  function ctForSend(evType) {
+    var tok = readCartCookie() || CART_TOKEN;
+    if (!tok) return '';
+    var cartEvent = evType === 'add_to_cart' || evType === 'cart_viewed'
+                 || evType === 'checkout_started';
+    if (cartEvent || tok !== CT_SENT) { CT_SENT = tok; return tok; }
+    return '';
+  }
+
   function send(event_type, data) {
     var payload = JSON.stringify({
       tid: TID, vid: VID, event_type: event_type,
       url: location.href, referrer: document.referrer || '',
       ts: Date.now(), ua: UA, sw: SW,
-      utm: UTM, customer_id: CID, ct: readCartCookie() || CART_TOKEN,
+      utm: UTM, customer_id: CID, ct: ctForSend(event_type),
       data: data || {}
     });
     try {
@@ -548,9 +561,10 @@ async def receive_event(request: Request):
 
     await store.push_event(tid, event)
 
-    # Cart token → ziyaretçi köprüsü. Yalnız sepet/checkout event'lerinde yazılır;
-    # her page_view'da yazmak aktif trafikte gereksiz Redis yükü olurdu.
-    if cart_token and vid and event_type in ("add_to_cart", "cart_viewed", "checkout_started"):
+    # Cart token → ziyaretçi köprüsü. Kısıtlama pixel tarafında yapılıyor (ct
+    # yalnız sepet olaylarında ya da token değiştiğinde dolu gelir), burada ct
+    # doluysa yazmak yeterli — event tipine göre elemek ziyaretçiyi kaçırırdı.
+    if cart_token and vid:
         await store.set_cart_visitor(cart_token, tid, vid)
         if event_type == "checkout_started":
             logger.info("[BRIDGE] cart_vid yazildi cart=%s vid=%s", cart_token[:12], vid)
