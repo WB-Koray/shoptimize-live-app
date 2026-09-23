@@ -381,14 +381,26 @@ window._spt_loaded = true;
     }
   }, true);
 
+  var _checkoutSent = false;
   document.addEventListener('click', function(e) {
+    if (_checkoutSent) return;
     var el = e.target;
     for (var i = 0; i < 8 && el && el.tagName !== 'BODY'; i++) {
+      var tag  = (el.tagName || '').toUpperCase();
       var href = (el.getAttribute && el.getAttribute('href')) || '';
       var name = (el.getAttribute && el.getAttribute('name')) || '';
       var cls  = (el.className && typeof el.className === 'string') ? el.className : '';
-      if (href.indexOf('/checkout') !== -1 || name === 'checkout' || cls.indexOf('checkout') !== -1) {
-        send('checkout_started', {}); break;
+      // href ve name kesin sinyal. Class eslesmesi ise yalniz gercekten
+      // tiklanabilir elemanlarda kabul edilir: sepet cekmecesi modern temalarda
+      // her sayfada DOM'da duruyor ve cart-drawer__checkout gibi class'lar
+      // tasiyor, aksi halde alakasiz sayfalardaki tiklamalar checkout sayiliyordu.
+      var actionable = tag === 'A' || tag === 'BUTTON' || tag === 'INPUT';
+      if (href.indexOf('/checkout') !== -1
+          || name === 'checkout'
+          || (actionable && cls.indexOf('checkout') !== -1)) {
+        _checkoutSent = true;   // sayfa basina bir kez
+        send('checkout_started', {});
+        break;
       }
       el = el.parentElement;
     }
@@ -1935,6 +1947,14 @@ async def shopify_checkouts_webhook(
     if checkout_token and phone:
         pixel_tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
         total_price = str(checkout.get("total_price") or checkout.get("subtotal_price") or "0")
+        # checkouts/update aynı handler'a geliyor (Shopify'da o topic de buraya
+        # kayıtlı). ts her seferinde "şimdi" yazılırsa terk edilmiş sepet sayacı
+        # her güncellemede sıfırlanır — adres/kargo düzenleyen müşteriye
+        # hatırlatma sürekli ileri kayar, worker delay'i bu alana göre ölçüyor
+        # (main.py: now_ms - checkout_ts < step_delay_ms). İlk görülme anı korunur.
+        _existing = await store.get_checkout(checkout_token) or {}
+        _first_seen = int(_existing.get("ts") or 0) or int(time.time() * 1000)
+        _topic = (request.headers.get("x-shopify-topic", "") or "").strip()
         await store.save_checkout(checkout_token, {
             "token": checkout_token,
             "phone": phone,
@@ -1946,11 +1966,13 @@ async def shopify_checkouts_webhook(
             "brand": brand,
             "vid": matched_vid or "",
             "tid": matched_tid or pixel_tid or "",
-            "ts": int(time.time() * 1000),
+            "ts": _first_seen,
         })
         if customer_name:
             await store.set_phone_name(phone, customer_name)
-        logger.info("[CHECKOUT] kaydedildi phone=***%s name=%s product=%s", phone[-4:], customer_name or "-", product[:30] or "-")
+        logger.info("[CHECKOUT] kaydedildi topic=%s phone=***%s name=%s product=%s yas=%ss",
+                    _topic or "-", phone[-4:], customer_name or "-", product[:30] or "-",
+                    int((time.time() * 1000 - _first_seen) / 1000))
     else:
         logger.info("[CHECKOUT] token veya telefon eksik token=%s phone=%s", bool(checkout_token), bool(phone))
 
