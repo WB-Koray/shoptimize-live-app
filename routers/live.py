@@ -1724,11 +1724,17 @@ async def shopify_orders_webhook(
             from services.wa_sender import send_wa_template
             customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
             tmpl = post_order.get("template", "siparis_onay")
-            await send_wa_template(
-                settings["wa_token"], settings["phone_number_id"], phone,
-                name=customer_name, order_number=str(order.get("name") or order.get("order_number") or ""),
-                template_name=tmpl,
-            )
+            _oid = str(order.get("id", "")).strip()
+            # Mükerrer webhook teslimi müşteriye ikinci kez mesaj attırmasın.
+            if _oid and not await store.claim_once(f"order_wa:{_oid}"):
+                logger.info("[ORDER] WA onayi zaten gonderilmis, atlandi order=%s", order_number)
+            else:
+                await send_wa_template(
+                    settings["wa_token"], settings["phone_number_id"], phone,
+                    name=customer_name,
+                    order_number=str(order.get("name") or order.get("order_number") or ""),
+                    template_name=tmpl,
+                )
 
     # Sipariş → ziyaretçi eşlemesi. Öncelik cart_token köprüsünde: misafir
     # alışverişlerde customer_id pixel'e hiç ulaşmadığı için _customer_to_tid
@@ -1793,6 +1799,14 @@ async def shopify_orders_webhook(
         "customer_name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip(),
         "line_items": line_items,
     }
+
+    # Mükerrer teslimde yolculuğa ve canlı akışa ikinci bir "Sipariş verdi"
+    # satırı düşmesin. Eşleme (set_order_visitor) idempotent olduğu için
+    # yalnız event basımı kilitleniyor.
+    _ev_oid = str(order.get("id", "")).strip()
+    if _ev_oid and not await store.claim_once(f"order_ev:{_ev_oid}"):
+        logger.info("[ORDER] checkout_completed zaten basilmis, atlandi order=%s", order_number)
+        return JSONResponse({"ok": True, "duplicate": True})
 
     if session_info:
         tid = session_info["tid"]

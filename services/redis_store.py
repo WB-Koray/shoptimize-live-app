@@ -382,6 +382,19 @@ class RedisStore:
         except Exception:
             return None
 
+    async def claim_once(self, key: str, ttl_sec: int = 86400) -> bool:
+        """Tek seferlik islem kilidi. Ilk cagirana True, sonrakilere False doner.
+
+        Shopify webhook teslimi "en az bir kez" garantisi verir: ayni siparis
+        birden fazla gelebilir (retry ya da birden fazla abonelik). Ciro sayimi
+        gibi yerlerde zaten order_id dedup'i var, ama WhatsApp gonderimi gibi
+        geri alinamaz yan etkiler icin acik bir kilit gerekiyor.
+        """
+        try:
+            return bool(await self._redis.set(f"once:{key}", "1", ex=ttl_sec, nx=True))
+        except Exception:
+            return True  # Redis erisilemiyorsa islemi engelleme
+
     # Köprü teşhis kaydı — her siparişte hangi yolun tuttuğu kısa bir listede
     # birikir. Log taramadan tarayıcıdan bakılabilsin diye (bkz.
     # GET /api/admin/bridge-log). Yalnız son 50 kayıt tutulur.
