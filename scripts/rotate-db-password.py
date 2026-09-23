@@ -133,7 +133,8 @@ def dsn_iceren_degiskenler():
         for e in envs if isinstance(envs, list) else []:
             deger = str(e.get("value") or "")
             if _DSN_RE.search(deger):
-                bulunan.append((ad, uuid, e.get("key", ""), deger))
+                bulunan.append((ad, uuid, e.get("key", ""), deger,
+                                e.get("updated_at") or e.get("created_at") or "?"))
     return apps, bulunan
 
 
@@ -146,7 +147,7 @@ def cmd_scan():
         print("\nHicbir uygulamada DSN yok. Token'in tum kaynaklari gorebildiginden emin ol.")
         return
     hostlar = {}
-    for ad, uuid, key, deger in bulunan:
+    for ad, uuid, key, deger, _ts in bulunan:
         hostlar.setdefault(dsn_host(deger), []).append(ad)
     if len(hostlar) > 1:
         print()
@@ -156,11 +157,11 @@ def cmd_scan():
             print(f"    {h}  <- {', '.join(sorted(set(adlar)))}")
 
     son_app = None
-    for ad, uuid, key, deger in bulunan:
+    for ad, uuid, key, deger, ts in bulunan:
         if ad != son_app:
             print(f"\n  {ad}  ({uuid})")
             son_app = ad
-        print(f"    {key}")
+        print(f"    {key}   (son degisiklik: {ts})")
         print(f"      {maskele(deger)}")
     print(f"\n{'='*78}")
     print("Bu degiskenlerin HEPSI 'apply' ile guncellenecek.")
@@ -208,7 +209,7 @@ def cmd_apply():
         return
 
     print(f"\n{len(bulunan)} degisken guncellenecek:")
-    for ad, _u, key, _v in bulunan:
+    for ad, _u, key, _v, _t in bulunan:
         print(f"  {ad} / {key}")
     if input("\nDevam? (evet/hayir): ").strip().lower() not in ("evet", "e", "yes", "y"):
         print("Iptal edildi.")
@@ -216,7 +217,7 @@ def cmd_apply():
 
     guncellenen_uuidler = []
     atlanan = []
-    for ad, uuid, key, deger in bulunan:
+    for ad, uuid, key, deger, _ts in bulunan:
         # Eski sifre icinde kodlanmamis '@' varsa regex ilk '@'te durur ve
         # sifrenin kalani host'a karisir. group(3) zaten '@' ile basladigi icin
         # esik 1: birden fazlaysa DSN belirsiz. Sessizce bozmaktansa atla.
