@@ -438,6 +438,38 @@ class RedisStore:
                 pass
         return out
 
+    # Sipariş anındaki yolculuk anlık görüntüsü.
+    # events:{tid} listesi _MAX_EVENTS (5000) kaydında kırpılıyor ve bu tavan
+    # tüm ziyaretçiler için ortak. Yoğun mağazada birkaç saatte doluyor, en
+    # eski event'ler düşüyor — yani yolculuğun BAŞI, "nereden geldi" cevabı,
+    # ilk kaybolan şey oluyor. 7 günlük TTL bu yüzden yanıltıcı.
+    # Sipariş anında veri hâlâ elimizdeyken kalıcılaştırılıyor.
+
+    _ORDER_JOURNEY_TTL = 86400 * 90
+
+    async def set_order_journey(self, order_id: str, veri: dict) -> None:
+        if not order_id or not veri:
+            return
+        try:
+            await self._redis.setex(
+                f"order_journey:{order_id}",
+                self._ORDER_JOURNEY_TTL,
+                json.dumps(veri, ensure_ascii=False),
+            )
+        except Exception:
+            pass  # anlık görüntü sipariş akışını asla bozmamalı
+
+    async def get_order_journey(self, order_id: str) -> dict | None:
+        if not order_id:
+            return None
+        raw = await self._redis.get(f"order_journey:{order_id}")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
     # Sipariş → ziyaretçi. Yolculuk ekranı sipariş id'siyle sorgulandığı için
     # cart_vid eşlemesi orders/create anında buraya sabitlenir; cart token o
     # noktadan sonra bir daha görünmez.

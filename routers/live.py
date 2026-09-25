@@ -1012,19 +1012,9 @@ def _source_touches(events):
     return touches
 
 
-async def _build_local_journey(order_id: str) -> Optional[dict]:
-    """Shopify yolculuk verisi boşsa kendi pixel event'lerimizden yolculuk kurar.
-
-    Shopify'ın customer journey'si kendi analytics çerezine bağlı; çerez onayı
-    reddedilince (CMP) veya uygulama içi tarayıcıda boş kalıyor. Bizim pixel o
-    mekanizmadan bağımsız çalıştığı için veri çoğu zaman elimizde oluyor.
-    Eşleme orders/create anında cart_token köprüsünden kuruluyor.
-    """
-    mapping = await store.get_order_visitor(str(order_id or "").strip())
-    if not mapping:
-        return None
-    tid, vid = mapping.get("tid", ""), mapping.get("vid", "")
-    events = await store.get_visitor_events(tid, vid, limit=120)
+def _journey_from_events(events, vid: str) -> Optional[dict]:
+    """Event listesinden yolculuk kurar. Hem siparis anindaki anlik goruntu
+    hem de sonradan canli yeniden kurulum bu fonksiyonu kullanir."""
     if not events:
         return None
 
@@ -1084,6 +1074,45 @@ async def _build_local_journey(order_id: str) -> Optional[dict]:
         # kurban gitmemeli.
         "steps": _kuyrugu_al(steps, 40),
     }
+
+
+async def _snapshot_order_journey(order_id: str, tid: str, vid: str) -> None:
+    """Siparis anindaki yolculugu kalicilastir.
+
+    events:{tid} 5000 kayitta kirpildigi ve bu tavan tum ziyaretcilerde ortak
+    oldugu icin yogun magazada yolculugun basi birkac saatte dusuyor. Veri
+    hala elimizdeyken sakliyoruz; ekran sonradan bakildiginda bozulmasin.
+    """
+    if not order_id or not tid or not vid:
+        return
+    try:
+        events = await store.get_visitor_events(tid, vid, limit=200)
+        veri = _journey_from_events(events, vid)
+        if veri:
+            await store.set_order_journey(order_id, veri)
+    except Exception:
+        logger.exception("[JOURNEY] anlik goruntu alinamadi order=%s", order_id)
+
+
+async def _build_local_journey(order_id: str) -> Optional[dict]:
+    """Shopify yolculuk verisi bossa kendi pixel event'lerimizden yolculuk dondurur.
+
+    Once siparis anindaki anlik goruntuye bakar. Yoksa (koprü kurulmadan onceki
+    siparisler) canli event'lerden yeniden kurmayi dener — ama o veri kirpilmis
+    olabilir, bu yuzden anlik goruntu tercih edilir.
+    """
+    oid = str(order_id or "").strip()
+    anlik = await store.get_order_journey(oid)
+    if anlik:
+        return anlik
+
+    mapping = await store.get_order_visitor(oid)
+    if not mapping:
+        return None
+    events = await store.get_visitor_events(
+        mapping.get("tid", ""), mapping.get("vid", ""), limit=120
+    )
+    return _journey_from_events(events, mapping.get("vid", ""))
 
 
 @router.get("/api/shopify/order-journey")
@@ -1920,6 +1949,8 @@ async def shopify_orders_webhook(
             "data": ev_data,
         }
         await store.push_event(tid, ev)
+        # Yolculugu simdi sakla — event tamponu doldukca yolculugun basi duser.
+        await _snapshot_order_journey(str(order.get("id", "")), tid, vid)
         return JSONResponse({"ok": True, "matched": True, "tid": tid})
 
     # Fallback: checkout webhook stored vid+tid — push event via that path
@@ -1933,6 +1964,7 @@ async def shopify_orders_webhook(
             "data": ev_data,
         }
         await store.push_event(tid, ev)
+        await _snapshot_order_journey(str(order.get("id", "")), tid, vid)
         return JSONResponse({"ok": True, "matched": True, "via": "checkout_data", "tid": tid})
 
     return JSONResponse({"ok": True, "matched": False})
