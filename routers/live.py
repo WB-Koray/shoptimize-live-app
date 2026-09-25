@@ -941,6 +941,12 @@ _JOURNEY_STEP_TYPES = (
 )
 
 
+def _sira_anahtari(x):
+    """Zaman, sonra tip. Ayni ts'te kaynak temasi once gelir: kaynak, ona
+    sebep olan sayfa goruntulemesinden sonra gorunmemeli."""
+    return (x.get("ts", 0), 0 if x.get("event_type") == "_source" else 1)
+
+
 def _kuyrugu_al(steps, limit):
     """Son `limit` adimi dondurur ama kaynak temaslarini her zaman korur."""
     if len(steps) <= limit:
@@ -948,7 +954,7 @@ def _kuyrugu_al(steps, limit):
     temaslar = [x for x in steps if x.get("event_type") == "_source"]
     kuyruk = [x for x in steps[-limit:] if x.get("event_type") != "_source"]
     birlesik = temaslar + kuyruk
-    return sorted(birlesik, key=lambda x: x.get("ts", 0))
+    return sorted(birlesik, key=_sira_anahtari)
 
 
 def _site_host(events) -> str:
@@ -1057,7 +1063,7 @@ async def _build_local_journey(order_id: str) -> Optional[dict]:
     # gostermek coklu temasi gizliyordu.
     touches = _source_touches(events)
     if touches:
-        steps = sorted(steps + touches, key=lambda x: x.get("ts", 0))
+        steps = sorted(steps + touches, key=_sira_anahtari)
 
     # Ozet rozet icin ilk temas
     ilk = touches[0] if touches else {}
