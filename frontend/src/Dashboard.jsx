@@ -823,6 +823,88 @@ function VisitStep({ visit, index, isLast }) {
   );
 }
 
+// Kanal siniflandirmasi — ham kaynak yerine okunabilir etiket.
+// Regex yerine duz metin eslesmesi: kaynak listeleri buyudukce okunakli kalsin.
+const ARAMA_HOSTLARI  = ['google.', 'bing.', 'yahoo.', 'yandex.', 'duckduckgo.'];
+const SOSYAL_HOSTLARI = ['facebook', 'instagram', 'tiktok', 'pinterest', 'youtube', 'linkedin', 't.co', 'x.com'];
+const UCRETLI_MEDYA   = ['cpc', 'ppc', 'paid', 'display', 'cpm'];
+
+function icerirMi(metin, liste) {
+  return liste.some(x => metin.includes(x));
+}
+
+function refHost(ref) {
+  if (!ref) return '';
+  try {
+    const h = new URL(ref).hostname.toLowerCase();
+    return h.startsWith('www.') ? h.slice(4) : h;
+  } catch { return ''; }
+}
+
+function kanalEtiketi(utm, referrer, t) {
+  const u = utm || {};
+  const src = (u.utm_source || '').toLowerCase();
+  const med = (u.utm_medium || '').toLowerCase();
+  const ucretli = icerirMi(med, UCRETLI_MEDYA);
+  const sosyalKaynak = icerirMi(src, SOSYAL_HOSTLARI);
+  const aramaKaynak  = icerirMi(src, ['google', 'bing', 'yahoo', 'yandex']);
+
+  if (ucretli && sosyalKaynak) return t('ojrn.ch.paid_social');
+  if (ucretli && aramaKaynak)  return t('ojrn.ch.paid_search');
+  if (ucretli)                 return t('ojrn.ch.paid');
+  if (src === 'email' || icerirMi(med, ['email', 'newsletter', 'mail'])) return t('ojrn.ch.email');
+  if (sosyalKaynak) return t('ojrn.ch.social');
+  if (src)          return t('ojrn.ch.referral');
+
+  const host = refHost(referrer);
+  if (icerirMi(host, ARAMA_HOSTLARI))  return t('ojrn.ch.organic_search');
+  if (icerirMi(host, SOSYAL_HOSTLARI)) return t('ojrn.ch.social');
+  if (host) return t('ojrn.ch.referral');
+  return t('ojrn.ch.direct');
+}
+
+// Yolculuk cizelgesindeki kaynak temasi — reklamdan/aramadan/e-postadan
+// gelisi, site ici adimlardan gorsel olarak ayrilmis halde gosterir.
+function SourceTouchStep({ step, isLast, t }) {
+  const utm = step.utm || {};
+  const etiket = kanalEtiketi(utm, step.referrer, t);
+  const host = refHost(step.referrer);
+  const detay = utm.utm_source
+    ? utm.utm_source + (utm.utm_medium ? ' / ' + utm.utm_medium : '')
+    : host;
+  const ts = step.ts
+    ? new Date(step.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+  return (
+    <div className="flex gap-2.5">
+      <div className="flex flex-col items-center shrink-0 pt-1">
+        <div className="w-2 h-2 rounded-full bg-purple shrink-0" />
+        {!isLast && <div className="w-px bg-border flex-1 mt-0.5 mb-0.5" style={{ minHeight: '14px' }} />}
+      </div>
+      <div className={!isLast ? 'flex-1 min-w-0 pb-2' : 'flex-1 min-w-0'}>
+        <div className="rounded-lg bg-purpleSoft border border-purple/20 px-2.5 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <ExternalLink size={11} className="text-purple shrink-0" />
+              <span className="text-[11px] font-semibold text-purple">{t('ojrn.source_step')}</span>
+              <span className="text-[11px] font-bold text-text truncate">{etiket}</span>
+            </div>
+            {ts && <span className="text-[10px] text-textMute whitespace-nowrap shrink-0">{ts}</span>}
+          </div>
+          {(detay || utm.utm_campaign) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1 ml-4">
+              {detay && <span className="text-[10px] text-textDim">{detay}</span>}
+              {utm.utm_campaign && (
+                <span className="text-[10px] bg-blueSoft text-blue px-1.5 py-0.5 rounded">{utm.utm_campaign}</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Shopify yolculuk verisi yokken kendi pixel event'lerimizden kurulan adım
 const LOCAL_STEP_ICONS = {
   page_viewed: Eye,
@@ -1036,7 +1118,9 @@ function OrderJourneyModal({ orderId, session, onClose }) {
 
               <div className="space-y-0">
                 {local.steps.map((st, i) => (
-                  <LocalJourneyStep key={i} step={st} isLast={i === local.steps.length - 1} t={t} />
+                  st.event_type === '_source'
+                    ? <SourceTouchStep key={i} step={st} isLast={i === local.steps.length - 1} t={t} />
+                    : <LocalJourneyStep key={i} step={st} isLast={i === local.steps.length - 1} t={t} />
                 ))}
               </div>
             </div>
@@ -4644,6 +4728,11 @@ export default function Dashboard({ session, onLogout }) {
   const [sseStatus, setSseStatus]     = useState('connecting');
   const [paused, setPaused]           = useState(false);
   const [feedOpen, setFeedOpen]       = useState(true);
+  // Ziyaretci / akis arama ve "sadece siparis" filtreleri
+  const [visitorQuery, setVisitorQuery]       = useState('');
+  const [visitorOnlyOrders, setVisitorOnlyOrders] = useState(false);
+  const [feedQuery, setFeedQuery]             = useState('');
+  const [feedOnlyOrders, setFeedOnlyOrders]   = useState(false);
   const [newIds, setNewIds]           = useState(new Set());
   const [flashProducts, setFlashProducts] = useState(new Set());
 
@@ -4946,6 +5035,39 @@ export default function Dashboard({ session, onLogout }) {
       })
       .sort((a, b) => b.lastTs - a.lastTs);
   }, [events, convertedOrders]);
+
+  // Ziyaretci arama + "sadece siparis verenler" filtresi.
+  // Arama ziyaretcinin gezdigi TUM urunlerde calisir: "satin alinan urunu ara,
+  // kaynagini bul" akisi icin kart uzerindeki son urun yeterli degil.
+  const filteredVisitors = useMemo(() => {
+    const q = visitorQuery.trim().toLowerCase();
+    return visitorProfiles.filter(p => {
+      if (visitorOnlyOrders && p.stage !== 'converted') return false;
+      if (!q) return true;
+      const alanlar = [
+        p.vid, p.lastProduct, p.referrer, p.device,
+        p.utm?.utm_source, p.utm?.utm_medium, p.utm?.utm_campaign,
+        ...(p.events || []).map(e => {
+          const d = e.data || {};
+          return [d.product_title, d.title, d.query, d.order_number].filter(Boolean).join(' ');
+        }),
+      ];
+      return alanlar.some(x => String(x || '').toLowerCase().includes(q));
+    });
+  }, [visitorProfiles, visitorQuery, visitorOnlyOrders]);
+
+  // Canli akis arama + "sadece siparisler" filtresi.
+  const filteredEvents = useMemo(() => {
+    const q = feedQuery.trim().toLowerCase();
+    return events.filter(ev => {
+      if (feedOnlyOrders && ev.event_type !== 'checkout_completed') return false;
+      if (!q) return true;
+      const d = ev.data || {};
+      const alanlar = [ev.event_type, ev.vid, ev.url,
+                       d.product_title, d.title, d.query, d.order_number, d.customer_name];
+      return alanlar.some(x => String(x || '').toLowerCase().includes(q));
+    });
+  }, [events, feedQuery, feedOnlyOrders]);
 
   const memberCount = useMemo(() => visitorProfiles.filter(p => p.customer_id).length, [visitorProfiles]);
 
@@ -5551,17 +5673,44 @@ export default function Dashboard({ session, onLogout }) {
           <div className="space-y-4">
             {visitorProfiles.length > 0 && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-                <SectionHead icon={Users} title={t('visitors.title')} badge={visitorProfiles.length} extra={t('visitors.extra')} />
-                <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 min-h-[120px]">
-                  {visitorProfiles.slice(0, 18).map(profile => (
-                    <VisitorCard key={profile.vid} profile={profile}
-                      customerName={customerNames[profile.customer_id]}
-                      anonymized={anonymized}
-                      onClick={() => setSelectedVisitor(profile)} />
-                  ))}
+                <SectionHead icon={Users} title={t('visitors.title')} badge={filteredVisitors.length} extra={t('visitors.extra')} />
+                <div className="flex items-center gap-2 px-4 pt-3">
+                  <div className="relative flex-1 min-w-0">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-textMute pointer-events-none" />
+                    <input
+                      value={visitorQuery}
+                      onChange={e => setVisitorQuery(e.target.value)}
+                      placeholder={t('vis.search')}
+                      className="w-full bg-surfaceAlt border border-border rounded-lg pl-7 pr-7 py-1.5 text-[11px] text-text placeholder:text-textMute focus:outline-none focus:border-green/50"
+                    />
+                    {visitorQuery && (
+                      <button onClick={() => setVisitorQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-textMute hover:text-text">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setVisitorOnlyOrders(v => !v)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors shrink-0
+                      ${visitorOnlyOrders ? 'bg-greenSoft border-green/30 text-green' : 'bg-surfaceAlt border-borderStrong text-textDim hover:text-text'}`}>
+                    <CheckCircle size={11} /> {t('vis.only_orders')}
+                  </button>
                 </div>
-                {visitorProfiles.length > 18 && (
-                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{visitorProfiles.length - 18} {t('visitors.more').replace('+{n} ', '')}</p>
+                {filteredVisitors.length === 0 ? (
+                  <p className="py-10 text-center text-xs text-textMute">{t('vis.no_match')}</p>
+                ) : (
+                  <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 min-h-[120px]">
+                    {filteredVisitors.slice(0, 18).map(profile => (
+                      <VisitorCard key={profile.vid} profile={profile}
+                        customerName={customerNames[profile.customer_id]}
+                        anonymized={anonymized}
+                        onClick={() => setSelectedVisitor(profile)} />
+                    ))}
+                  </div>
+                )}
+                {filteredVisitors.length > 18 && (
+                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{filteredVisitors.length - 18} {t('visitors.more').replace('+{n} ', '')}</p>
                 )}
               </div>
             )}
@@ -5573,7 +5722,7 @@ export default function Dashboard({ session, onLogout }) {
                   <Activity size={16} className="text-textDim" />
                   <span className="text-text text-sm font-bold">{t('feed.title')}</span>
                   {events.length > 0 && (
-                    <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{events.length}</span>
+                    <span className="text-[10px] bg-surfaceAlt text-textDim px-2 py-0.5 rounded-full">{filteredEvents.length}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -5593,18 +5742,47 @@ export default function Dashboard({ session, onLogout }) {
                 </div>
               </div>
               {feedOpen && (
-                <div className="overflow-y-auto max-h-[520px] p-3 space-y-2 custom-scrollbar">
-                  {events.length === 0
-                    ? <div className="py-16 text-center space-y-2">
-                        <p className="text-textMute text-sm font-medium">{t('feed.no_events')}</p>
-                        <p className="text-textMute text-xs">{t('feed.no_events_sub')}</p>
+                <>
+                  {events.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 pt-3">
+                      <div className="relative flex-1 min-w-0">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-textMute pointer-events-none" />
+                        <input
+                          value={feedQuery}
+                          onChange={e => setFeedQuery(e.target.value)}
+                          placeholder={t('feed.search')}
+                          className="w-full bg-surfaceAlt border border-border rounded-lg pl-7 pr-7 py-1.5 text-[11px] text-text placeholder:text-textMute focus:outline-none focus:border-green/50"
+                        />
+                        {feedQuery && (
+                          <button onClick={() => setFeedQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-textMute hover:text-text">
+                            <X size={11} />
+                          </button>
+                        )}
                       </div>
-                    : events.map(ev => (
-                        <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
-                          ev={ev} isNew={newIds.has(ev._uid)} />
-                      ))
-                  }
-                </div>
+                      <button
+                        onClick={() => setFeedOnlyOrders(v => !v)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors shrink-0
+                          ${feedOnlyOrders ? 'bg-greenSoft border-green/30 text-green' : 'bg-surfaceAlt border-borderStrong text-textDim hover:text-text'}`}>
+                        <CheckCircle size={11} /> {t('feed.only_orders')}
+                      </button>
+                    </div>
+                  )}
+                  <div className="overflow-y-auto max-h-[520px] p-3 space-y-2 custom-scrollbar">
+                    {events.length === 0
+                      ? <div className="py-16 text-center space-y-2">
+                          <p className="text-textMute text-sm font-medium">{t('feed.no_events')}</p>
+                          <p className="text-textMute text-xs">{t('feed.no_events_sub')}</p>
+                        </div>
+                      : filteredEvents.length === 0
+                        ? <p className="py-10 text-center text-xs text-textMute">{t('feed.no_match')}</p>
+                        : filteredEvents.map(ev => (
+                            <EventRow key={ev._uid || `${ev.ts}_${ev.vid}_${ev.event_type}`}
+                              ev={ev} isNew={newIds.has(ev._uid)} />
+                          ))
+                    }
+                  </div>
+                </>
               )}
             </div>
 

@@ -941,6 +941,71 @@ _JOURNEY_STEP_TYPES = (
 )
 
 
+def _kuyrugu_al(steps, limit):
+    """Son `limit` adimi dondurur ama kaynak temaslarini her zaman korur."""
+    if len(steps) <= limit:
+        return steps
+    temaslar = [x for x in steps if x.get("event_type") == "_source"]
+    kuyruk = [x for x in steps[-limit:] if x.get("event_type") != "_source"]
+    birlesik = temaslar + kuyruk
+    return sorted(birlesik, key=lambda x: x.get("ts", 0))
+
+
+def _site_host(events) -> str:
+    """Magazanin kendi hostu — ic gezinmeyi kaynak sanmamak icin."""
+    from urllib.parse import urlparse
+    for ev in events:
+        h = (urlparse(ev.get("url") or "").hostname or "").lower()
+        if h:
+            return h[4:] if h.startswith("www.") else h
+    return ""
+
+
+def _source_key(ev, site_host):
+    """Event'in kaynak imzasi. Kaynak yoksa None (ic gezinme dahil)."""
+    from urllib.parse import urlparse
+    utm = ev.get("utm") if isinstance(ev.get("utm"), dict) else {}
+    src = (utm.get("utm_source") or "").strip()
+    med = (utm.get("utm_medium") or "").strip()
+    camp = (utm.get("utm_campaign") or "").strip()
+    ref = ev.get("referrer") or ""
+    ref_host = (urlparse(ref).hostname or "").lower() if ref else ""
+    if ref_host.startswith("www."):
+        ref_host = ref_host[4:]
+    # Kendi sitesinden gelen referrer ic gezinmedir, kaynak degil.
+    if ref_host and site_host and (ref_host == site_host or ref_host.endswith("." + site_host)):
+        ref_host = ""
+    if not src and not ref_host:
+        return None
+    return (src.lower(), med.lower(), camp, ref_host)
+
+
+def _source_touches(events):
+    """Yolculuk boyunca kaynak degisimleri. Ayni kaynak art arda tekrar etmez.
+
+    Tek bir "ilk kaynak" yerine liste donuyoruz: musteri reklamdan gelip,
+    cikip, e-postadan donduyse ikinci temas da gorunmeli. Veri zaten her
+    event'te duruyordu, ekranda kayboluyordu.
+    """
+    site_host = _site_host(events)
+    touches, onceki = [], None
+    for ev in events:
+        anahtar = _source_key(ev, site_host)
+        if anahtar is None or anahtar == onceki:
+            continue
+        onceki = anahtar
+        utm = ev.get("utm") if isinstance(ev.get("utm"), dict) else {}
+        touches.append({
+            "event_type": "_source",
+            "ts": ev.get("ts", 0),
+            "url": "",
+            "title": "",
+            "utm": {k: v for k, v in utm.items() if v},
+            "referrer": ev.get("referrer") or "",
+        })
+    return touches
+
+
 async def _build_local_journey(order_id: str) -> Optional[dict]:
     """Shopify yolculuk verisi boşsa kendi pixel event'lerimizden yolculuk kurar.
 
@@ -988,15 +1053,16 @@ async def _build_local_journey(order_id: str) -> Optional[dict]:
         collapsed.append(st)
     steps = collapsed
 
-    # Atıf ilk ziyarette yakalanır; ilk dolu UTM/referrer'ı al.
-    utm, referrer = {}, ""
-    for ev in events:
-        if not utm and isinstance(ev.get("utm"), dict) and ev.get("utm"):
-            utm = ev["utm"]
-        if not referrer and ev.get("referrer"):
-            referrer = ev["referrer"]
-        if utm and referrer:
-            break
+    # Kaynak temaslari adim olarak cizelgeye karisir — rozette tek bir kaynak
+    # gostermek coklu temasi gizliyordu.
+    touches = _source_touches(events)
+    if touches:
+        steps = sorted(steps + touches, key=lambda x: x.get("ts", 0))
+
+    # Ozet rozet icin ilk temas
+    ilk = touches[0] if touches else {}
+    utm = ilk.get("utm") or {}
+    referrer = ilk.get("referrer") or ""
 
     return {
         "source": "shoptimize_pixel",
@@ -1007,7 +1073,10 @@ async def _build_local_journey(order_id: str) -> Optional[dict]:
         "utm": utm,
         "referrer": referrer,
         # Satın almaya yakın adımlar daha anlamlı — kuyruğu al, sırayı koru.
-        "steps": steps[-40:],
+        # Kaynak temaslari kirpilmaz: yolculugun basindaki ilk temas tam da
+        # "bu siparis nereden geldi" sorusunun cevabi, kuyruk kirpmasina
+        # kurban gitmemeli.
+        "steps": _kuyrugu_al(steps, 40),
     }
 
 
