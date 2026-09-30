@@ -575,9 +575,24 @@ class RedisStore:
         return bool(await self._redis.exists(f"wa_step:{checkout_token}:{step_idx}"))
 
     async def mark_step_sent(self, checkout_token: str, step_idx: int) -> None:
+        import time as _t
         await self._redis.setex(f"wa_step:{checkout_token}:{step_idx}", self._CHECKOUT_TTL, "1")
+        # Son gonderim zamani — adimlar arasi araligi korumak icin. Yoksa
+        # bekleyen eski bir sepette tum adimlarin suresi ayni anda dolmus
+        # olur ve musteriye ust uste mesaj gider.
+        await self._redis.setex(
+            f"wa_last_sent:{checkout_token}", self._CHECKOUT_TTL, str(int(_t.time() * 1000))
+        )
         if step_idx == 0:
             await self._redis.setex(f"wa_sent:{checkout_token}", self._CHECKOUT_TTL, "1")
+
+    async def get_last_step_sent_ts(self, checkout_token: str) -> int:
+        """Bu checkout icin son adimin gonderim zamani (ms). Bilinmiyorsa 0."""
+        try:
+            val = await self._redis.get(f"wa_last_sent:{checkout_token}")
+            return int(val) if val else 0
+        except Exception:
+            return 0
 
     # ── Opt-out yönetimi ────────────────────────────────────────────────────────
 

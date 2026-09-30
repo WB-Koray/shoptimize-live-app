@@ -144,14 +144,31 @@ async def _abandoned_checkout_worker():
                 enabled_step_indices = [i for i, s in enumerate(sequence) if s.get("enabled")]
                 last_enabled_idx = enabled_step_indices[-1] if enabled_step_indices else -1
 
+                # Adimlar arasi minimum aralik icin son gonderim zamani.
+                last_sent_ts = await store.get_last_step_sent_ts(token)
+                prev_delay_ms = 0   # bir onceki AKTIF adimin gecikmesi
+
                 for step_idx, step in enumerate(sequence):
                     if not step.get("enabled"):
                         continue
                     step_delay_ms = step.get("delay_minutes", 15) * 60 * 1000
+                    gap_needed_ms = max(0, step_delay_ms - prev_delay_ms)
+                    prev_delay_ms = step_delay_ms
                     if now_ms - checkout_ts < step_delay_ms:
                         continue
                     if await store.is_step_sent(token, step_idx):
                         continue
+                    # Bekleyen eski bir sepette tum adimlarin suresi ayni anda
+                    # dolmus olabilir. Checkout yasi yetse bile iki gonderim
+                    # arasinda adimin kendi araligi kadar beklenir; aksi halde
+                    # musteriye ust uste mesaj gider.
+                    if last_sent_ts and now_ms - last_sent_ts < gap_needed_ms:
+                        _log.info(
+                            "[FLOW] adim %s bekletildi — onceki gonderimden bu yana %s dk, gereken %s dk (token=%s…)",
+                            step_idx, int((now_ms - last_sent_ts) / 60000),
+                            int(gap_needed_ms / 60000), token[:8],
+                        )
+                        break
 
                     tmpl = step.get("template", "sepet_hatirlatma")
                     lang = step.get("language", "tr")
@@ -197,6 +214,10 @@ async def _abandoned_checkout_worker():
                                 dedupe_key=f"sendfail:{username}:{brand}", cooldown_sec=3600)
                         except Exception:
                             pass
+
+                    # Bir geciste en fazla bir adim. Sonraki adim kendi
+                    # araligini bekler; arka arkaya mesaj gitmez.
+                    break
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("[FLOW] Worker hatası: %s", e)
