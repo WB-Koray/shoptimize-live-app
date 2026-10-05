@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from services.db import get_setting, set_connection_settings, lookup_username_by_shop
+from services.db import get_setting, set_connection_settings, lookup_username_by_shop, ShopLookupError
 from services.auth import get_current_user as get_current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -531,7 +531,13 @@ async def shopify_reauth(
 
     # username öncelik sırası: 1) explicit param  2) DB lookup  3) shop'tan türet
     if not username:
-        found = lookup_username_by_shop(shop)
+        try:
+            found = lookup_username_by_shop(shop)
+        except ShopLookupError as e:
+            # Arama yapilamadiysa username turetmek yanlis hesaba baglanmaya
+            # yol acabilir — durup hata don.
+            logger.error("[Reauth] Mağaza araması yapılamadı: %s — %s", shop, e)
+            raise HTTPException(503, "Veritabanına şu an erişilemiyor. Birazdan tekrar deneyin.")
         if found:
             username, brand = found
             logger.info("[Reauth] DB lookup: shop=%s → username=%s brand=%s", shop, username, brand)
@@ -859,7 +865,14 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     if not shop or not shop.endswith(".myshopify.com"):
         raise HTTPException(401, f"Geçersiz shop: {dest}")
 
-    found = lookup_username_by_shop(shop)
+    try:
+        found = lookup_username_by_shop(shop)
+    except ShopLookupError as e:
+        # Gecici DB hatasi. 404 dondurmek olumcul: istemci bunu "kurulu degil"
+        # sanip OAuth kurulumuna yonlendiriyor, OAuth admin'e geri donuyor ve
+        # uygulama sonsuz yenilenme donguusune giriyordu.
+        logger.error("[SessTok] Mağaza araması yapılamadı: %s — %s", shop, e)
+        raise HTTPException(503, "Veritabanına şu an erişilemiyor. Birazdan tekrar deneyin.")
     if not found:
         logger.warning("[SessTok] Mağaza bulunamadı: %s", shop)
         raise HTTPException(404, "Mağaza bulunamadı. Uygulamayı Shopify App Store'dan yükleyin.")

@@ -91,6 +91,14 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
         logger.error("[DB] set_connection_settings hatası: %s", e)
 
 
+class ShopLookupError(Exception):
+    """Magaza aramasi teknik bir sebeple yapilamadi (DB erisimi vb.).
+
+    "Bulunamadi" (None) ile ayni sey DEGIL: biri tekrar denemeyi, digeri
+    kurulum akisini baslatmayi gerektirir.
+    """
+
+
 def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
     """
     shop_domain'e göre (username, brand) döner.
@@ -115,7 +123,13 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                     if stored and stored.lower() == shop_domain.lower():
                         return (row["username"], row["brand"])
     except Exception as e:
+        # DB hatasini "magaza kurulu degil" ile ayni cevaba (None) indirgemek
+        # cagiranlari yaniltiyordu: embedded app 404 gorup OAuth kurulumuna
+        # yonlendiriyor, OAuth admin'e geri donuyor, uygulama tekrar aciliyor
+        # ve gecici bir DB hatasi sonsuz yonlendirme donguusune donusuyordu.
+        # Artik ayirt edilebilir: cagiran kendi baglamina gore karar versin.
         logger.error("[DB] lookup_username_by_shop hatası: %s", e)
+        raise ShopLookupError(str(e)) from e
     return None
 
 

@@ -225,9 +225,22 @@ export default function App() {
       }
 
       if (res.status === 404) {
-        // Uygulama bu mağazada kurulu değil → install'a yönlendir
+        // Uygulama bu mağazada kurulu değil → install'a yönlendir.
         // window.top kullanılmalı: embedded app iframe içinde çalışıyor,
         // OAuth top-level window'da olmalı (iframe'de OAuth çalışmaz).
+        //
+        // Döngü koruması: OAuth tamamlanınca Shopify admin'e, oradan da bu
+        // ekrana geri dönülüyor. Kurulum yine tutmazsa aynı yol baştan
+        // başlıyor ve uygulama sonsuza kadar yenileniyordu — kullanıcıya
+        // hiçbir şey söylemeden. Oturumda bir kez denenir, sonrası açık hata.
+        if (sessionStorage.getItem('spt_install_tried') === '1') {
+          sessionStorage.removeItem('spt_install_tried');
+          throw new Error(
+            'Uygulama bu mağazada kurulu görünmüyor ve kurulum tamamlanamadı. ' +
+            'Shopify yöneticisinden uygulamayı kaldırıp yeniden yükleyin.'
+          );
+        }
+        sessionStorage.setItem('spt_install_tried', '1');
         const shop = sessionStorage.getItem('spt_shopify_shop') || '';
         topRedirect(`${API_URL}/auth/shopify/install?shop=${encodeURIComponent(shop)}`);
         return;
@@ -260,6 +273,7 @@ export default function App() {
         shop:     (data.shop || currentShop() || '').toLowerCase(),  // tenant guard
         tid:      data.tid || '',
       };
+      sessionStorage.removeItem('spt_install_tried');   // kurulum tuttu
       saveSession(newSession);
       setSession(newSession);
     } catch (e) {
