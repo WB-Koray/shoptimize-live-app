@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from services.db import get_setting, set_connection_settings, lookup_username_by_shop, ShopLookupError
+from services.db import get_setting, get_setting_strict, set_connection_settings, lookup_username_by_shop, ShopLookupError
 from services.auth import get_current_user as get_current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -336,7 +336,14 @@ async def shopify_callback(
         from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP
         import secrets as _secrets
 
-        wh_token = get_setting(username, brand, "shopify", "webhook_token", "")
+        # DB okumasi basarisiz olursa YENI token uretme: eski token hala
+        # Shopify'da kayitli aboneliklerde kullaniliyor, yenisi kopya abonelik
+        # yaratir ve ayni olay iki kez teslim edilir.
+        try:
+            wh_token = get_setting_strict(username, brand, "shopify", "webhook_token", "")
+        except Exception as _e:
+            logger.error("[OAuth] webhook_token okunamadi, kayit atlandi: %s", _e)
+            raise
         if not wh_token:
             wh_token = _secrets.token_hex(16)
             set_connection_settings(username, brand, "shopify", {"webhook_token": wh_token})
@@ -792,7 +799,14 @@ def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_tok
     try:
         from routers.live import _shopify_graphql, _WEBHOOK_TOPIC_MAP, SHOPIFY_API_VERSION
         import secrets as _secrets
-        wh_token = get_setting(username, brand, "shopify", "webhook_token", "")
+        # DB okumasi basarisiz olursa YENI token uretme: eski token hala
+        # Shopify'da kayitli aboneliklerde kullaniliyor, yenisi kopya abonelik
+        # yaratir ve ayni olay iki kez teslim edilir.
+        try:
+            wh_token = get_setting_strict(username, brand, "shopify", "webhook_token", "")
+        except Exception as _e:
+            logger.error("[OAuth] webhook_token okunamadi, kayit atlandi: %s", _e)
+            raise
         if not wh_token:
             wh_token = _secrets.token_hex(16)
             set_connection_settings(username, brand, "shopify", {"webhook_token": wh_token})

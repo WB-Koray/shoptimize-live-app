@@ -22,6 +22,38 @@ def _get_conn():
     return psycopg2.connect(DSN)
 
 
+def get_setting_strict(username: str, brand: str, integration: str, key: str, default=""):
+    """get_setting'in hata yutmayan hali — DB erisimi basarisizsa firlatir.
+
+    get_setting DB hatasinda varsayilani doner. Cogu cagri icin zararsiz, ama
+    "deger yoksa yenisini uret" kalibinda olumcul: okuma basarisiz oldugu icin
+    bos donen bir degeri "hic yok" sanip yenisini uretmek Shopify webhook
+    aboneliklerinin cogalmasina yol acti (her yeni token yeni URL, yeni
+    abonelik; eskiler de duruyor). Boyle yerlerde bu surum kullanilmali.
+    """
+    with _get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT payload_json FROM integration_connections
+                WHERE username = %s AND brand = %s AND integration_id = %s
+                LIMIT 1
+                """,
+                (username, brand, integration),
+            )
+            row = cur.fetchone()
+            if row and row["payload_json"]:
+                data = row["payload_json"]
+                if isinstance(data, str):
+                    data = json.loads(data)
+                sub = data.get("settings", {})
+                val = sub.get(key) if isinstance(sub, dict) else None
+                if val is None:
+                    val = data.get(key)
+                return val if val is not None else default
+    return default
+
+
 def get_setting(username: str, brand: str, integration: str, key: str, default=""):
     try:
         with _get_conn() as conn:
