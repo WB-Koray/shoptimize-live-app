@@ -146,6 +146,30 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
         logger.error("[DB] set_connection_settings hatası: %s", e)
 
 
+def _kayit_oncelik(username: str, data: dict, shop_domain: str):
+    """Ayni shop_domain'e sahip kayitlar arasinda hangisi gercek hesap?
+
+    Arama bozuldugunda cagiran taraf shop adindan username turetip yeni bir
+    kayit aciyordu (auth.py _shop_to_username: 59fc15-cd.myshopify.com ->
+    59fc15-cd). Boylece ayni magaza icin iki kayit olustu ve magaza bos olana
+    giriyordu. Burada gercek hesap tercih edilir:
+
+      1. Turetilmis olmayan username once gelir
+      2. Esitlikte, dolu alan sayisi fazla olan kazanir
+
+    Kolon adina (id, created_at) guvenilmiyor: bu tablo ana backend'e ait ve
+    semasi bu repodan dogrulanamiyor.
+    """
+    turetilmis = username.strip().lower() == shop_domain.replace(".myshopify.com", "").strip().lower()
+    ayarlar = data.get("settings") if isinstance(data.get("settings"), dict) else {}
+    dolu = sum(
+        1 for k in ("admin_api_token", "pixel_tracking_id", "webhook_token",
+                    "wa_token", "phone_number_id", "billing_status")
+        if (ayarlar.get(k) or data.get(k))
+    )
+    return (0 if turetilmis else 1, dolu)
+
+
 class ShopLookupError(Exception):
     """Magaza aramasi teknik bir sebeple yapilamadi (DB erisimi vb.).
 
@@ -165,9 +189,8 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT id, username, brand, payload_json FROM integration_connections
+                    SELECT username, brand, payload_json FROM integration_connections
                     WHERE integration_id = 'shopify'
-                    ORDER BY id ASC
                     """,
                 )
                 rows = cur.fetchall()
@@ -195,7 +218,7 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                         )
                         continue
                     if stored and stored.lower() == shop_domain.lower():
-                        eslesenler.append((row["username"], row["brand"]))
+                        eslesenler.append((row["username"], row["brand"], data))
                 # Ayni shop_domain icin birden fazla kayit olusabiliyor: arama
                 # basarisiz oldugunda cagiran taraf shop'tan username turetip
                 # YENI kayit aciyor (auth.py _shop_to_username). Sonucu agir —
@@ -203,12 +226,15 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                 # gorunuyor. id ASC siralamasi sayesinde her zaman EN ESKI,
                 # yani gercek kayit kazanir; fazlasi loglanir.
                 if len(eslesenler) > 1:
+                    eslesenler.sort(key=lambda x: _kayit_oncelik(x[0], x[2], shop_domain),
+                                    reverse=True)
                     logger.warning(
-                        "[DB] ayni shop_domain icin %d kayit var: %s — en eskisi secildi: %s",
-                        len(eslesenler), shop_domain, eslesenler,
+                        "[DB] ayni shop_domain icin %d kayit var: %s — secilen: %s/%s (digerleri: %s)",
+                        len(eslesenler), shop_domain, eslesenler[0][0], eslesenler[0][1],
+                        [(u, b) for u, b, _ in eslesenler[1:]],
                     )
                 if eslesenler:
-                    return eslesenler[0]
+                    return (eslesenler[0][0], eslesenler[0][1])
     except Exception as e:
         # DB hatasini "magaza kurulu degil" ile ayni cevaba (None) indirgemek
         # cagiranlari yaniltiyordu: embedded app 404 gorup OAuth kurulumuna
