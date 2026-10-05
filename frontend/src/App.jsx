@@ -333,20 +333,29 @@ export default function App() {
         minHeight: '100vh', background: '#0f1117', flexDirection: 'column', gap: 14, padding: 24,
       }}>
         <p style={{ color: '#f87171', fontSize: 15, margin: 0, textAlign: 'center', maxWidth: 420 }}>{shopifyError}</p>
-        <button
-          onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(true); }}
-          style={{
-            padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
-            color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
-          }}
-        >
-          Aboneliği Aktive Et →
-        </button>
+        {/* "Aboneliği Aktive Et" YALNIZCA gercekten billing hatasindaysa.
+            Onceden her hatada gosteriliyordu: veritabani hatasi, oturum
+            suresi dolmasi, kurulum hatasi — hepsinde kullaniciya abonelik
+            satin almasi soyleniyordu. Yaniltici ve maliyetli bir yonlendirme. */}
+        {billingRetryUrl && (
+          <button
+            onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(true); }}
+            style={{
+              padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
+              color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            Aboneliği Aktive Et →
+          </button>
+        )}
         <button
           onClick={() => { authAttempted.current = false; setShopifyError(''); doShopifyAuth(); }}
-          style={{
+          style={billingRetryUrl ? {
             padding: '7px 18px', borderRadius: 8, background: 'transparent',
             color: '#6b7280', border: '1px solid #2a2f3a', cursor: 'pointer', fontSize: 12,
+          } : {
+            padding: '11px 28px', borderRadius: 10, background: '#22d3a5',
+            color: '#0f1117', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14,
           }}
         >
           Tekrar dene
