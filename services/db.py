@@ -171,10 +171,27 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                 )
                 rows = cur.fetchall()
                 for row in rows:
-                    data = row["payload_json"] or {}
-                    if isinstance(data, str):
-                        data = json.loads(data)
-                    stored = (data.get("settings") or {}).get("shop_domain") or data.get("shop_domain", "")
+                    # Satir basina koruma: TEK bir merchant'in bozuk payload'i
+                    # (gecersiz JSON, dict yerine liste, beklenmedik tip) tum
+                    # taramayi cokertiyordu — yani bir kaydin bozulmasi BUTUN
+                    # magazalarin girisini kiriyordu. Bozuk satir atlanir,
+                    # hangi kayit oldugu loglanir; arama devam eder.
+                    try:
+                        data = row["payload_json"] or {}
+                        if isinstance(data, str):
+                            data = json.loads(data)
+                        if not isinstance(data, dict):
+                            raise TypeError(f"payload_json dict degil: {type(data).__name__}")
+                        sub = data.get("settings")
+                        stored = (sub.get("shop_domain") if isinstance(sub, dict) else None)                                  or data.get("shop_domain", "")
+                        if not isinstance(stored, str):
+                            stored = ""
+                    except Exception as _row_err:
+                        logger.warning(
+                            "[DB] bozuk kayit atlandi: username=%s brand=%s — %s",
+                            row.get("username"), row.get("brand"), _row_err,
+                        )
+                        continue
                     if stored and stored.lower() == shop_domain.lower():
                         return (row["username"], row["brand"])
     except Exception as e:
