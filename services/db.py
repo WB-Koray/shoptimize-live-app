@@ -66,9 +66,7 @@ def get_setting_strict(username: str, brand: str, integration: str, key: str, de
             )
             row = cur.fetchone()
             if row and row["payload_json"]:
-                data = row["payload_json"]
-                if isinstance(data, str):
-                    data = json.loads(data)
+                data = payload_coz(row["payload_json"])
                 sub = data.get("settings", {})
                 val = sub.get(key) if isinstance(sub, dict) else None
                 if val is None:
@@ -91,9 +89,7 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
                 )
                 row = cur.fetchone()
                 if row and row["payload_json"]:
-                    data = row["payload_json"]
-                    if isinstance(data, str):
-                        data = json.loads(data)
+                    data = payload_coz(row["payload_json"])
                     # settings alt anahtarı varsa orada ara, yoksa kök seviyede
                     sub = data.get("settings", {})
                     val = sub.get(key) if isinstance(sub, dict) else None
@@ -122,24 +118,29 @@ def set_connection_settings(username: str, brand: str, integration: str, updates
                 )
                 row = cur.fetchone()
                 if row:
-                    existing = row["payload_json"] or {}
-                    if isinstance(existing, str):
-                        existing = json.loads(existing)
+                    ham = row["payload_json"]
+                    # Kaydin mevcut formati korunur: sifreli gelen sifreli
+                    # yazilir. Aksi halde ana backend o kaydi bir daha
+                    # okuyamaz — bu tabloyu o yaziyor, biz paylasiyoruz.
+                    sifreli = payload_sifreli_mi(ham)
+                    existing = payload_coz(ham)
                     existing.update(updates)
                     cur.execute(
                         """
                         UPDATE integration_connections SET payload_json = %s, updated_at = EXTRACT(EPOCH FROM NOW())::bigint
                         WHERE username = %s AND brand = %s AND integration_id = %s
                         """,
-                        (json.dumps(existing), username, brand, integration),
+                        (payload_yaz(existing, sifreli), username, brand, integration),
                     )
                 else:
+                    # Yeni kayit: anahtar varsa ana backend'le ayni formatta
+                    # (sifreli) yaz; yoksa duz JSON.
                     cur.execute(
                         """
                         INSERT INTO integration_connections (username, brand, integration_id, payload_json, updated_at)
                         VALUES (%s, %s, %s, %s, EXTRACT(EPOCH FROM NOW())::bigint)
                         """,
-                        (username, brand, integration, json.dumps(updates)),
+                        (username, brand, integration, payload_yaz(updates, bool(_ENC_KEY))),
                     )
             conn.commit()
     except Exception as e:
@@ -168,6 +169,62 @@ def _kayit_oncelik(username: str, data: dict, shop_domain: str):
         if (ayarlar.get(k) or data.get(k))
     )
     return (0 if turetilmis else 1, dolu)
+
+
+# ── payload_json sifrelemesi ────────────────────────────────────────────────
+# Ana backend (shoptimize-backend) bu tabloyu "enc1:" + Fernet ile sifreli
+# yaziyor. Bu uygulama formati tanimadigi icin 18 kayittan 17'sini hic
+# okuyamiyordu; okuyabildigi tek kayit kendi yazdigi duz JSON olandi. Sonucu
+# agirdi: magaza aramasi hicbir kaydi bulamiyor, cagiran taraf shop adindan
+# username turetip yeni bos kayit aciyor ve magaza kendi verilerini kaybetmis
+# saniyordu.
+#
+# Yazarken kaydin MEVCUT formati korunur: sifreli gelen sifreli yazilir, yoksa
+# ana backend o kaydi bir daha okuyamaz.
+_ENC_ONEK = "enc1:"
+_ENC_KEY = os.getenv("DATA_ENCRYPTION_KEY", "").strip()
+
+
+class PayloadDecryptError(Exception):
+    """Sifreli payload cozulemedi — anahtar eksik ya da yanlis."""
+
+
+def _fernet():
+    from cryptography.fernet import Fernet
+    if not _ENC_KEY:
+        raise PayloadDecryptError("DATA_ENCRYPTION_KEY tanimli degil")
+    return Fernet(_ENC_KEY.encode())
+
+
+def payload_coz(ham):
+    """Saklanan payload_json degerini dict'e cevirir (sifreliyse cozer)."""
+    if ham is None:
+        return {}
+    if isinstance(ham, dict):
+        return ham
+    metin = str(ham)
+    if not metin:
+        return {}
+    if metin.startswith(_ENC_ONEK):
+        try:
+            metin = _fernet().decrypt(metin[len(_ENC_ONEK):].encode()).decode()
+        except PayloadDecryptError:
+            raise
+        except Exception as e:
+            raise PayloadDecryptError(f"cozulemedi: {type(e).__name__}") from e
+    return json.loads(metin)
+
+
+def payload_sifreli_mi(ham) -> bool:
+    return isinstance(ham, str) and ham.startswith(_ENC_ONEK)
+
+
+def payload_yaz(veri: dict, sifreli: bool) -> str:
+    """dict'i saklanacak metne cevirir. sifreli=True ise enc1: formatinda."""
+    duz = json.dumps(veri, ensure_ascii=False)
+    if not sifreli:
+        return duz
+    return _ENC_ONEK + _fernet().encrypt(duz.encode()).decode()
 
 
 class ShopLookupError(Exception):
@@ -202,9 +259,7 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                     # magazalarin girisini kiriyordu. Bozuk satir atlanir,
                     # hangi kayit oldugu loglanir; arama devam eder.
                     try:
-                        data = row["payload_json"] or {}
-                        if isinstance(data, str):
-                            data = json.loads(data)
+                        data = payload_coz(row["payload_json"])
                         if not isinstance(data, dict):
                             raise TypeError(f"payload_json dict degil: {type(data).__name__}")
                         sub = data.get("settings")
@@ -268,9 +323,7 @@ def get_all_shopify_connections():
                     # hicbir magazayi gormuyor, app/uninstalled temizligi
                     # eslesecek kaydi bulamiyordu.
                     try:
-                        settings = row["payload_json"] or {}
-                        if isinstance(settings, str):
-                            settings = json.loads(settings)
+                        settings = payload_coz(row["payload_json"])
                         if not isinstance(settings, dict):
                             raise TypeError(f"payload_json dict degil: {type(settings).__name__}")
                     except Exception as _row_err:

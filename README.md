@@ -265,6 +265,7 @@ RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip e
 | `SHOPIFY_CLIENT_ID` | ✅ | Shopify app client ID |
 | `SHOPIFY_CLIENT_SECRET` | ✅ | Shopify app client secret |
 | `SHOPIFY_APP_URL` | ✅ | `https://live.shoptimize.com.tr` |
+| `DATA_ENCRYPTION_KEY` | ✅ | Ana backend `integration_connections.payload_json` alanını `enc1:` + Fernet ile şifreli yazıyor. Bu anahtar olmadan hiçbir merchant kaydı okunamaz — uygulama mağazaları bulamaz ve boş yeni kayıtlar açar. `shoptimize-backend` ile **aynı değer** olmalı |
 | `API_BASE_URL` | ✅ | Pixel'in event göndereceği adres — `{API}` olarak pixel.js'e gömülür ve ScriptTag kurulum URL'ini belirler. **Varsayılanı `https://api.shoptimize.com.tr`** (ana backend); bu app için `https://live.shoptimize.com.tr` verilmezse event'ler yanlış backend'e gider |
 | `SHOPIFY_API_VERSION` | — | Default: `2026-04` |
 | `SHOPIFY_CLIENT_SECRET_LEGACY` | — | Eski app secret (geçiş dönemi fallback) |
