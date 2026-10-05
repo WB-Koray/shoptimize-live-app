@@ -6,6 +6,7 @@ Mevcut shoptimize backend ile aynı DB'yi paylaşır, sadece okur.
 import os
 import json
 import logging
+from contextlib import contextmanager
 import psycopg2
 import psycopg2.extras
 from typing import Optional
@@ -18,8 +19,30 @@ DSN = os.getenv(
 )
 
 
+@contextmanager
 def _get_conn():
-    return psycopg2.connect(DSN)
+    """Postgres baglantisi — transaction'i kapatir VE baglantiyi kapatir.
+
+    Onceki hali duz `psycopg2.connect(DSN)` donuyordu ve cagiranlar
+    `with _get_conn() as conn:` kullaniyordu. psycopg2'de connection context
+    manager'i transaction'i yonetir, BAGLANTIYI KAPATMAZ — yaygin bir tuzak.
+    Baglantilar cop toplayiciya kaliyor, yuk altinda birikiyor ve Postgres
+    max_connections sinirina dayaninca yeni baglantilar reddediliyordu.
+
+    Sonucu sessizdi: get_setting / lookup_username_by_shop hatayi yutup
+    varsayilani donuyor, uygulama da bunu "ayar yok" sanip yanlis karar
+    veriyordu (sonsuz kurulum donguusu, kopya webhook token'i, "Shopify
+    baglantisi bulunamadi").
+    """
+    conn = psycopg2.connect(DSN, connect_timeout=10)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_setting_strict(username: str, brand: str, integration: str, key: str, default=""):
