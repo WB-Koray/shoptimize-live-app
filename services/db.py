@@ -165,11 +165,13 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT username, brand, payload_json FROM integration_connections
+                    SELECT id, username, brand, payload_json FROM integration_connections
                     WHERE integration_id = 'shopify'
+                    ORDER BY id ASC
                     """,
                 )
                 rows = cur.fetchall()
+                eslesenler = []
                 for row in rows:
                     # Satir basina koruma: TEK bir merchant'in bozuk payload'i
                     # (gecersiz JSON, dict yerine liste, beklenmedik tip) tum
@@ -193,7 +195,20 @@ def lookup_username_by_shop(shop_domain: str) -> tuple[str, str] | None:
                         )
                         continue
                     if stored and stored.lower() == shop_domain.lower():
-                        return (row["username"], row["brand"])
+                        eslesenler.append((row["username"], row["brand"]))
+                # Ayni shop_domain icin birden fazla kayit olusabiliyor: arama
+                # basarisiz oldugunda cagiran taraf shop'tan username turetip
+                # YENI kayit aciyor (auth.py _shop_to_username). Sonucu agir —
+                # magaza bos bir hesaba giriyor, eski ayarlari "silinmis"
+                # gorunuyor. id ASC siralamasi sayesinde her zaman EN ESKI,
+                # yani gercek kayit kazanir; fazlasi loglanir.
+                if len(eslesenler) > 1:
+                    logger.warning(
+                        "[DB] ayni shop_domain icin %d kayit var: %s — en eskisi secildi: %s",
+                        len(eslesenler), shop_domain, eslesenler,
+                    )
+                if eslesenler:
+                    return eslesenler[0]
     except Exception as e:
         # DB hatasini "magaza kurulu degil" ile ayni cevaba (None) indirgemek
         # cagiranlari yaniltiyordu: embedded app 404 gorup OAuth kurulumuna
@@ -221,9 +236,23 @@ def get_all_shopify_connections():
                 rows = cur.fetchall()
                 result = []
                 for row in rows:
-                    settings = row["payload_json"] or {}
-                    if isinstance(settings, str):
-                        settings = json.loads(settings)
+                    # Satir basina koruma — lookup_username_by_shop ile ayni
+                    # gerekce: tek bozuk payload butun listeyi [] yapiyordu.
+                    # Sonucu agirdi: TID warmup bos doneyor, saglik monitoru
+                    # hicbir magazayi gormuyor, app/uninstalled temizligi
+                    # eslesecek kaydi bulamiyordu.
+                    try:
+                        settings = row["payload_json"] or {}
+                        if isinstance(settings, str):
+                            settings = json.loads(settings)
+                        if not isinstance(settings, dict):
+                            raise TypeError(f"payload_json dict degil: {type(settings).__name__}")
+                    except Exception as _row_err:
+                        logger.warning(
+                            "[DB] bozuk kayit atlandi (get_all): username=%s brand=%s — %s",
+                            row.get("username"), row.get("brand"), _row_err,
+                        )
+                        continue
                     result.append({
                         "username": row["username"],
                         "brand": row["brand"],
