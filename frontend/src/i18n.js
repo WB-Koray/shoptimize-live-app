@@ -68,7 +68,7 @@ const translations = {
     'pixel.one_click':            'One-Click Install',
     'pixel.uninstall_confirm':    'Pixel will be removed and tracking will stop. Are you sure?',
     'pixel.open_theme_editor':    'Activate in Theme Editor',
-    'pixel.embed_hint':           'Go to Theme Editor → App Embeds and enable "Store X-Ray Pixel"',
+    'pixel.embed_hint':           'Go to Theme Editor → App Embeds and enable "Shoptimize Pixel"',
     'pixel.embed_configured':     'Embed Configured',
     'pixel.manage_embed':         'Manage in Theme Editor',
 
@@ -690,7 +690,7 @@ const translations = {
     'pixel.one_click':            'Tek Tıkla Kur',
     'pixel.uninstall_confirm':    'Pixel kaldırılacak ve takip duracak. Emin misiniz?',
     'pixel.open_theme_editor':    'Theme Editor\'da Etkinleştir',
-    'pixel.embed_hint':           'Theme Editor → App Embeds\'e gidip "Store X-Ray Pixel"\'i açın',
+    'pixel.embed_hint':           'Theme Editor → App Embeds\'e gidip "Shoptimize Pixel"\'i açın',
     'pixel.embed_configured':     'Embed Ayarlı',
     'pixel.manage_embed':         'Theme Editor\'da Yönet',
 

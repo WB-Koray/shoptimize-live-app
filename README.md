@@ -3,7 +3,7 @@
 Shopify mağazaları için gerçek zamanlı ziyaretçi analitik servisi. Anlık aktivite takibi, WhatsApp terk edilmiş sepet otomasyonu, RFM müşteri segmentasyonu ve conversion funnel analizi sağlar.
 
 **Canlı URL:** https://live.shoptimize.com.tr  
-**Shopify App:** Store X-Ray (`client_id: 1e80272ad8faa2261f770841ddee0377`)
+**Shopify App:** Shoptimize: WA Cart Recovery (`client_id: 1e80272ad8faa2261f770841ddee0377`)
 
 ---
 
@@ -315,7 +315,7 @@ Health check: `GET /health` → `{"ok": true, "service": "shoptimize-live"}`
 
 > ⚠️ **Eklenti handle'ı ve klasör adı (`shop-x-ray-pixel`) DEĞİŞTİRİLMEMELİ.**
 > Uygulamanın görünen adı 2026-10-20'de `Shop X-Ray WA Cart Recovery` →
-> `Store X-Ray` olarak değişti (Shopify App Store kuralı 4.1.2). Handle ise
+> `Shoptimize: WA Cart Recovery` olarak değişti (Shopify App Store kuralı 4.1.2). Handle ise
 > eklentinin kimliği: değişirse Shopify bunu yeni bir eklenti sayar ve
 > mağazalarda kurulu App Embed kopar, pixel susar.
 

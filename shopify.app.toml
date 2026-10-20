@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "1e80272ad8faa2261f770841ddee0377"
-name = "Store X-Ray"
+name = "Shoptimize: WA Cart Recovery"
 application_url = "https://live.shoptimize.com.tr"
 embedded = true
 
