@@ -259,7 +259,7 @@ Dönüşüm süresi: 14 gün · 3 dokunuş
 
 ## Kurulum Süreci
 
-1. Shopify App Store'dan "Shop X-Ray WA Cart Recovery" kurulur.
+1. Shopify App Store'dan "Store X-Ray" kurulur.
 2. Shopify, gerekli izinleri sorar (`read_checkouts`, `read_customers`, `read_orders`).
 3. Onay verilince pixel otomatik yüklenir, abonelik onaylanır.
 4. **Kurulum süresi: ~2 dakika.** Kod yazmak gerekmez.
