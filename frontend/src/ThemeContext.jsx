@@ -1,26 +1,47 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 import { getTheme, applyThemeToCSSVars } from './theme';
 
 const ThemeCtx = createContext(null);
 
+// Yeni kullanici icin isletim sisteminin tercihi. Uygulama Shopify Admin'in
+// icinde iframe olarak calisiyor ve admin varsayilani acik tema; sabit 'dark'
+// varsaymak merchant'i kendi ortamiyla celisen bir panele dusuruyordu.
+function varsayilanMod() {
+  const kayitli = localStorage.getItem('spt_mode');
+  if (kayitli === 'light' || kayitli === 'dark') return kayitli;
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export function ThemeProvider({ children }) {
-  const [vibe, setVibe] = useState(() => {
-    const saved = localStorage.getItem('spt_vibe');
-    // 'warm' eski default'tu — slate'e geç (kullanıcı isterse tekrar değiştirebilir)
-    if (!saved || saved === 'warm') return 'slate';
-    return saved;
-  });
-  const [mode, setMode] = useState(() => localStorage.getItem('spt_mode') || 'dark');
-  const theme = getTheme(vibe, mode);
+  const [mode, setMode] = useState(varsayilanMod);
+  const theme = getTheme(mode);
 
   useEffect(() => {
     applyThemeToCSSVars(theme);
-    localStorage.setItem('spt_vibe', vibe);
     localStorage.setItem('spt_mode', mode);
-  }, [vibe, mode]);
+  }, [mode, theme]);
+
+  // Kullanici elle secmediyse isletim sistemi tercihini izlemeye devam et.
+  useEffect(() => {
+    if (localStorage.getItem('spt_mode')) return;
+    let mq;
+    try {
+      mq = window.matchMedia('(prefers-color-scheme: dark)');
+    } catch {
+      return;
+    }
+    const degisti = (e) => setMode(e.matches ? 'dark' : 'light');
+    mq.addEventListener?.('change', degisti);
+    return () => mq.removeEventListener?.('change', degisti);
+  }, []);
 
   return (
-    <ThemeCtx.Provider value={{ theme, vibe, mode, setVibe, setMode }}>
+    <ThemeCtx.Provider value={{ theme, mode, setMode }}>
       {children}
     </ThemeCtx.Provider>
   );
@@ -32,30 +53,34 @@ export function useTheme() {
   return ctx;
 }
 
+// Tek dugme: acik <-> koyu. Eskiden yedi dugme vardi (SLATE/WARM/BRUTAL +
+// LIGHT/DARK); uc tema ailesi kaldirildigi icin geriye tek bir secim kaldi.
 export function ThemeSwitch() {
-  const { vibe, mode, setVibe, setMode } = useTheme();
-  const base = {
-    padding: '3px 8px',
-    fontSize: 10,
-    fontWeight: 700,
-    border: '1px solid var(--c-border)',
-    background: 'transparent',
-    color: 'var(--c-textDim)',
-    borderRadius: 'var(--r-sm)',
-    cursor: 'pointer',
-    fontFamily: 'var(--font-mono)',
-    letterSpacing: '0.04em',
-    transition: 'background 150ms, color 150ms',
-  };
-  const active = { ...base, background: 'var(--c-text)', color: 'var(--c-bg)' };
+  const { mode, setMode } = useTheme();
+  const koyu = mode === 'dark';
+  const etiket = koyu ? 'Açık temaya geç' : 'Koyu temaya geç';
+
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <button style={vibe === 'slate'     ? active : base} onClick={() => setVibe('slate')}>SLATE</button>
-      <button style={vibe === 'warm'      ? active : base} onClick={() => setVibe('warm')}>WARM</button>
-      <button style={vibe === 'brutalist' ? active : base} onClick={() => setVibe('brutalist')}>BRUTAL</button>
-      <span style={{ width: 1, height: 14, background: 'var(--c-border)', margin: '0 2px' }} />
-      <button style={mode === 'light' ? active : base} onClick={() => setMode('light')}>LIGHT</button>
-      <button style={mode === 'dark'  ? active : base} onClick={() => setMode('dark')}>DARK</button>
-    </div>
+    <button
+      type="button"
+      onClick={() => setMode(koyu ? 'light' : 'dark')}
+      aria-label={etiket}
+      title={etiket}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 28,
+        height: 28,
+        border: '1px solid var(--c-border)',
+        borderRadius: 'var(--r-sm)',
+        background: 'transparent',
+        color: 'var(--c-textDim)',
+        cursor: 'pointer',
+        transition: 'background 150ms, color 150ms',
+      }}
+    >
+      {koyu ? <Sun size={14} /> : <Moon size={14} />}
+    </button>
   );
 }
