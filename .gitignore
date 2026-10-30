@@ -220,3 +220,6 @@ frontend/dist/
 # Yerel ajan/skill araclari (repo disi)
 .agents/
 skills-lock.json
+
+# Tasarim tezgahinin aldigi ekran goruntuleri - kod degil, cikti
+frontend/design/goruntu/

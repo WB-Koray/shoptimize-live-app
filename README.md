@@ -506,6 +506,50 @@ Health check: `GET /health` → `{"ok": true, "service": "shoptimize-live"}`
 
 ---
 
+## Tasarım Tezgahı — paneli görmeden tasarlamamak için
+
+Panelin yerleşimi uzun süre **körlemesine** düzeltildi: yaz, yayınla, kullanıcı
+ekran görüntüsü göndersin, düzelt. "Bu sayfa çok uzun" bir testle değil
+**bakmakla** anlaşılıyor; bakmak pahalı olduğu için bakılmadan yazıldı.
+
+Tezgah gerçek `Dashboard` bileşenini **sahte veriyle** render eder — backend,
+Docker, oturum ya da canlı trafik gerekmez:
+
+```bash
+cd frontend
+npm run tasarim           # http://localhost:5174/design.html
+```
+
+URL ile: `?alan=performans`, `?tema=dark`, `?dil=en`, `?onboarding=1`
+
+Veri hacimleri canlı Welcome Baby verisinden alındı (~200 ziyaretçi, 620 olay):
+boş bir ekran her zaman düzenli görünür, sorun dolu haliyle ortaya çıkar.
+Rastgelelik **deterministik** — iki ekran görüntüsü karşılaştırılabilsin diye.
+
+### Ölçüm
+
+```bash
+node design/bak.mjs                      # tüm alanlar x 3 ekran genisligi
+node design/bak.mjs --alan simdi
+node design/bak.mjs --genislik 390 --tema dark
+```
+
+Her alan için **sayfanın kaç ekran boyu olduğunu** (`scrollHeight / viewport`),
+yatay taşmayı ve konsol hatalarını raporlar, tam sayfa görüntü alır.
+
+| Ölçüm | Anlamı |
+|---|---|
+| 1 ekran | Tek bakışta görünür |
+| 2+ | Kaydırma gerekir |
+| 3+ | Bilgi kayboluyor |
+
+Görüntüler `frontend/design/goruntu/` altına yazılır (git'e girmez).
+
+Üretim paketi etkilenmez: Vite yalnız `index.html`'i derler, `design/` `dist`'e
+girmez.
+
+---
+
 ## Geliştirme Ortamı
 
 **Bağımlılık servisleri (Redis + PostgreSQL) Docker ile:**
