@@ -271,6 +271,9 @@ ya da 7 gün geçti.
 # Durum — hangi mağaza hangi tipte? (salt okunur, token değeri basmaz)
 python scripts/token-migrate.py durum
 
+# Token'lar gerçekten çalışıyor mu? (salt okunur, her biriyle bir Admin API sorgusu)
+python scripts/token-migrate.py kontrol
+
 # Tek mağaza, kuru prova
 python scripts/token-migrate.py tasi --shop magaza.myshopify.com
 
@@ -314,6 +317,11 @@ bilerek veren için, filtre uygulanmaz.
 kaydı gösterir. `token` sütunu değerin sha256 parmak izidir (ilk 8 karakter):
 aynı parmak izi = aynı token, böylece hangi mükerrerlerin aynı token'ı
 paylaştığı değer sızdırmadan görülür.
+
+`kontrol` **taşımadan önce** çalıştırılmalı: taşıma geri alınamaz ve ölü bir
+token'a taşıma denemek hiçbir şey kanıtlamaz. Ayrıca `billing_status` bayat
+olabiliyor (kaldırılmış bir mağaza hâlâ `active` görünebiliyor) — bu ölçüm
+doğrudan Shopify'a soruyor, uygulamanın gerçekte nerede kurulu olduğunu söyler.
 
 Sağlık monitörü iki yeni sorun bildirir: *"Shopify token yenilenemiyor"*
 (`admin_token_needs_reauth`) ve son 60 güne girildiğinde *"token hâlâ süresiz
