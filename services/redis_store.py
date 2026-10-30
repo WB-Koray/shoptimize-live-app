@@ -233,6 +233,12 @@ class RedisStore:
             gun_k  = f"gun:{tid}:{gun}"
             kanal_k = f"gun_kanal:{tid}:{gun}"
 
+            # Sayaclarin bu magaza icin ilk calistigi gun. Panel bunu bilmezse
+            # sayac kurulmadan onceki gunleri "o gun hic ziyaretci olmadi" diye
+            # gosterir — duzeltmeye calistigimiz yanlis bilgilendirmenin ta
+            # kendisi. SETNX: yalnizca ilk yazimda kurulur.
+            await self._redis.setnx(f"gun_basladi:{tid}", gun)
+
             pipe = self._redis.pipeline()
             pipe.hincrby(gun_k, "events", 1)
             if tip:
@@ -273,6 +279,13 @@ class RedisStore:
         except Exception as e:
             logger.warning("[GUN] gunluk sayac hatasi (tid=%s): %s", tid[:16], e)
 
+    async def gunluk_baslangic(self, tid: str) -> str:
+        """Sayaclarin bu magaza icin ilk calistigi gun (YYYY-MM-DD) ya da ""."""
+        try:
+            return await self._redis.get(f"gun_basladi:{tid}") or ""
+        except Exception:
+            return ""
+
     async def gunluk_istatistik(self, tid: str, gunler: int = 30) -> list[dict]:
         """Son N günün sayaçları — bugün dahil, en yeniden eskiye.
 
@@ -302,6 +315,7 @@ class RedisStore:
                 ciro = 0.0
             sonuc.append({
                 "date":               gun,
+                "has_data":           bool(ham),
                 "events":             _say("events"),
                 "visitors":           _say("visitors"),
                 "page_viewed":        _say("page_viewed"),

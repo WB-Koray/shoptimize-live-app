@@ -2201,11 +2201,14 @@ async def daily_stats_endpoint(
     if not tid:
         return {"ok": True, "days": [], "channels": [], "products": [], "no_tid": True}
 
-    gunler  = await store.gunluk_istatistik(tid, days)
+    gunler   = await store.gunluk_istatistik(tid, days)
     kanallar = await store.gunluk_kirilim(tid, days, "kanal")
     urunler  = await store.gunluk_kirilim(tid, days, "urun")
+    # since: sayaclarin bu magaza icin ilk calistigi gun. Panel bundan onceki
+    # gunleri "veri yok" diye gostermeli, "o gun satis olmadi" diye degil.
     return {
         "ok":       True,
+        "since":    await store.gunluk_baslangic(tid),
         "days":     gunler,
         "channels": kanallar[:30],
         "products": urunler[:30],
