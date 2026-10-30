@@ -2201,15 +2201,33 @@ async def daily_stats_endpoint(
     if not tid:
         return {"ok": True, "days": [], "channels": [], "products": [], "no_tid": True}
 
-    gunler   = await store.gunluk_istatistik(tid, days)
+    # Karsilastirma icin iki kat gun cekilir: ilk N gun secili donem, sonraki
+    # N gun onceki donem. Istemcinin ikinci bir istek atmasina ya da toplami
+    # kendi hesaplamasina gerek kalmasin — ayni mantigin iki yerde yasamasi,
+    # birinin sessizce yanlis olmasinin en kisa yolu.
+    tum      = await store.gunluk_istatistik(tid, days * 2)
+    gunler   = tum[:days]
+    onceki   = tum[days:]
     kanallar = await store.gunluk_kirilim(tid, days, "kanal")
     urunler  = await store.gunluk_kirilim(tid, days, "urun")
+
+    def _toplam(satirlar):
+        alanlar = ("events", "visitors", "product_viewed", "add_to_cart",
+                   "cart_viewed", "checkout_started", "checkout_completed",
+                   "search_submitted")
+        t = {a: sum(s[a] for s in satirlar) for a in alanlar}
+        t["revenue"] = round(sum(s["revenue"] for s in satirlar), 2)
+        t["has_data"] = any(s["has_data"] for s in satirlar)
+        return t
+
     # since: sayaclarin bu magaza icin ilk calistigi gun. Panel bundan onceki
     # gunleri "veri yok" diye gostermeli, "o gun satis olmadi" diye degil.
     return {
         "ok":       True,
         "since":    await store.gunluk_baslangic(tid),
         "days":     gunler,
+        "totals":   _toplam(gunler),
+        "previous": _toplam(onceki),
         "channels": kanallar[:30],
         "products": urunler[:30],
     }

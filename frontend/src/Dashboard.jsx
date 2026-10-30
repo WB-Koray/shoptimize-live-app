@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   Activity, Eye, ShoppingCart, Search, CreditCard, Package,
   Layers, CheckCircle, WifiOff, Zap, RefreshCw, Trash2,
@@ -11,6 +11,10 @@ import {
   Download,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
+// Performans tembel yuklenir: recharts ~377 kB getiriyor ve uygulama Shopify
+// Admin icinde iframe olarak aciliyor. Ilk acilista gorunen ekran "Simdi";
+// grafik kodunu oraya yuklememek icin bu bolme.
+const Performans = lazy(() => import('./components/Performans'));
 import { useLang, LangSwitch } from './LangContext';
 import OnboardingModal from './OnboardingModal';
 
@@ -4717,7 +4721,6 @@ export default function Dashboard({ session, onLogout }) {
 
   const [anonymized, setAnonymized] = useState(false);
   const [activeView, setActiveView] = useState('live');
-  const [liveTab, setLiveTab]           = useState('realtime');
   const [prodOpen, setProdOpen]         = useState(true);
   const [collOpen, setCollOpen]         = useState(false);
   const [searchOpen, setSearchOpen]     = useState(false);
@@ -5163,10 +5166,10 @@ export default function Dashboard({ session, onLogout }) {
   // En çok görüntülenen ürünlerin stok seviyesi (ProductCard köşe rozeti için).
   // Yalnız Analiz sekmesi açıkken sorgula — diğer sekmelerde bu grid görünmüyor,
   // boş handle geçerek gereksiz Shopify isteğini önlüyoruz.
-  const prodStock = useStockLevels(
-    activeView === 'live' && liveTab === 'analytics' ? productStats.map(p => p.handle) : [],
-    session
-  );
+  // Stok seviyeleri yalniz Stok-Talep Alarm panelinde kullaniliyor; eski urun
+  // gridi (Analiz sekmesi) Performans'a tasindi ve orasi stok rozeti
+  // kullanmiyor. Bos handle listesi = gereksiz Shopify istegi yok.
+  const prodStock = useStockLevels([], session);
 
   const searchStats = useMemo(() => {
     const map = {};
@@ -5380,14 +5383,22 @@ export default function Dashboard({ session, onLogout }) {
           {/* View switcher */}
           <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-lg p-0.5">
             <button onClick={() => setActiveView('live')}
+              aria-pressed={activeView === 'live'}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'live' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <Radio size={11} /> {t('nav.live')}
+              <Radio size={11} aria-hidden="true" /> {t('nav.now')}
+            </button>
+            <button onClick={() => setActiveView('performans')}
+              aria-pressed={activeView === 'performans'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'performans' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
+              <BarChart2 size={11} aria-hidden="true" /> {t('nav.performance')}
             </button>
             <button onClick={() => setActiveView('flow')}
+              aria-pressed={activeView === 'flow'}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'flow' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-              <MessageCircle size={11} /> {t('nav.wa')}
+              <MessageCircle size={11} aria-hidden="true" /> {t('nav.recovery')}
             </button>
             <button onClick={() => setActiveView('plan')}
+              aria-pressed={activeView === 'plan'}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${activeView === 'plan' ? 'bg-surface text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
               <CreditCard size={11} /> {t('nav.plan')}
               {billingInfo?.days_remaining != null && billingInfo.billing_status !== 'active' && (
@@ -5415,7 +5426,16 @@ export default function Dashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* WA Otomasyon view */}
+      {/* Performans — gercek gunluk sayaclardan beslenir (bkz. /api/live/stats/daily).
+          Eski "Analiz" sekmesi ayni kayan event penceresini analiz ediyordu;
+          adi analizdi ama gosterdigi sey son yarim saatti. */}
+      {activeView === 'performans' && (
+        <Suspense fallback={<p className="text-xs text-textMute px-1 py-6">{t('perf.loading')}</p>}>
+          <Performans session={session} />
+        </Suspense>
+      )}
+
+      {/* Kurtarma (WA Otomasyon) view */}
       {activeView === 'flow' && <FlowPanel session={session} anonymized={anonymized} />}
 
       {/* Plan view */}
@@ -5603,22 +5623,11 @@ export default function Dashboard({ session, onLogout }) {
 
       </div>
 
-      {/* Inner tab switcher */}
-      <div className="flex justify-center">
-        <div className="flex items-center gap-1 bg-surfaceAlt border border-border rounded-xl p-1">
-          <button onClick={() => setLiveTab('realtime')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${liveTab === 'realtime' ? 'bg-surface border border-border text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-            <Radio size={11} /> {t('nav.realtime')}
-          </button>
-          <button onClick={() => setLiveTab('analytics')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${liveTab === 'analytics' ? 'bg-surface border border-border text-text shadow-sm' : 'text-textMute hover:text-text'}`}>
-            <BarChart2 size={11} /> {t('nav.analytics')}
-          </button>
-        </div>
-      </div>
-
       {/* ── CANLI TAB ── */}
-      {liveTab === 'realtime' && (
+      {/* "Simdi" alani: yalniz canli durum. Donemsel rakamlar Performans'a
+          tasindi - ikisinin yan yana durmasi yanlis donusum orani
+          hesaplanmasina yol aciyordu. */}
+      {(
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] xl:grid-cols-[1fr_2fr] gap-4 items-start">
 
           {/* SOL — KPIs, Abandoned, Funnel */}
@@ -5798,242 +5807,6 @@ export default function Dashboard({ session, onLogout }) {
                   <p>{t('howto.s2')}</p>
                   <p>{t('howto.s3')}</p>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── ANALİZ TAB ── */}
-      {liveTab === 'analytics' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
-
-          {/* SOL — Products, Collections, Searches, Traffic */}
-          <div className="space-y-3">
-
-            {/* Products accordion */}
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-              <button onClick={() => setProdOpen(o => !o)}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                <TrendingUp size={13} className="text-purple shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.products')}</span>
-                {productStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{productStats.length}</span>}
-                {prodOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-              </button>
-              {prodOpen && (
-                productStats.length > 0
-                  ? <div className="p-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-t border-border/60">
-                      {productStats.map(p => <ProductCard key={p.key} product={p} flash={flashProducts.has(p.key)} available={prodStock[p.handle]?.available} />)}
-                    </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_products')}</p>
-              )}
-            </div>
-
-            {/* Collections accordion */}
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-              <button onClick={() => setCollOpen(o => !o)}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                <Layers size={13} className="text-teal shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.collections')}</span>
-                {collectionStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{collectionStats.length}</span>}
-                {collOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-              </button>
-              {collOpen && (
-                collectionStats.length > 0
-                  ? <div className="divide-y divide-border/60 border-t border-border/60">
-                      {collectionStats.map((col, i) => (
-                        <div key={col.handle} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
-                          <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
-                          <span className="flex-1 text-sm text-text font-medium">{col.handle}</span>
-                          <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-teal to-blue rounded-full"
-                              style={{ width: `${Math.min(100, (col.count / collectionStats[0].count) * 100)}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{col.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_collections')}</p>
-              )}
-            </div>
-
-            {/* Searches accordion */}
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-              <button onClick={() => setSearchOpen(o => !o)}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                <Search size={13} className="text-textDim shrink-0" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.searches')}</span>
-                {searchStats.length > 0 && <span className="text-[10px] text-textMute mr-1">{searchStats.length}</span>}
-                {searchOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-              </button>
-              {searchOpen && (
-                searchStats.length > 0
-                  ? <div className="divide-y divide-border/60 border-t border-border/60">
-                      {searchStats.map((s, i) => (
-                        <div key={s.query} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
-                          <span className="text-[10px] text-textMute w-4 text-right font-mono">{i + 1}</span>
-                          <span className="flex-1 text-sm text-text font-medium">"{s.query}"</span>
-                          <div className="w-16 h-1.5 bg-surfaceAlt rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-blue to-purple rounded-full"
-                              style={{ width: `${Math.min(100, (s.count / searchStats[0].count) * 100)}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-textDim w-6 text-right tabular-nums">{s.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  : <p className="px-4 py-3 text-[10px] text-textMute border-t border-border/60">{t('analytics.no_searches')}</p>
-              )}
-            </div>
-
-            {/* Traffic sources */}
-            {visitorProfiles.length > 0 && (
-              <TrafficTable traffic={trafficStats} onSourceClick={src => {
-                const prods = Object.values(sourceProductsMap[src] || {}).sort((a, b) => b.views - a.views);
-                const vids = new Set(events.filter(ev => parseReferrer(ev.referrer) === src).map(ev => ev.vid));
-                setDrillDown({
-                  title: `Visitors from ${src}`,
-                  subtitle: `${vids.size} visitors · ${prods.length} products`,
-                  products: prods,
-                  visitors: visitorProfiles.filter(v => vids.has(v.vid)),
-                });
-              }} />
-            )}
-          </div>
-
-          {/* SAĞ — Funnel, UTM, Pages, 404s, RFM */}
-          <div className="space-y-3">
-
-            {/* Funnel */}
-            {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
-
-            {/* RFM Müşteri Segmentasyonu */}
-            <RFMWidget session={session} anonymized={anonymized} />
-
-            {/* Attribution Raporu (XLSX indir) */}
-            <AttributionReportWidget session={session} />
-
-            {/* UTM campaigns accordion */}
-            {utmStats.length > 0 && (
-              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-                <button onClick={() => setUtmOpen(o => !o)}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                  <BarChart2 size={13} className="text-blue shrink-0" />
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.utm')}</span>
-                  <span className="text-[10px] text-textMute mr-1">{utmStats.length}</span>
-                  {utmOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-                </button>
-                {utmOpen && (
-                  <div className="divide-y divide-border/60 border-t border-border/60">
-                    {utmStats.map(camp => (
-                      <div key={camp.campaign}
-                        onClick={() => {
-                          // Set.has() yerine UTM campaign adıyla direkt eşleştir — daha güvenilir
-                          const campVisitors = visitorProfiles.filter(
-                            v => (v.utm?.utm_campaign === camp.campaign) ||
-                                 Array.from(camp.vids).includes(v.vid)
-                          );
-                          setDrillDown({
-                            title: `Campaign: ${camp.campaign}`,
-                            subtitle: `${[camp.source, camp.medium].filter(Boolean).join(' / ')} · ${campVisitors.length} visitors · ${camp.views} views`,
-                            products: camp.products,
-                            visitors: campVisitors,
-                          });
-                        }}
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surfaceAlt/40 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-text font-semibold truncate">{camp.campaign}</p>
-                          <p className="text-[10px] text-textMute truncate">{[camp.source, camp.medium].filter(Boolean).join(' / ')}</p>
-                        </div>
-                        <div className="flex items-center gap-4 shrink-0">
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-purple tabular-nums">{camp.views}</p>
-                            <p className="text-[10px] text-textMute">{t('common.views')}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-green tabular-nums">{camp.carts}</p>
-                            <p className="text-[10px] text-textMute">{t('common.cart')}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-blue tabular-nums">{camp.vids.size}</p>
-                            <p className="text-[10px] text-textMute">{t('common.visitors')}</p>
-                          </div>
-                          <ArrowRight size={11} className="text-textMute" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Page stats accordion */}
-            {pageStats.length > 0 && (
-              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-                <button onClick={() => setPageOpen(o => !o)}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                  <Eye size={13} className="text-textDim shrink-0" />
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.pages')}</span>
-                  <span className="text-[10px] text-textMute mr-1">{pageStats.length}</span>
-                  {pageOpen ? <ChevronUp size={13} className="text-textMute shrink-0" /> : <ChevronDown size={13} className="text-textMute shrink-0" />}
-                </button>
-                {pageOpen && (
-                  <div className="divide-y divide-border/60 border-t border-border/60">
-                    {pageStats.map((page, i) => (
-                      <div key={page.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surfaceAlt/40 transition-colors">
-                        <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-text font-medium truncate">{page.title}</p>
-                          <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                            <p className="text-[10px] text-textMute">{t('common.unique')}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-textDim tabular-nums">{page.count}</p>
-                            <p className="text-[10px] text-textMute">{t('common.views')}</p>
-                          </div>
-                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(page.lastTs, lang)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 404 pages accordion */}
-            {notFoundStats.length > 0 && (
-              <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
-                <button onClick={() => setNotFoundOpen(o => !o)}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-roseSoft/60 transition-colors">
-                  <span className="text-sm font-bold text-rose shrink-0">404</span>
-                  <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.not_found')}</span>
-                  <span className="text-[10px] bg-roseSoft text-rose px-1.5 py-0.5 rounded-full mr-1">{notFoundStats.length}</span>
-                  {notFoundOpen ? <ChevronUp size={13} className="text-rose/60 shrink-0" /> : <ChevronDown size={13} className="text-rose/60 shrink-0" />}
-                </button>
-                {notFoundOpen && (
-                  <div className="divide-y divide-rose/10 border-t border-rose/15">
-                    {notFoundStats.map((item, i) => (
-                      <div key={item.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-roseSoft/30 transition-colors">
-                        <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                        <p className="flex-1 text-xs text-text font-mono truncate">{item.path}</p>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-rose tabular-nums">{item.vids.size}</p>
-                            <p className="text-[10px] text-textMute">{t('common.unique')}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-textDim tabular-nums">{item.count}</p>
-                            <p className="text-[10px] text-textMute">{t('common.hits')}</p>
-                          </div>
-                          <span className="text-[10px] text-textMute w-14 text-right">{timeAgo(item.lastTs, lang)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
