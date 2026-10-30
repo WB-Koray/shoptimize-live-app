@@ -4696,6 +4696,7 @@ export default function Dashboard({ session, onLogout }) {
   const [prodOpen, setProdOpen]         = useState(true);
   const [collOpen, setCollOpen]         = useState(false);
   const [searchOpen, setSearchOpen]     = useState(false);
+  const [detayTab, setDetayTab]         = useState('urunler');
   const [pageOpen, setPageOpen]         = useState(false);
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [utmOpen, setUtmOpen]           = useState(true);
@@ -5615,10 +5616,15 @@ export default function Dashboard({ session, onLogout }) {
           tasindi - ikisinin yan yana durmasi yanlis donusum orani
           hesaplanmasina yol aciyordu. */}
       {(
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] xl:grid-cols-[1fr_2fr] gap-4 items-start">
+        /* Üç sütun: eylem panelleri · ziyaretçiler · canlı akış.
+           Önceden iki sütundu ve ziyaretçi listesiyle akış SAĞ SÜTUNDA ÜST
+           ÜSTE duruyordu — sadece o ikisi 1250px tutuyor, sol sütun ise
+           1030'da bitip altını boş bırakıyordu. Yan yana alınca aynı bilgi
+           ~600px'e sığıyor. bkz. frontend/design/YERLESIM.md */
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[300px_1fr_1fr] gap-3 items-start">
 
-          {/* SOL — KPIs, Abandoned, Funnel */}
-          <div className="space-y-4">
+          {/* SOL — canlı durum sayıları ve eylem panelleri */}
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <StatCard label={t('now.onsite')}
                 sub={t('now.onsite_sub').replace('{n}', canliDurum.pencereDk)}
@@ -5659,8 +5665,8 @@ export default function Dashboard({ session, onLogout }) {
                 gostermekten daha kotu. */}
           </div>
 
-          {/* SAĞ — Visitors + Live Feed */}
-          <div className="space-y-4">
+          {/* ORTA — şu an sitede olanlar */}
+          <div>
             {visitorProfiles.length > 0 && (
               <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                 <SectionHead icon={Users} title={t('visitors.title')} badge={filteredVisitors.length} extra={t('visitors.extra')} />
@@ -5690,8 +5696,13 @@ export default function Dashboard({ session, onLogout }) {
                 {filteredVisitors.length === 0 ? (
                   <p className="py-10 text-center text-xs text-textMute">{t('vis.no_match')}</p>
                 ) : (
-                  <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 min-h-[120px]">
-                    {filteredVisitors.slice(0, 18).map(profile => (
+                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2
+                                  /* En fazla IKI sutun: kapsayici artik ~530px
+                                     ve Tailwind kirilimlari kapsayiciya degil EKRANA
+                                     bakiyor. Dort sutun istemek 125px genisliginde
+                                     kart demekti; metinler okunamiyordu. */
+                                  max-h-[300px] sm:max-h-[360px] xl:max-h-[460px] overflow-y-auto custom-scrollbar">
+                    {filteredVisitors.slice(0, 60).map(profile => (
                       <VisitorCard key={profile.vid} profile={profile}
                         customerName={customerNames[profile.customer_id]}
                         anonymized={anonymized}
@@ -5699,12 +5710,17 @@ export default function Dashboard({ session, onLogout }) {
                     ))}
                   </div>
                 )}
-                {filteredVisitors.length > 18 && (
-                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{filteredVisitors.length - 18} {t('visitors.more').replace('+{n} ', '')}</p>
+                {filteredVisitors.length > 60 && (
+                  <p className="px-4 pb-3 text-center text-[10px] text-textMute">+{filteredVisitors.length - 60} {t('visitors.more').replace('+{n} ', '')}</p>
                 )}
               </div>
             )}
+          </div>
 
+          {/* SAĞ — canlı akış. Ziyaretçi listesiyle yan yana duruyor;
+              üst üste olduğu sürece ikisi tek başına sayfanın üçte ikisini
+              yiyordu. */}
+          <div>
             {/* Live feed */}
             <div className="bg-surface border border-border rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-border">
@@ -5758,7 +5774,7 @@ export default function Dashboard({ session, onLogout }) {
                       </button>
                     </div>
                   )}
-                  <div className="overflow-y-auto max-h-[520px] p-3 space-y-2 custom-scrollbar">
+                  <div className="overflow-y-auto max-h-[320px] sm:max-h-[380px] xl:max-h-[520px] p-3 space-y-2 custom-scrollbar">
                     {events.length === 0
                       ? <div className="py-16 text-center space-y-2">
                           <p className="text-textMute text-sm font-medium">{t('feed.no_events')}</p>
@@ -5794,127 +5810,132 @@ export default function Dashboard({ session, onLogout }) {
         </div>
       )}
 
-      {/* Reklam → Ürün Performansı — full width */}
-      {activeView === 'live' && utmStats.length > 0 && (
-        <AdProductGrid utmStats={utmStats} session={session} customerNames={customerNames} />
-      )}
-
-      {/* Su an gezilen urunler - canli. Performans'taki urun listesi
-          donemsel sayaclardan gelir; bu ise o anki pencereyi gosterir,
-          stok rozetiyle birlikte. Adlari bu yuzden farkli. */}
-      {activeView === 'live' && productStats.length > 0 && (
+      {/* ── Canlı detay — sekmeli ─────────────────────────────────────────
+          Burada eskiden YEDİ bölüm alt alta duruyordu (reklam, ürünler,
+          trafik, aramalar, koleksiyonlar, sayfalar, 404). Sayfayı 4.1 ekrana
+          çıkaran asıl sebep buydu: her biri kendi başına makul, toplamı
+          okunamaz. Hiçbiri silinmedi — aynı anda yalnız biri görünüyor.
+          bkz. frontend/design/YERLESIM.md */}
+      {activeView === 'live' && (
         <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <Package size={13} className="text-blue shrink-0" aria-hidden="true" />
-            <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">
-              {t('now.products')}
-            </span>
-            <span className="text-[10px] text-textMute">{productStats.length}</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 p-3 border-t border-border/60">
-            {productStats.slice(0, 12).map(p => (
-              <ProductCard key={p.key} product={p}
-                /* flash artik turetiliyor: eskiden her product_viewed olayinda
-                   Dashboard seviyesinde iki setState yapiliyordu (yaz + 1.5sn
-                   sonra sil) ve her biri tum paneli yeniden ciziyordu. lastTs
-                   zaten elimizde; ayni etki, sifir fazladan render. */
-                flash={Date.now() - p.lastTs < 2500}
-                available={prodStock[p.handle]?.available} />
+          <div className="flex items-center gap-1 px-3 py-2 border-b border-border overflow-x-auto"
+               role="tablist" aria-label={t('detail.title')}>
+            {[
+              ['urunler',   t('detail.products'), Package, productStats.length],
+              ['kaynaklar', t('detail.sources'),  Globe,   trafficStats.length],
+              ['aramalar',  t('detail.searches'), Search,  searchStats.length],
+              ['sayfalar',  t('detail.pages'),    Layers,  pageStats.length + notFoundStats.length],
+            ].map(([anahtar, etiket, Ikon, sayi]) => (
+              <button key={anahtar} onClick={() => setDetayTab(anahtar)}
+                role="tab" aria-selected={detayTab === anahtar}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                  detayTab === anahtar ? 'bg-surfaceAlt text-text' : 'text-textMute hover:text-text'}`}>
+                <Ikon size={11} aria-hidden="true" /> {etiket}
+                {sayi > 0 && <span className="text-[9px] text-textMute tabular-nums">{sayi}</span>}
+              </button>
             ))}
           </div>
+
+          <div className="max-h-[300px] sm:max-h-[340px] xl:max-h-[400px] overflow-y-auto custom-scrollbar p-3">
+
+            {detayTab === 'urunler' && (
+              productStats.length === 0
+                ? <p className="py-10 text-center text-[11px] text-textMute">{t('analytics.no_products')}</p>
+                : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+                    {productStats.slice(0, 12).map(p => (
+                      <ProductCard key={p.key} product={p}
+                        flash={Date.now() - p.lastTs < 2500}
+                        available={prodStock[p.handle]?.available} />
+                    ))}
+                  </div>
+            )}
+
+            {detayTab === 'kaynaklar' && (
+              <div className="space-y-3">
+                {trafficStats.length > 0 && (
+                  <TrafficTable traffic={trafficStats} onSourceClick={src => {
+                    const vids = new Set(events.filter(e => parseReferrer(e.referrer) === src).map(e => e.vid));
+                    setDrillDown({
+                      title: src,
+                      subtitle: `${vids.size} ${t('common.visitors')}`,
+                      visitors: visitorProfiles.filter(v => vids.has(v.vid)),
+                    });
+                  }} />
+                )}
+                {utmStats.length > 0 && (
+                  <AdProductGrid utmStats={utmStats} session={session} customerNames={customerNames} />
+                )}
+                {!trafficStats.length && !utmStats.length && (
+                  <p className="py-10 text-center text-[11px] text-textMute">{t('perf.no_channels')}</p>
+                )}
+              </div>
+            )}
+
+            {detayTab === 'aramalar' && (
+              searchStats.length === 0
+                ? <p className="py-10 text-center text-[11px] text-textMute">{t('analytics.no_searches')}</p>
+                : <SearchTable searches={searchStats} />
+            )}
+
+            {detayTab === 'sayfalar' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute mb-1.5">
+                    {t('analytics.pages')}
+                  </div>
+                  {pageStats.length === 0
+                    ? <p className="text-[11px] text-textMute">—</p>
+                    : <ul className="space-y-1">
+                        {pageStats.slice(0, 12).map(sayfa => (
+                          <li key={sayfa.path} className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] text-text truncate" title={sayfa.title}>{sayfa.title}</p>
+                              <p className="text-[10px] text-textMute font-mono truncate">{sayfa.path}</p>
+                            </div>
+                            <span className="text-[11px] font-bold text-purple tabular-nums shrink-0">{sayfa.vids.size}</span>
+                          </li>
+                        ))}
+                      </ul>}
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute mb-1.5">
+                    {t('analytics.collections')}
+                  </div>
+                  {collectionStats.length === 0
+                    ? <p className="text-[11px] text-textMute">—</p>
+                    : <ul className="space-y-1">
+                        {collectionStats.slice(0, 12).map(k => (
+                          <li key={k.handle} className="flex items-center gap-2">
+                            <p className="flex-1 text-[11px] text-text truncate" title={k.handle}>{k.handle}</p>
+                            <span className="text-[11px] font-bold text-text tabular-nums shrink-0">{k.count}</span>
+                          </li>
+                        ))}
+                      </ul>}
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-rose mb-1.5">
+                    404 · {t('analytics.not_found')}
+                  </div>
+                  {notFoundStats.length === 0
+                    ? <p className="text-[11px] text-textMute">—</p>
+                    : <ul className="space-y-1">
+                        {notFoundStats.slice(0, 12).map(x => (
+                          <li key={x.path} className="flex items-center gap-2">
+                            <p className="flex-1 text-[11px] text-text font-mono truncate" title={x.path}>{x.path}</p>
+                            <span className="text-[11px] font-bold text-rose tabular-nums shrink-0">{x.vids.size}</span>
+                            <span className="text-[10px] text-textMute shrink-0">{timeAgo(x.lastTs, lang)}</span>
+                          </li>
+                        ))}
+                      </ul>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Canli sinyaller - "su an ne aranıyor", "su an nereden geliyorlar",
-          "su an hangi sayfa kiriliyor". Bunlar eski Analiz sekmesindeydi ama
-          donemsel degil ANLIK veriler; yanlis olan tek sey etiketleriydi. */}
-      {activeView === 'live' && (searchStats.length > 0 || trafficStats.length > 0 || notFoundStats.length > 0 || pageStats.length > 0 || collectionStats.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
-          {trafficStats.length > 0 && (
-            <TrafficTable traffic={trafficStats} onSourceClick={src => {
-              const vids = new Set(events.filter(e => parseReferrer(e.referrer) === src).map(e => e.vid));
-              setDrillDown({
-                title: src,
-                subtitle: `${vids.size} ${t('common.visitors')}`,
-                visitors: visitorProfiles.filter(v => vids.has(v.vid)),
-              });
-            }} />
-          )}
-          {searchStats.length > 0 && <SearchTable searches={searchStats} />}
-          {collectionStats.length > 0 && (
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3">
-                <Layers size={13} className="text-purple shrink-0" aria-hidden="true" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.collections')}</span>
-              </div>
-              <ul className="divide-y divide-border/60 border-t border-border/60">
-                {collectionStats.slice(0, 8).map(c => (
-                  <li key={c.handle} className="flex items-center gap-3 px-4 py-2">
-                    <p className="flex-1 text-xs text-text truncate" title={c.handle}>{c.handle}</p>
-                    <span className="text-xs font-bold text-text tabular-nums shrink-0">{c.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {pageStats.length > 0 && (
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-              <button onClick={() => setPageOpen(o => !o)}
-                aria-expanded={pageOpen}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
-                <Globe size={13} className="text-purple shrink-0" aria-hidden="true" />
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.pages')}</span>
-                <span className="text-[10px] text-textMute mr-1">{pageStats.length}</span>
-                {pageOpen ? <ChevronUp size={13} className="text-textMute shrink-0" aria-hidden="true" />
-                          : <ChevronDown size={13} className="text-textMute shrink-0" aria-hidden="true" />}
-              </button>
-              {pageOpen && (
-                <div className="divide-y divide-border/60 border-t border-border/60">
-                  {pageStats.slice(0, 12).map((page, i) => (
-                    <div key={page.path} className="flex items-center gap-3 px-4 py-2">
-                      <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-text font-medium truncate" title={page.title}>{page.title}</p>
-                        <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
-                        <p className="text-[10px] text-textMute">{t('common.unique')}</p>
-                      </div>
-                      <span className="text-[10px] text-textMute w-12 text-right shrink-0">{timeAgo(page.lastTs, lang)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {notFoundStats.length > 0 && (
-            <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
-              <button onClick={() => setNotFoundOpen(o => !o)}
-                aria-expanded={notFoundOpen}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-roseSoft/60 transition-colors">
-                <span className="text-sm font-bold text-rose shrink-0" aria-hidden="true">404</span>
-                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.not_found')}</span>
-                <span className="text-[10px] bg-roseSoft text-rose px-1.5 py-0.5 rounded-full mr-1">{notFoundStats.length}</span>
-                {notFoundOpen ? <ChevronUp size={13} className="text-rose/60 shrink-0" aria-hidden="true" />
-                              : <ChevronDown size={13} className="text-rose/60 shrink-0" aria-hidden="true" />}
-              </button>
-              {notFoundOpen && (
-                <div className="divide-y divide-rose/10 border-t border-rose/15">
-                  {notFoundStats.slice(0, 10).map((item, i) => (
-                    <div key={item.path} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
-                      <p className="flex-1 text-xs text-text font-mono truncate" title={item.path}>{item.path}</p>
-                      <span className="text-xs font-bold text-rose tabular-nums shrink-0">{item.vids.size}</span>
-                      <span className="text-[10px] text-textMute w-14 text-right shrink-0">{timeAgo(item.lastTs, lang)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Modals — always rendered regardless of tab */}
       <JourneyModal profile={selectedVisitor}

@@ -2,6 +2,12 @@
 
 const translations = {
   en: {
+    'detail.title':    'Live detail',
+    'detail.products': 'Products',
+    'detail.sources':  'Sources',
+    'detail.searches': 'Searches',
+    'detail.pages':    'Pages',
+
     'journey.lifetime':    'lifetime',
 
     'event.attention_time': 'Time on Page',
@@ -682,6 +688,12 @@ const translations = {
   },
 
   tr: {
+    'detail.title':    'Canlı detay',
+    'detail.products': 'Ürünler',
+    'detail.sources':  'Kaynaklar',
+    'detail.searches': 'Aramalar',
+    'detail.pages':    'Sayfalar',
+
     'journey.lifetime':    'toplam',
 
     'event.attention_time': 'Sayfada Geçirilen Süre',
