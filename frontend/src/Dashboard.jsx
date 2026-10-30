@@ -379,7 +379,7 @@ function VisitorCard({ profile, customerName, onClick, anonymized = false }) {
   const fullName = anonymized ? maskName(rawName) : rawName;
   return (
     <div onClick={onClick}
-      className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-borderStrong transition-all space-y-2
+      className={`bg-surfaceSoft border rounded-xl p-3 cursor-pointer hover:border-borderStrong space-y-2 spt-kalk
         ${inactive ? 'border-border/40 opacity-50' : 'border-border'}`}>
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
@@ -5535,18 +5535,24 @@ export default function Dashboard({ session, onLogout }) {
 
       {activeView === 'live' && <>
 
-      {/* Pixel panel — always visible */}
-      <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
-        ${pixelStatus?.installed ? 'bg-greenSoft/50 border-green/20' : 'bg-surfaceAlt/50 border-borderStrong'}`}>
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${pixelStatus?.installed ? 'bg-greenSoft' : 'bg-surfaceAlt/40'}`}>
-            <Zap size={16} className={pixelStatus?.installed ? 'text-green' : 'text-textDim'} />
+      {/* Pixel durumu. KURULUYKEN (normal durum) tek satirlik ince bir serit:
+          her gun bakilan bir sey degil, yalnizca "calisiyor mu" sorusuna
+          cevap veriyor. KURULU DEGILKEN eylem cagrisi oldugu icin buyuk
+          kaliyor - orada dikkat cekmesi gerekiyor. */}
+      <div className={`rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 spt-giris
+        ${pixelStatus?.installed
+          ? 'bg-greenSoft/40 border-green/20 px-3 py-2'
+          : 'bg-surfaceAlt/50 border-borderStrong p-4'}`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`rounded-lg shrink-0 ${pixelStatus?.installed ? 'p-1 bg-greenSoft' : 'p-2 bg-surfaceAlt/40'}`}>
+            <Zap size={pixelStatus?.installed ? 13 : 16}
+              className={pixelStatus?.installed ? 'text-green' : 'text-textDim'} aria-hidden="true" />
           </div>
-          <div>
-            <p className={`text-sm font-bold ${pixelStatus?.installed ? 'text-green' : 'text-text'}`}>
+          <div className={pixelStatus?.installed ? 'flex items-center gap-2 flex-wrap min-w-0' : ''}>
+            <p className={`font-bold ${pixelStatus?.installed ? 'text-xs text-green' : 'text-sm text-text'}`}>
               {pixelStatus?.installed ? t('pixel.installed') : t('pixel.not_installed')}
             </p>
-            <p className="text-textMute text-[10px]">
+            <p className="text-textMute text-[10px] truncate">
               {pixelStatus?.installed
                 ? `${t('pixel.tracking_id')}: ${pixelStatus.tracking_id || '—'}`
                 : themeEditorUrl
@@ -5834,19 +5840,28 @@ export default function Dashboard({ session, onLogout }) {
               ['urunler',   t('detail.products'), Package, productStats.length],
               ['kaynaklar', t('detail.sources'),  Globe,   trafficStats.length],
               ['aramalar',  t('detail.searches'), Search,  searchStats.length],
-              ['sayfalar',  t('detail.pages'),    Layers,  pageStats.length + notFoundStats.length],
-            ].map(([anahtar, etiket, Ikon, sayi]) => (
+              ['sayfalar',  t('detail.pages'),    Layers,  pageStats.length, notFoundStats.length],
+            ].map(([anahtar, etiket, Ikon, sayi, uyari]) => (
               <button key={anahtar} onClick={() => setDetayTab(anahtar)}
                 role="tab" aria-selected={detayTab === anahtar}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
                   detayTab === anahtar ? 'bg-surfaceAlt text-text' : 'text-textMute hover:text-text'}`}>
                 <Ikon size={11} aria-hidden="true" /> {etiket}
                 {sayi > 0 && <span className="text-[9px] text-textMute tabular-nums">{sayi}</span>}
+                {/* Kirik sayfa sayisi AYRI gosteriliyor: genel toplamin icinde
+                    kaybolursa merchant 404 oldugunu fark etmiyor. */}
+                {uyari > 0 && (
+                  <span className="text-[9px] font-bold text-rose bg-roseSoft px-1 rounded tabular-nums"
+                        title={`${uyari} ${t('analytics.not_found')}`}>
+                    404·{uyari}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
-          <div className="max-h-[300px] sm:max-h-[340px] xl:max-h-[400px] overflow-y-auto custom-scrollbar p-3">
+          <div key={detayTab}
+               className="max-h-[300px] sm:max-h-[340px] xl:max-h-[400px] overflow-y-auto custom-scrollbar p-3 spt-gecis">
 
             {detayTab === 'urunler' && (
               productStats.length === 0

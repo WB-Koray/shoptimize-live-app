@@ -4,31 +4,35 @@
 
 /* Fontlar index.html <head>'inde preconnect + <link> ile yukleniyor (CLS icin). */
 
-/* ── Tema degiskenleri (ThemeProvider runtime'da gunceller) ── */
+/* ── Tema degiskenleri ──────────────────────────────────────────────────────
+   ThemeProvider bunlari runtime'da gunceller; buradakiler JS calismadan onceki
+   ILK BOYAMA icin. Eskiden kaldirilmis WARM temasinin kahverengileri duruyordu:
+   sayfa bir an kahverengi aciliyor, sonra acik temaya ziplyordu. Artik SLATE
+   acik tema ile birebir ayni. */
 :root {
-  --c-bg:#1F1A14;          --c-surface:#2A231B;       --c-surfaceAlt:#362D22;
-  --c-surfaceSoft:#24201A; --c-border:#403628;        --c-borderStrong:#F4EFE6;
-  --c-text:#F4EFE6;        --c-textDim:#B8AD9A;       --c-textMute:#7A705F;
-  --c-accent:#E8925F;      --c-accentSoft:#3A2A1E;
-  --c-teal:#6DC4B0;        --c-tealSoft:#1F2E2A;
-  --c-green:#9BBA7A;       --c-greenSoft:#24301D;
-  --c-amber:#E0BA70;       --c-amberSoft:#332815;
-  --c-blue:#8FAECB;        --c-blueSoft:#1F2A36;
-  --c-purple:#C4A5D4;      --c-purpleSoft:#2C2336;
-  --c-rose:#DB8898;        --c-roseSoft:#332027;
+  --c-bg:#F6F8FB;          --c-surface:#FFFFFF;       --c-surfaceAlt:#F1F5F9;
+  --c-surfaceSoft:#FAFBFD; --c-border:#E5EAF1;        --c-borderStrong:#CBD5E1;
+  --c-text:#0F1A2A;        --c-textDim:#51607A;       --c-textMute:#8A97AB;
+  --c-accent:#16A34A;      --c-accentSoft:#E2F6E9;
+  --c-teal:#0D9488;        --c-tealSoft:#D9F2EF;
+  --c-green:#16A34A;       --c-greenSoft:#E2F6E9;
+  --c-amber:#D97706;       --c-amberSoft:#FBEBD2;
+  --c-blue:#2563EB;        --c-blueSoft:#DEE9FD;
+  --c-purple:#9333EA;      --c-purpleSoft:#EFE2FB;
+  --c-rose:#E11D48;        --c-roseSoft:#FBDDE4;
 
-  --font-display: 'Fraunces', 'Newsreader', Georgia, serif;
+  --font-display: 'Geist', system-ui, sans-serif;
   --font-body:    'Geist', 'Inter', system-ui, sans-serif;
   --font-mono:    'Geist Mono', ui-monospace, monospace;
 
-  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
-}
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px;
 
-[data-vibe="brutalist"] {
-  --r-sm: 0px; --r-md: 0px; --r-lg: 0px; --r-xl: 0px;
+  /* Hareket suresi tek yerden. prefers-reduced-motion asagida bunu 0 yapiyor;
+     her animasyonu ayri ayri kapatmak yerine tek degisken. */
+  --hiz-hizli: 160ms;
+  --hiz-orta:  240ms;
+  --egri: cubic-bezier(0.22, 0.61, 0.36, 1);   /* ease-out: cikis hizli, inis yumusak */
 }
-[data-vibe="brutalist"] .border,
-[data-vibe="brutalist"] [class*="border-["] { border-width: 2px !important; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -40,7 +44,7 @@ html, body, #root {
   color: var(--c-text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  transition: background-color 200ms ease, color 200ms ease;
+  transition: background-color var(--hiz-orta) ease, color var(--hiz-orta) ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -57,8 +61,55 @@ html, body, #root {
 
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
-@keyframes slide-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+/* ── Hareket ────────────────────────────────────────────────────────────────
+   Kural: hareket BIR SEY SOYLEMELI. Bu panelde soyleyecek sey su: "bu satir
+   yeni geldi", "icerik degisti". Dekoratif hareket yok - canli akis saniyede
+   birkac satir alabiliyor, her biri dans ederse okunmaz hale gelir. */
+
+@keyframes spt-kay-gir {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
 }
-.event-enter { animation: slide-in 0.2s ease-out; }
+@keyframes spt-belir {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spt-nabiz {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* Canli akista yeni gelen satir */
+.event-enter { animation: spt-kay-gir var(--hiz-hizli) var(--egri); }
+
+/* Sekme icerigi degisince: kisa bir belirme. Kullanici hangi bolumun
+   degistigini goz hareketiyle degil, hareketle yakalar. */
+.spt-gecis { animation: spt-belir var(--hiz-orta) var(--egri); }
+
+/* Panellerin ilk acilista sirayla belirmesi. Gecikme satir ici style ile
+   veriliyor; 5'ten fazla ogeye uygulanmaz - bekleme hissi yaratir. */
+.spt-giris { animation: spt-belir var(--hiz-orta) var(--egri) both; }
+
+/* Canli gosterge noktasi */
+.spt-nabiz { animation: spt-nabiz 2s ease-in-out infinite; }
+
+/* Tiklanabilir kartlarda hafif kalkis. transform kullaniliyor: layout'u
+   tetiklemez, yalniz compositor isi. */
+.spt-kalk { transition: transform var(--hiz-hizli) var(--egri),
+                        box-shadow var(--hiz-hizli) var(--egri),
+                        border-color var(--hiz-hizli) var(--egri); }
+.spt-kalk:hover { transform: translateY(-1px); }
+
+/* ── Harekete duyarlilik ────────────────────────────────────────────────────
+   Isletim sisteminde "hareketi azalt" secili olan kullanici icin HER SEY
+   kapanir. Bu bir tercih degil, erisilebilirlik gereği: vestibuler rahatsizligi
+   olan kisilerde hareket bas donmesi yapabiliyor. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --hiz-hizli: 0.01ms; --hiz-orta: 0.01ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
