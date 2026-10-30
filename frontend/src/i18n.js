@@ -2,6 +2,8 @@
 
 const translations = {
   en: {
+    'journey.lifetime':    'lifetime',
+
     'event.attention_time': 'Time on Page',
     'event.scroll_depth':   'Scroll Depth',
 
@@ -680,6 +682,8 @@ const translations = {
   },
 
   tr: {
+    'journey.lifetime':    'toplam',
+
     'event.attention_time': 'Sayfada Geçirilen Süre',
     'event.scroll_depth':   'Sayfa Kaydırma',
 

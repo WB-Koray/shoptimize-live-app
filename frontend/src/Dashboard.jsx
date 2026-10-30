@@ -11,6 +11,7 @@ import {
   Download,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeContext';
+import { satinAldiMi, hazirlaSiparisIndeksi } from './lib/donusum';
 // Performans tembel yuklenir: recharts ~377 kB getiriyor ve uygulama Shopify
 // Admin icinde iframe olarak aciliyor. Ilk acilista gorunen ekran "Simdi";
 // grafik kodunu oraya yuklememek icin bu bolme.
@@ -589,7 +590,15 @@ function JourneyModal({ profile, customerName, onClose }) {
           <span>{Math.max(0, Math.round((profile.lastTs - profile.firstTs) / 60000))} {t('journey.min')}</span>
           {profile.customer_id && !fullName && <span className="text-green font-semibold">{t('common.member')}{profile.customer_id}</span>}
           {customerName?.email && <span className="text-textDim">{customerName.email}</span>}
-          {customerName?.orders_count > 0 && <span className="text-amber">{customerName.orders_count} {t('journey.orders')}</span>}
+          {/* Bu iki deger Shopify musteri kaydindan gelir: YASAM BOYU toplam.
+              Satirin geri kalani bu ziyareti anlatiyor (3 etkinlik, ilk/son
+              saat, sure); etiketsiz durunca "bu ziyarette 2 siparis verdi"
+              gibi okunuyordu. */}
+          {customerName?.orders_count > 0 && (
+            <span className="text-amber">
+              {t('journey.lifetime')} {customerName.orders_count} {t('journey.orders')}
+            </span>
+          )}
           {customerName?.total_spent && parseFloat(customerName.total_spent) > 0 && (
             <span className="text-green">{parseFloat(customerName.total_spent).toLocaleString('tr-TR')} ₺</span>
           )}
@@ -4912,20 +4921,13 @@ export default function Dashboard({ session, onLogout }) {
         if (!p.attentionSeconds || ev.data.seconds > p.attentionSeconds) p.attentionSeconds = ev.data.seconds;
       }
     }
-    // Cross-reference with WA converted orders — handles case where checkout_completed
-    // event was never pushed (guest checkout / server restart lost in-memory session dict)
-    const convertedVids = new Set(convertedOrders.map(o => o.vid).filter(Boolean));
-    const ordersWithoutVid = convertedOrders.filter(o => !o.vid);
+    // Siparis eslestirmesi services/lib/donusum.js'de: sessizce yanlis
+    // calisabilen bir mantik, test edilebilir olmasi icin disari alindi.
+    const siparisIndeksi = hazirlaSiparisIndeksi(convertedOrders);
     for (const p of Object.values(map)) {
-      if (p.stage === 'converted') continue;
-      if (convertedVids.has(p.vid)) {
-        p.stage = 'converted';
-      } else if (p.stage === 'checkout' && ordersWithoutVid.length > 0) {
-        // Timestamp fallback: order placed after visitor's last activity, within 2 hours
-        const matched = ordersWithoutVid.some(o => o.ts >= p.lastTs && o.ts - p.lastTs < 120 * 60 * 1000);
-        if (matched) p.stage = 'converted';
-      }
+      if (satinAldiMi(p, siparisIndeksi)) p.stage = 'converted';
     }
+
     const nowTR = Date.now() + 3 * 3_600_000;
     const todayStartMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
     return Object.values(map)
