@@ -4879,25 +4879,75 @@ export default function Dashboard({ session, onLogout }) {
     setWebhookLoading(false);
   };
 
+  // Musteri adlarini cozumle.
+  //
+  // Onceki surumde iki hata vardi ve ikisi birlikte "Member #123456" yazisinin
+  // KALICI olmasina yol aciyordu:
+  //
+  //   1. Kimlik, istek SONUCLANMADAN once "alindi" diye isaretleniyordu. Istek
+  //      basarisiz olursa (ag hatasi, hiz siniri, gecici 500) o kimlik zaten
+  //      isaretli oldugu icin bir daha hic denenmiyordu.
+  //   2. Promise.all ile SINIRSIZ eszamanli istek. Yirmi uye ayni anda
+  //      gelince yirmi paralel istek gidiyor, Shopify hiz sinirina takiliyor
+  //      ve takilanlar (1) yuzunden kalici olarak isimsiz kaliyordu.
+  //
+  // customerCache.current[id] artik bir DURUM tutuyor:
+  //   'tamam' -> ad alindi
+  //   'yok'   -> sunucu basariyla cevap verdi ama ad yok (tekrar deneme)
+  //   sayi    -> basarisiz deneme sayisi (3'e kadar tekrar denenir)
+  const musteriCalisiyor = useRef(false);
   useEffect(() => {
-    const toFetch = visitorProfiles
-      .filter(p => p.customer_id && !(p.customer_id in customerCache.current))
-      .map(p => p.customer_id)
-      .filter((id, i, arr) => arr.indexOf(id) === i);
-    if (!toFetch.length) return;
-    toFetch.forEach(id => { customerCache.current[id] = true; });
-    Promise.all(toFetch.map(async id => {
-      try {
-        const r = await fetch(`${API_URL}/api/shopify/customer?customer_id=${encodeURIComponent(id)}&${qs}`);
-        const d = await r.json();
-        if (d.ok && d.customer) return [id, d.customer];
-      } catch {}
-      return [id, null];
-    })).then(results => {
-      const updates = {};
-      results.forEach(([id, c]) => { if (c) updates[id] = c; });
-      if (Object.keys(updates).length) setCustomerNames(prev => ({ ...prev, ...updates }));
+    if (musteriCalisiyor.current) return;
+
+    const bekleyen = [...new Set(
+      visitorProfiles.filter(p => p.customer_id).map(p => p.customer_id)
+    )].filter(id => {
+      const durum = customerCache.current[id];
+      if (durum === 'tamam' || durum === 'yok') return false;
+      return typeof durum !== 'number' || durum < 3;
     });
+    if (!bekleyen.length) return;
+
+    musteriCalisiyor.current = true;
+    (async () => {
+      // Eszamanli istek sayisi sinirli tutulur. Shopify Admin API hiz sinirli;
+      // hepsini birden gondermek cogunun reddedilmesi demek.
+      const ESZAMANLI = 4;
+      for (let i = 0; i < bekleyen.length; i += ESZAMANLI) {
+        const dilim = bekleyen.slice(i, i + ESZAMANLI);
+        const sonuclar = await Promise.all(dilim.map(async id => {
+          try {
+            const r = await fetch(`${API_URL}/api/shopify/customer?customer_id=${encodeURIComponent(id)}&${qs}`);
+            const d = await r.json();
+            if (d.ok && d.customer) return [id, d.customer, 'tamam'];
+            // 4xx (429 haric) KALICI: musteri silinmis, kimlik gecersiz,
+            // korumali veri izni yok ya da Shopify bagli degil. Tekrar
+            // denemek her ziyaretci icin bos istek demek.
+            // 429 ve 5xx GECICI: hiz siniri ya da sunucu dalgalanmasi,
+            // birazdan tekrar denenir.
+            if (r.ok || (r.status >= 400 && r.status < 500 && r.status !== 429)) {
+              return [id, null, 'yok'];
+            }
+          } catch { /* ag hatasi -> asagida tekrar denenecek */ }
+          return [id, null, 'hata'];
+        }));
+
+        const yeniAdlar = {};
+        for (const [id, musteri, durum] of sonuclar) {
+          if (durum === 'hata') {
+            const onceki = typeof customerCache.current[id] === 'number'
+              ? customerCache.current[id] : 0;
+            customerCache.current[id] = onceki + 1;   // sonraki gecoste tekrar dene
+          } else {
+            customerCache.current[id] = durum;
+            if (musteri) yeniAdlar[id] = musteri;
+          }
+        }
+        if (Object.keys(yeniAdlar).length) {
+          setCustomerNames(prev => ({ ...prev, ...yeniAdlar }));
+        }
+      }
+    })().finally(() => { musteriCalisiyor.current = false; });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events.length, qs]);
 
