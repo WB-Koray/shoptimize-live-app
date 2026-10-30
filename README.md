@@ -296,6 +296,12 @@ denenirse Shopify aynı çifti döner — bu yüzden eski token
 biri olunca kapanır: yeni çift bir kez yenilendi, mağaza için yeni token alındı,
 ya da 7 gün geçti.
 
+Pratikte ilk koşul neredeyse hemen gerçekleşiyor: token 60 dakikalık olduğu için
+yenileme işçisi ~50 dakika içinde devreye giriyor ve pencere o anda kapanıyor.
+Bu yüzden `yenile()` başarılı bir yenilemeden sonra `admin_api_token_legacy`
+alanını **siler** — artık hiçbir işe yaramayan, ölü bir kimlik bilgisini DB'de
+tutmanın anlamı yok. Geçici bir hatada silinmez, kurtarma hâlâ mümkün olabilir.
+
 ### Operasyon
 
 ```bash

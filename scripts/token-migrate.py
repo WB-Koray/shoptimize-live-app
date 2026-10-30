@@ -172,6 +172,10 @@ def komut_durum(args):
         if ayar.get(K_MIGRATED):
             gecen = simdi - int(ayar.get(K_MIGRATED) or 0)
             notlar.append(f"tasindi {_sure(gecen)} once")
+            # Kurtarma penceresi SADECE eski token hala saklaniyorsa aciktir.
+            # Shopify'a gore pencere "uygulama cifti bir kez yeniledi"ginde
+            # kapaniyor; yenile() o anda eski token'i siliyor. Yalnizca gecen
+            # sureye bakmak, kapanmis bir pencereyi acik gostermek olurdu.
             if gecen < 7 * 86400 and (ayar.get(K_LEGACY) or "").strip():
                 notlar.append("kurtarma penceresi acik")
 

@@ -400,7 +400,20 @@ def yenile(username: str, brand: str, kayit: Optional[dict] = None,
             _reauth_isaretle(username, brand, shop, str(e))
             return ""
 
-        return _cift_kaydet(username, brand, yanit)
+        yeni = _cift_kaydet(username, brand, yanit)
+
+        # Yenileme başarılı oldu. Shopify'ın taşıma için verdiği 7 günlük
+        # kurtarma penceresi tam bu anda kapanıyor: "recovery ends when your
+        # app successfully refreshes the issued pair". Yani saklanan eski
+        # süresiz token artık hiçbir işe yaramıyor — DB'de ölü bir kimlik
+        # bilgisi tutmanın anlamı yok, silinir.
+        if (taze.get(K_LEGACY) or "").strip():
+            try:
+                set_connection_settings(username, brand, "shopify", {K_LEGACY: ""})
+                logger.info("[Token] kurtarma penceresi kapandı, eski token silindi: shop=%s", shop)
+            except Exception as e:
+                logger.warning("[Token] eski token silinemedi: shop=%s — %s", shop, e)
+        return yeni
     finally:
         _kilit_birak(anahtar)
 
