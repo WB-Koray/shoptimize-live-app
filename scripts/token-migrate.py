@@ -45,7 +45,8 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from services.db import (                                          # noqa: E402
-    ShopLookupError, get_all_shopify_connections, lookup_username_by_shop,
+    ShopLookupError, get_all_shopify_connections, get_payload,
+    lookup_username_by_shop,
 )
 from services.shopify_token import (                                 # noqa: E402
     EXPIRING_ENABLED, K_EXPIRES, K_LEGACY, K_MIGRATED, K_REAUTH,
@@ -299,6 +300,13 @@ def komut_tasi(args):
 
 
 def komut_yenile(args):
+    """Yenileme akisini ELLE test eder.
+
+    zorla=True sart: yenile() normalde son kullanmaya 10 dakikadan fazla
+    varsa hicbir sey yapmadan mevcut token'i dondurur. O hâlde bu komut
+    "OK" yazar ama aslinda hicbir sey kanitlamaz - token'in degisip
+    degismedigi parmak izinden okunmali.
+    """
     hedef = _hedefleri_bul(args)
     if not hedef:
         print("Eslesen kayit yok.")
@@ -307,15 +315,24 @@ def komut_yenile(args):
         shop = ayar.get("shop_domain") or "-"
         onceki = token_durumu(u, b)
         if not onceki["son_kullanma"]:
-            print(f"  ATLANDI    {shop:36} suresiz token - yenilenecek bir sey yok")
+            print(f"  ATLANDI    {shop:36} suresiz token - once tasinmali")
             continue
-        yeni = yenile(u, b)
+
+        eski_parmak = _parmak((get_payload(u, b, "shopify").get(K_TOKEN) or ""))
+        yeni = yenile(u, b, zorla=True)
         sonraki = token_durumu(u, b)
-        if yeni:
-            print(f"  OK         {shop:36} yeni kalan={_sure(sonraki['kalan_sn'] or 0)} "
-                  f"refresh={_sure((sonraki['refresh_son'] or 0) - int(time.time()))}")
-        else:
+        yeni_parmak = _parmak(yeni)
+
+        if not yeni:
             print(f"  BASARISIZ  {shop:36} reauth_gerek={sonraki['reauth_gerek']}")
+        elif yeni_parmak == eski_parmak:
+            # Istek gitti ama token ayni kaldi: yenileme GERCEKLESMEDI.
+            print(f"  DEGISMEDI  {shop:36} token {eski_parmak} ayni - "
+                  f"yenileme calismadi, loglara bakin")
+        else:
+            print(f"  OK         {shop:36} token {eski_parmak} -> {yeni_parmak}  "
+                  f"kalan={_sure(sonraki['kalan_sn'] or 0)} "
+                  f"refresh={_sure((sonraki['refresh_son'] or 0) - int(time.time()))}")
         time.sleep(1)
 
 

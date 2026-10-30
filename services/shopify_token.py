@@ -331,11 +331,16 @@ def kod_degistir(shop: str, code: str) -> dict:
 # Yenileme
 # ---------------------------------------------------------------------------
 
-def yenile(username: str, brand: str, kayit: Optional[dict] = None) -> str:
+def yenile(username: str, brand: str, kayit: Optional[dict] = None,
+           zorla: bool = False) -> str:
     """Refresh token'la yeni access token alır. Başarısızsa "" döner.
 
     Kilit alınamazsa (başka bir süreç yeniliyor) kısa süre bekleyip DB'den
     taze token'ı okumayı dener — iki ayrı yenileme yapmaktan iyidir.
+
+    zorla=True son kullanmaya daha çok varken de yeniler. Elle test için:
+    aksi hâlde komut hiçbir şey yapmadan mevcut token'ı döndürür ve
+    "çalıştı" gibi görünür.
     """
     kayit = kayit if kayit is not None else get_payload(username, brand, "shopify")
     shop  = (kayit.get("shop_domain") or "").strip()
@@ -357,7 +362,7 @@ def yenile(username: str, brand: str, kayit: Optional[dict] = None) -> str:
     try:
         # Kilidi beklerken başkası bitirmiş olabilir — tekrar oku.
         taze = get_payload(username, brand, "shopify")
-        if not _yenileme_gerekli(taze):
+        if not zorla and not _yenileme_gerekli(taze):
             return (taze.get(K_TOKEN) or "").strip()
         ref = (taze.get(K_REFRESH) or ref).strip()
 

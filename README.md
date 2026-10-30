@@ -280,9 +280,15 @@ python scripts/token-migrate.py tasi --shop magaza.myshopify.com --uygula
 # Taşınması gereken hepsi
 python scripts/token-migrate.py tasi --hepsi --uygula
 
-# Yenileme akışını test et
+# Yenileme akışını test et (token taze olsa bile ZORLA yeniler)
 python scripts/token-migrate.py yenile --shop magaza.myshopify.com
 ```
+
+`yenile` komutu `zorla=True` ile çağırır. Normal akışta `yenile()` son
+kullanmaya 10 dakikadan fazla varsa hiçbir şey yapmadan mevcut token'ı
+döndürür — elle test ederken bu, "OK" yazıp hiçbir şey kanıtlamamak demek
+olurdu. Komut token'ın sha256 parmak izini önce/sonra karşılaştırır:
+değişmediyse `DEGISMEDI` yazar, `OK` yazmaz.
 
 `SHOPIFY_EXPIRING_TOKENS` kapalıyken `tasi --uygula` kendini durdurur: taşınan
 mağaza bir sonraki açılışında tekrar süresiz token alır ve taşıma geri alınmış
