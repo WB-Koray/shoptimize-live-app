@@ -367,7 +367,8 @@ def komut_kontrol(args):
     print(baslik)
     print("-" * len(baslik))
 
-    sayac = {"canli": 0, "olu": 0, "suresiz_red": 0, "yok": 0, "hata": 0, "atlandi": 0}
+    sayac = {"canli": 0, "olu": 0, "suresiz_red": 0, "yok": 0, "donmus": 0,
+             "hata": 0, "atlandi": 0}
     for u, b, ayar in kayitlar:
         shop  = (ayar.get("shop_domain") or "").strip()
         token = (ayar.get(K_TOKEN) or "").strip()
@@ -414,6 +415,14 @@ def komut_kontrol(args):
             elif r.status_code == 404:
                 sonuc = "MAGAZA YOK"; ayrinti = "HTTP 404 - magaza silinmis"
                 sayac["yok"] += 1
+            elif r.status_code == 402:
+                # "Unavailable Shop": magaza dondurulmus (odenmemis fatura /
+                # askiya alinma). Token'la ya da bizim tarafla ilgisi yok;
+                # magaza geri acilirsa calismaya devam eder. "HATA" diye
+                # gostermek bizde bir sorun varmis izlenimi veriyordu.
+                sonuc = "MAGAZA DONMUS"
+                ayrinti = f"HTTP 402 {(r.text or '').strip()[:90]} - Shopify magazayi askiya almis"
+                sayac["donmus"] += 1
             else:
                 ayrinti = f"HTTP {r.status_code} {r.text[:60]}"
                 sayac["hata"] += 1
@@ -428,7 +437,8 @@ def komut_kontrol(args):
     print()
     print(f"{sayac['canli']} CANLI, {sayac['suresiz_red']} SURESIZ RED, "
           f"{sayac['olu']} olu token, {sayac['yok']} magaza yok, "
-          f"{sayac['hata']} hata, {sayac['atlandi']} atlandi (token yok / mukerrer)")
+          f"{sayac['donmus']} magaza donmus, {sayac['hata']} hata, "
+          f"{sayac['atlandi']} atlandi (token yok / mukerrer)")
     print()
     print("CANLI       : token calisiyor, tasinabilir")
     print("SURESIZ RED : token OLU DEGIL - Shopify sirf suresiz oldugu icin")
@@ -436,6 +446,8 @@ def komut_kontrol(args):
     print("              bu magazalar oncelikli tasinmali.")
     print("OLU         : token gercekten gecersiz (uygulama kaldirilmis).")
     print("              Tasima denemesi basarisiz olur, zararsiz.")
+    print("MAGAZA DONMUS: token saglam, uygulama kurulu - ama Shopify magazayi")
+    print("              askiya almis (odenmemis fatura vb.). Bizde sorun yok.")
     print()
 
 
