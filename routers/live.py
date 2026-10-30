@@ -622,7 +622,15 @@ async def sse_stream(request: Request, tid: str = Query(...), current_user: dict
     q = store.subscribe(tid)
 
     async def generate():
-        for ev in await store.get_recent_events(tid, limit=500):
+        # EN ESKIDEN EN YENIYE gonderilir. get_recent_events Redis listesini
+        # LRANGE ile okuyor ve LPUSH yuzunden o liste EN YENI basta geliyor;
+        # istemci ise aldigi her olayi dizinin BASINA ekliyor. En yeniden
+        # gondermek, tekrar oynatilan blogun istemcide TERS sirali durmasina
+        # yol aciyordu. Sonuclari:
+        #   - Canli Akis'ta eski olaylar artan sirada gorunuyordu
+        #   - "son gorulen urun" turetimi ters calisiyordu (en eskiyi aliyordu)
+        #   - panelin pencere suresi hesabi yanlis cikiyordu
+        for ev in reversed(await store.get_recent_events(tid, limit=500)):
             yield f"data: {json.dumps(ev)}\n\n"
         try:
             while True:

@@ -4983,7 +4983,12 @@ export default function Dashboard({ session, onLogout }) {
     // "Son 10 dakika" yazmak, elimizde olmayan bir araligi iddia etmek olur -
     // duzeltmeye calistigimiz hatanin aynisi. events en yeniden eskiye sirali,
     // yani en eski olay sondaki.
-    const enEski = events.length ? events[events.length - 1].ts : simdi;
+    // Siraya GUVENMEDEN en eski zaman damgasini bul. Dizinin en yeniden
+    // eskiye sirali olmasi gerekiyor, ama bu varsayim bir kez sessizce
+    // bozuldu (SSE tekrar oynatmasi ters sirada geliyordu) ve pencere
+    // suresi 1 dakika gibi yanlis cikti. Tek gecis, O(n).
+    let enEski = simdi;
+    for (const ev of events) if (ev.ts < enEski) enEski = ev.ts;
     const pencereDk = Math.max(1, Math.min(10, Math.round((simdi - enEski) / 60000)));
     return {
       aktif:   canli.length,
