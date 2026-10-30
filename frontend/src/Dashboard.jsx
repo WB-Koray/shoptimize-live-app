@@ -468,80 +468,6 @@ function EventRow({ ev, isNew }) {
   );
 }
 
-// ── ConversionFunnelWidget ────────────────────────────────────────────────────
-// Adım adım dönüşüm hunisi — kayıp noktaları ve dönüşüm oranıyla
-
-function ConversionFunnelWidget({ stats }) {
-  const { t } = useLang();
-  const total = stats.total || 1;
-
-  const steps = [
-    { key: 'all_visitors',     count: stats.total,     bar: 'bg-blue',   text: 'text-blue' },
-    { key: 'viewed_product',   count: stats.product,   bar: 'bg-purple', text: 'text-purple' },
-    { key: 'added_to_cart',    count: stats.cart,      bar: 'bg-amber',  text: 'text-amber' },
-    { key: 'started_checkout', count: stats.checkout,  bar: 'bg-orange', text: 'text-orange' },
-    { key: 'purchased',        count: stats.converted, bar: 'bg-green',  text: 'text-green' },
-  ];
-
-  const convRate = total > 0 ? ((stats.converted / total) * 100).toFixed(1) : '0.0';
-  const convNum  = parseFloat(convRate);
-
-  return (
-    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={15} className="text-blue" />
-          <span className="text-text text-sm font-bold">{t('funnel.title')}</span>
-        </div>
-        <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
-          convNum >= 3 ? 'bg-greenSoft text-green' :
-          convNum >= 1 ? 'bg-amberSoft text-amber' : 'bg-roseSoft text-rose'
-        }`}>
-          {t('funnel.conv_rate')}: {convRate}%
-        </div>
-      </div>
-      <div className="p-4 space-y-1.5">
-        {steps.map((step, i) => {
-          const pct = total > 0 ? (step.count / total) * 100 : 0;
-          const prevCount = i > 0 ? steps[i - 1].count : step.count;
-          const dropOff  = i > 0 ? Math.max(0, prevCount - step.count) : 0;
-          const dropPct  = i > 0 && prevCount > 0 ? ((dropOff / prevCount) * 100).toFixed(0) : null;
-
-          return (
-            <div key={step.key}>
-              {/* Drop-off arrow between steps */}
-              {i > 0 && dropOff > 0 && (
-                <div className="flex items-center gap-1.5 py-0.5 pl-1">
-                  <span className="text-[9px] text-rose/60">▼</span>
-                  <span className="text-[9px] text-rose/70 font-medium">
-                    {dropOff} {t('funnel.dropped')} ({dropPct}%)
-                  </span>
-                </div>
-              )}
-              {/* Step row */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-[11px] font-semibold ${step.text}`}>{t('funnel.' + step.key)}</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-text tabular-nums">{step.count}</span>
-                      <span className="text-[10px] text-textMute tabular-nums">({pct.toFixed(0)}%)</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-surfaceAlt rounded-full overflow-hidden">
-                    <div className={`h-full ${step.bar} rounded-full transition-all duration-700 opacity-80`}
-                      style={{ width: `${Math.min(100, pct)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── TrafficTable ──────────────────────────────────────────────────────────────
 
 function TrafficTable({ traffic, onSourceClick }) {
@@ -4737,7 +4663,6 @@ export default function Dashboard({ session, onLogout }) {
   const [feedQuery, setFeedQuery]             = useState('');
   const [feedOnlyOrders, setFeedOnlyOrders]   = useState(false);
   const [newIds, setNewIds]           = useState(new Set());
-  const [flashProducts, setFlashProducts] = useState(new Set());
 
   const [selectedVisitor, setSelectedVisitor] = useState(null);
   const [drillDown, setDrillDown]             = useState(null);
@@ -4785,14 +4710,6 @@ export default function Dashboard({ session, onLogout }) {
 
         setNewIds(prev => { const n = new Set(prev); n.add(uid); return n; });
         setTimeout(() => setNewIds(prev => { const n = new Set(prev); n.delete(uid); return n; }), 2000);
-
-        if (ev.event_type === 'product_viewed') {
-          const key = ev.data?.product_id || ev.data?.product_handle || ev.data?.product_title;
-          if (key) {
-            setFlashProducts(prev => { const n = new Set(prev); n.add(key); return n; });
-            setTimeout(() => setFlashProducts(prev => { const n = new Set(prev); n.delete(key); return n; }), 1500);
-          }
-        }
 
         if (ev.event_type === 'checkout_completed') {
           playOrderSound();
@@ -4939,41 +4856,6 @@ export default function Dashboard({ session, onLogout }) {
 
   // ── Computed data ────────────────────────────────────────────────────────────
 
-  const evStats = useMemo(() => events.reduce((acc, ev) => {
-    acc[ev.event_type] = (acc[ev.event_type] || 0) + 1;
-    return acc;
-  }, {}), [events]);
-
-  const todayRevenue = useMemo(() => {
-    const nowTR = Date.now() + 3 * 3_600_000;
-    const startOfDayTR = nowTR - (nowTR % 86_400_000);
-    const startMs = startOfDayTR - 3 * 3_600_000;
-    // SSE event'lerinden gelen siparişler (order_id ile dedup için sakla)
-    const eventOrderIds = new Set(
-      events.filter(ev => ev.event_type === 'checkout_completed' && ev.data?.order_id)
-            .map(ev => ev.data.order_id)
-    );
-    const fromEvents = events
-      .filter(ev => ev.event_type === 'checkout_completed' && ev.ts >= startMs)
-      .reduce((sum, ev) => sum + parseFloat(ev.data?.total_price || 0), 0);
-    // WA orders listesinden, SSE'de olmayanlar (checkout_completed event push edilmemiş siparişler)
-    const fromOrders = convertedOrders
-      .filter(o => o.ts >= startMs && !eventOrderIds.has(o.order_id))
-      .reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
-    return fromEvents + fromOrders;
-  }, [events, convertedOrders]);
-
-  // Bugün tamamlanan siparişler (kart sayısı ve drill-down birebir aynı kaynak)
-  const ordersToday = useMemo(() => {
-    const nowTR = Date.now() + 3 * 3_600_000;
-    const startMs = (nowTR - (nowTR % 86_400_000)) - 3 * 3_600_000;
-    return convertedOrders
-      .filter(o => (o.ts || 0) >= startMs)
-      .sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  }, [convertedOrders]);
-
-  const uniqueVisitorCount = useMemo(() => new Set(events.map(e => e.vid)).size, [events]);
-
   const visitorProfiles = useMemo(() => {
     const map = {};
     for (const ev of events) {
@@ -5072,7 +4954,22 @@ export default function Dashboard({ session, onLogout }) {
     });
   }, [events, feedQuery, feedOnlyOrders]);
 
-  const memberCount = useMemo(() => visitorProfiles.filter(p => p.customer_id).length, [visitorProfiles]);
+  // "Simdi" alani DURUM olcer, donem saymaz: kac kisi su an sitede, kaci
+  // sepette, kaci odemede. Onceki kartlar (ETKINLIKLER/ZIYARETCILER) kayan
+  // event penceresini sayiyordu ve yanlarinda duran SIPARISLER/CIRO gercekten
+  // bugune aitti - merchant ikisini bolup yanlis donusum orani cikariyordu.
+  // Donemsel rakamlarin tamami Performans alaninda.
+  const CANLI_PENCERE = 10 * 60 * 1000;
+  const canliDurum = useMemo(() => {
+    const simdi = Date.now();
+    const canli = visitorProfiles.filter(p => simdi - p.lastTs < CANLI_PENCERE);
+    return {
+      aktif:   canli.length,
+      sepette: canli.filter(p => p.stage === 'cart').length,
+      odemede: canli.filter(p => p.stage === 'checkout').length,
+      liste:   canli,
+    };
+  }, [visitorProfiles]);
 
   // Abandonment Intelligence: cart/checkout ziyaretçileri risk skoruyla birlikte
   const atRiskVisitors = useMemo(() => {
@@ -5126,17 +5023,6 @@ export default function Dashboard({ session, onLogout }) {
       .sort((a, b) => b.lastCartTs - a.lastCartTs);
   }, [visitorProfiles]);
 
-  const funnelStats = useMemo(() => {
-    let product = 0, cart = 0, checkout = 0, converted = 0;
-    for (const p of visitorProfiles) {
-      if (['product','cart','checkout','converted'].includes(p.stage)) product++;
-      if (['cart','checkout','converted'].includes(p.stage)) cart++;
-      if (['checkout','converted'].includes(p.stage)) checkout++;
-      if (p.stage === 'converted') converted++;
-    }
-    return { total: visitorProfiles.length, product, cart, checkout, converted };
-  }, [visitorProfiles]);
-
 
   const productStats = useMemo(() => {
     const map = {};
@@ -5166,10 +5052,6 @@ export default function Dashboard({ session, onLogout }) {
   // En çok görüntülenen ürünlerin stok seviyesi (ProductCard köşe rozeti için).
   // Yalnız Analiz sekmesi açıkken sorgula — diğer sekmelerde bu grid görünmüyor,
   // boş handle geçerek gereksiz Shopify isteğini önlüyoruz.
-  // Stok seviyeleri yalniz Stok-Talep Alarm panelinde kullaniliyor; eski urun
-  // gridi (Analiz sekmesi) Performans'a tasindi ve orasi stok rozeti
-  // kullanmiyor. Bos handle listesi = gereksiz Shopify istegi yok.
-  const prodStock = useStockLevels([], session);
 
   const searchStats = useMemo(() => {
     const map = {};
@@ -5196,20 +5078,6 @@ export default function Dashboard({ session, onLogout }) {
       }
     }
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 15);
-  }, [events]);
-
-  const pageStats = useMemo(() => {
-    const map = {};
-    for (const ev of events) {
-      if (ev.event_type !== 'page_viewed') continue;
-      const path = fmtUrl(ev.url);
-      if (!path || path === '/') continue;
-      if (!map[path]) map[path] = { path, title: ev.data?.title || path, count: 0, vids: new Set(), lastTs: ev.ts };
-      map[path].count++;
-      map[path].vids.add(ev.vid);
-      if (ev.ts > map[path].lastTs) map[path].lastTs = ev.ts;
-    }
-    return Object.values(map).sort((a, b) => b.vids.size - a.vids.size).slice(0, 30);
   }, [events]);
 
   const notFoundStats = useMemo(() => {
@@ -5431,12 +5299,52 @@ export default function Dashboard({ session, onLogout }) {
           adi analizdi ama gosterdigi sey son yarim saatti. */}
       {activeView === 'performans' && (
         <Suspense fallback={<p className="text-xs text-textMute px-1 py-6">{t('perf.loading')}</p>}>
-          <Performans session={session} />
+          <div className="space-y-3">
+            <Performans session={session} />
+            {/* RFM segmentasyonu ve atif raporu da donemsel analizler -
+                ikisi de Shopify'dan gecmise bakarak calisiyor, canli
+                pencereyle ilgileri yok. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+              <RFMWidget session={session} anonymized={anonymized} />
+              <AttributionReportWidget session={session} />
+            </div>
+          </div>
         </Suspense>
       )}
 
       {/* Kurtarma (WA Otomasyon) view */}
-      {activeView === 'flow' && <FlowPanel session={session} anonymized={anonymized} />}
+      {activeView === 'flow' && (
+        <div className="space-y-3">
+          {/* Terk edilen odemeler kurtarmanin ham maddesi: kac kisi odemeye
+              basladi, kaci birakti. Eskiden canli ekrandaki kart sirasinda
+              duruyordu - orada donemsel oldugu belli olmuyordu. */}
+          {checkoutStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-surface border border-border rounded-xl px-3.5 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute">{t('stat.checkout')}</div>
+                <div className="mt-1 text-xl font-bold text-text tabular-nums">{checkoutStats.started_count ?? 0}</div>
+                <div className="text-[10px] text-textMute">{t('recovery.today')}</div>
+              </div>
+              <div className="bg-surface border border-border rounded-xl px-3.5 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute">{t('stat.abandoned')}</div>
+                <div className="mt-1 text-xl font-bold text-amber tabular-nums">{checkoutStats.abandoned_count ?? 0}</div>
+                <div className="text-[10px] text-textMute">{t('recovery.today')}</div>
+              </div>
+              <div className="bg-surface border border-border rounded-xl px-3.5 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute">{t('now.at_risk')}</div>
+                <div className="mt-1 text-xl font-bold text-rose tabular-nums">{atRiskVisitors.length}</div>
+                <div className="text-[10px] text-textMute">{t('now.at_risk_sub')}</div>
+              </div>
+              <div className="bg-surface border border-border rounded-xl px-3.5 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMute">{t('recovery.recovered')}</div>
+                <div className="mt-1 text-xl font-bold text-green tabular-nums">{convertedOrders.length}</div>
+                <div className="text-[10px] text-textMute">{t('recovery.recovered_sub')}</div>
+              </div>
+            </div>
+          )}
+          <FlowPanel session={session} anonymized={anonymized} />
+        </div>
+      )}
 
       {/* Plan view */}
       {activeView === 'plan' && (() => {
@@ -5633,30 +5541,22 @@ export default function Dashboard({ session, onLogout }) {
           {/* SOL — KPIs, Abandoned, Funnel */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label={t('stat.events')} sub={t('stat.events_sub')} value={events.length} icon={Activity} color="blue" pulse={sseStatus === 'connected'}
-                onClick={() => setDrillDown({ title: t('drill.all_events'), subtitle: `${events.length} events`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-              <StatCard label={t('stat.visitors')} sub={t('stat.visitors_sub')} value={uniqueVisitorCount} icon={Users} color="purple"
-                onClick={() => setDrillDown({ title: t('drill.visitors'), subtitle: `${uniqueVisitorCount} ${t('common.visitors')} · ${visitorProfiles.filter(v => v.isReturning).length} ${t('visitors.returning')}`, products: productStats.slice(0, 20), visitors: visitorProfiles })} />
-              <StatCard label={t('stat.members')} sub={t('stat.members_sub')} value={memberCount} icon={CheckCircle} color="teal"
-                onClick={() => setDrillDown({ title: t('drill.members'), subtitle: `${memberCount} ${t('stat.members')}`,
-                  products: productStats.filter(p => events.some(ev => ev.event_type === 'product_viewed' && visitorProfiles.find(v => v.vid === ev.vid && v.customer_id) && (ev.data?.product_id === p.key || ev.data?.product_title === p.key))),
-                  visitors: visitorProfiles.filter(v => v.customer_id) })} />
-              <StatCard label={t('stat.cart')} sub={t('stat.cart_sub')} value={evStats['add_to_cart'] || 0} icon={ShoppingCart} color="emerald"
-                onClick={() => setDrillDown({ title: t('drill.cart_products'), subtitle: `${evStats['add_to_cart'] || 0} ${t('stat.cart_sub')}`,
-                  products: productStats.filter(p => p.carts > 0).sort((a, b) => b.carts - a.carts),
-                  visitors: visitorProfiles.filter(v => ['cart','checkout','converted'].includes(v.stage)) })} />
-              <StatCard label={t('stat.checkout')} sub={t('stat.checkout_sub')} value={checkoutStats?.started_count ?? 0} icon={CreditCard} color="yellow"
-                onClick={() => setDrillDown({ title: t('drill.checkout_visitors'), subtitle: `${checkoutStats?.started_count ?? 0} ${t('stat.checkout_sub')}`,
-                  orders: checkoutStats?.started || [] })} />
-              <StatCard label={t('stat.orders')} sub={t('stat.orders_sub')} value={ordersToday.length} icon={CheckCircle} color="emerald"
-                onClick={() => setDrillDown({ title: t('drill.orders'), subtitle: `${ordersToday.length} ${t('stat.orders')}`,
-                  orders: ordersToday })} />
-              <StatCard label={t('stat.revenue')} sub={t('stat.revenue_sub')} value={todayRevenue > 0 ? fmtRevenue(todayRevenue) : (convertedOrders.length > 0 ? fmtRevenue(convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0)) + '*' : '—')} icon={TrendingUp} color="green"
-                onClick={() => setDrillDown({ title: t('drill.revenue'), subtitle: `Today: ₺${todayRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} · WA Total: ₺${convertedOrders.reduce((s,o) => s + parseFloat(o.total_price||0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
-                  orders: ordersToday })} />
-              <StatCard label={t('stat.abandoned')} sub={t('stat.abandoned_sub')} value={checkoutStats?.abandoned_count ?? 0} icon={CreditCard} color="orange"
-                onClick={() => setDrillDown({ title: t('drill.abandoned'), subtitle: t('drill.abandoned_sub'),
-                  orders: checkoutStats?.abandoned || [] })} />
+              <StatCard label={t('now.onsite')} sub={t('now.onsite_sub')}
+                value={canliDurum.aktif} icon={Users} color="blue" pulse={sseStatus === 'connected'}
+                onClick={() => setDrillDown({ title: t('now.onsite'), subtitle: t('now.onsite_sub'),
+                  visitors: canliDurum.liste })} />
+              <StatCard label={t('now.in_cart')} sub={t('now.in_cart_sub')}
+                value={canliDurum.sepette} icon={ShoppingCart} color="emerald"
+                onClick={() => setDrillDown({ title: t('now.in_cart'), subtitle: t('now.in_cart_sub'),
+                  visitors: canliDurum.liste.filter(p => p.stage === 'cart') })} />
+              <StatCard label={t('now.at_checkout')} sub={t('now.at_checkout_sub')}
+                value={canliDurum.odemede} icon={CreditCard} color="yellow"
+                onClick={() => setDrillDown({ title: t('now.at_checkout'), subtitle: t('now.at_checkout_sub'),
+                  visitors: canliDurum.liste.filter(p => p.stage === 'checkout') })} />
+              <StatCard label={t('now.at_risk')} sub={t('now.at_risk_sub')}
+                value={atRiskVisitors.length} icon={Zap} color="orange"
+                onClick={() => setDrillDown({ title: t('now.at_risk'), subtitle: t('now.at_risk_sub'),
+                  visitors: atRiskVisitors })} />
             </div>
 
             {/* Abandonment Intelligence Panel */}
@@ -5674,8 +5574,9 @@ export default function Dashboard({ session, onLogout }) {
             {/* #5 Stok-Talep Alarm */}
             <StockDemandWidget hotProducts={hotProducts} session={session} />
 
-            {/* Conversion funnel */}
-            {visitorProfiles.length > 0 && <ConversionFunnelWidget stats={funnelStats} />}
+            {/* Donusum hunisi Performans alaninda: donemsel bir olcu ve
+                ayni ekranda iki farkli sayi gostermek tek basina yanlis
+                gostermekten daha kotu. */}
           </div>
 
           {/* SAĞ — Visitors + Live Feed */}
@@ -5816,6 +5717,66 @@ export default function Dashboard({ session, onLogout }) {
       {/* Reklam → Ürün Performansı — full width */}
       {activeView === 'live' && utmStats.length > 0 && (
         <AdProductGrid utmStats={utmStats} session={session} customerNames={customerNames} />
+      )}
+
+      {/* Canli sinyaller - "su an ne aranıyor", "su an nereden geliyorlar",
+          "su an hangi sayfa kiriliyor". Bunlar eski Analiz sekmesindeydi ama
+          donemsel degil ANLIK veriler; yanlis olan tek sey etiketleriydi. */}
+      {activeView === 'live' && (searchStats.length > 0 || trafficStats.length > 0 || notFoundStats.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+          {trafficStats.length > 0 && (
+            <TrafficTable traffic={trafficStats} onSourceClick={src => {
+              const vids = new Set(events.filter(e => parseReferrer(e.referrer) === src).map(e => e.vid));
+              setDrillDown({
+                title: src,
+                subtitle: `${vids.size} ${t('common.visitors')}`,
+                visitors: visitorProfiles.filter(v => vids.has(v.vid)),
+              });
+            }} />
+          )}
+          {searchStats.length > 0 && <SearchTable searches={searchStats} />}
+          {collectionStats.length > 0 && (
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3">
+                <Layers size={13} className="text-purple shrink-0" aria-hidden="true" />
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.collections')}</span>
+              </div>
+              <ul className="divide-y divide-border/60 border-t border-border/60">
+                {collectionStats.slice(0, 8).map(c => (
+                  <li key={c.key} className="flex items-center gap-3 px-4 py-2">
+                    <p className="flex-1 text-xs text-text truncate" title={c.key}>{c.key}</p>
+                    <span className="text-xs font-bold text-text tabular-nums shrink-0">{c.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {notFoundStats.length > 0 && (
+            <div className="bg-roseSoft/50 border border-rose/20 rounded-2xl overflow-hidden">
+              <button onClick={() => setNotFoundOpen(o => !o)}
+                aria-expanded={notFoundOpen}
+                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-roseSoft/60 transition-colors">
+                <span className="text-sm font-bold text-rose shrink-0" aria-hidden="true">404</span>
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.not_found')}</span>
+                <span className="text-[10px] bg-roseSoft text-rose px-1.5 py-0.5 rounded-full mr-1">{notFoundStats.length}</span>
+                {notFoundOpen ? <ChevronUp size={13} className="text-rose/60 shrink-0" aria-hidden="true" />
+                              : <ChevronDown size={13} className="text-rose/60 shrink-0" aria-hidden="true" />}
+              </button>
+              {notFoundOpen && (
+                <div className="divide-y divide-rose/10 border-t border-rose/15">
+                  {notFoundStats.slice(0, 10).map((item, i) => (
+                    <div key={item.path} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
+                      <p className="flex-1 text-xs text-text font-mono truncate" title={item.path}>{item.path}</p>
+                      <span className="text-xs font-bold text-rose tabular-nums shrink-0">{item.vids.size}</span>
+                      <span className="text-[10px] text-textMute w-14 text-right shrink-0">{timeAgo(item.lastTs, lang)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modals — always rendered regardless of tab */}

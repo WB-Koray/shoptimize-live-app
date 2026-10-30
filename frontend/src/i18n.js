@@ -2,6 +2,19 @@
 
 const translations = {
   en: {
+    'recovery.today':         'today',
+    'recovery.recovered':     'Recovered orders',
+    'recovery.recovered_sub': 'via WhatsApp follow-up',
+
+    'now.onsite':          'On site now',
+    'now.onsite_sub':      'Active in the last 10 minutes',
+    'now.in_cart':         'In cart',
+    'now.in_cart_sub':     'Has items, not checking out yet',
+    'now.at_checkout':     'At checkout',
+    'now.at_checkout_sub': 'Started checkout right now',
+    'now.at_risk':         'At risk',
+    'now.at_risk_sub':     'Cart or checkout, idle for a while',
+
     'nav.now':          'Now',
     'nav.performance':  'Performance',
     'nav.recovery':     'Recovery',
@@ -662,6 +675,19 @@ const translations = {
   },
 
   tr: {
+    'recovery.today':         'bugün',
+    'recovery.recovered':     'Kurtarılan sipariş',
+    'recovery.recovered_sub': 'WhatsApp takibiyle',
+
+    'now.onsite':          'Şu an sitede',
+    'now.onsite_sub':      'Son 10 dakikada aktif',
+    'now.in_cart':         'Sepette',
+    'now.in_cart_sub':     'Ürün var, henüz ödemeye geçmedi',
+    'now.at_checkout':     'Ödemede',
+    'now.at_checkout_sub': 'Şu an ödeme adımında',
+    'now.at_risk':         'Risk altında',
+    'now.at_risk_sub':     'Sepet veya ödemede, bir süredir hareketsiz',
+
     'nav.now':          'Şimdi',
     'nav.performance':  'Performans',
     'nav.recovery':     'Kurtarma',
