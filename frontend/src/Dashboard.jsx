@@ -75,7 +75,19 @@ const EVENT_META = {
   checkout_started:   { label: 'Checkout Started',  icon: CreditCard,   color: 'yellow'  },
   checkout_completed: { label: 'Order Completed',   icon: CheckCircle,  color: 'emerald' },
   search_submitted:   { label: 'Search Submitted',  icon: Search,       color: 'slate'   },
+  attention_time:     { label: 'Time on Page',      icon: Activity,     color: 'slate'   },
+  scroll_depth:       { label: 'Scroll Depth',      icon: Activity,     color: 'slate'   },
 };
+
+
+// t() ceviri bulamazsa ANAHTARIN KENDISINI donuyor - hicbir zaman bos/false
+// donmuyor. Bu yuzden kod boyunca kullanilan "t(anahtar) || yedek" kalibi
+// yedege HIC dusmuyordu ve panelde ham anahtar gorunuyordu
+// ("event.attention_time"). Ceviri eksikse yedege dusen tek dogru yol bu.
+function ceviriYoksa(t, anahtar, yedek) {
+  const deger = t(anahtar);
+  return deger === anahtar ? (yedek || anahtar) : deger;
+}
 
 // Token tabanlı renk eşlemeleri — tema değişince otomatik güncellenir
 const CM = {
@@ -135,7 +147,10 @@ function fmtUrl(url) {
 }
 function shortVid(vid) { return 'vis_' + (vid || '').slice(-6); }
 function timeAgo(ts, lang = 'en') {
-  const s = Math.floor((Date.now() - ts) / 1000);
+  // Negatife KIRPILIR: olayin zaman damgasi ziyaretcinin cihazindan geliyor ve
+  // o saat merchant'in tarayicisindan ileride olabiliyor. Kirpmadan "-44sn once"
+  // gibi bozuk gorunen degerler cikiyordu.
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (lang === 'tr') {
     if (s < 60) return `${s}sn önce`;
     if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
@@ -424,7 +439,7 @@ function EventRow({ ev, isNew }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-bold ${c.text}`}>{t('event.' + ev.event_type) || meta.label}</span>
+          <span className={`text-xs font-bold ${c.text}`}>{ceviriYoksa(t, 'event.' + ev.event_type, meta.label)}</span>
           {d.order_number && (
             <span className="text-[10px] font-bold text-green bg-greenSoft border border-green/20 px-1.5 py-0.5 rounded-full">
               #{d.order_number}
@@ -592,7 +607,7 @@ function JourneyModal({ profile, customerName, onClose }) {
                 <div className={`p-1 rounded-md ${ec.bg} shrink-0 mt-0.5`}><Icon size={11} className={ec.text} /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold ${ec.text}`}>{t('event.' + ev.event_type) || meta.label}</span>
+                    <span className={`text-[10px] font-bold ${ec.text}`}>{ceviriYoksa(t, 'event.' + ev.event_type, meta.label)}</span>
                     {ev.data?.product_title && <span className="text-[10px] text-text/70 truncate max-w-[160px]">{ev.data.product_title}</span>}
                     {ev.data?.query && <span className="text-[10px] text-text/70">"{ev.data.query}"</span>}
                   </div>
@@ -1286,7 +1301,7 @@ function RFMWidget({ session, anonymized = false }) {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all
                     ${meta.cls} ${expanded === s ? 'ring-2 ring-offset-1 ring-current' : ''}`}>
                   <span>{meta.emoji}</span>
-                  <span>{t('rfm.seg.' + s) || meta.label}</span>
+                  <span>{ceviriYoksa(t, 'rfm.seg.' + s, meta.label)}</span>
                   <span className="bg-white/20 px-1 rounded-md">{rfmData.segments[s]}</span>
                 </button>
               );
@@ -1310,7 +1325,7 @@ function RFMWidget({ session, anonymized = false }) {
             <div className="bg-surfaceAlt/40 border border-border rounded-xl overflow-hidden">
               <div className="px-3 py-2 border-b border-border/60 flex items-center gap-2">
                 <span className="text-sm">{RFM_SEGMENTS[expanded].emoji}</span>
-                <span className="text-xs font-bold text-text">{t('rfm.seg.' + expanded) || RFM_SEGMENTS[expanded].label}</span>
+                <span className="text-xs font-bold text-text">{ceviriYoksa(t, 'rfm.seg.' + expanded, RFM_SEGMENTS[expanded].label)}</span>
                 <span className="text-[10px] text-textMute ml-auto">{t('rfm.top10')}</span>
               </div>
               <div className="divide-y divide-border/40">
@@ -4963,13 +4978,21 @@ export default function Dashboard({ session, onLogout }) {
   const canliDurum = useMemo(() => {
     const simdi = Date.now();
     const canli = visitorProfiles.filter(p => simdi - p.lastTs < CANLI_PENCERE);
+    // Gercek pencere 10 dakikadan KISA olabilir: istemcideki event tamponu
+    // 2000'de kirpiliyor ve yogun bir magazada bu birkac dakika ediyor.
+    // "Son 10 dakika" yazmak, elimizde olmayan bir araligi iddia etmek olur -
+    // duzeltmeye calistigimiz hatanin aynisi. events en yeniden eskiye sirali,
+    // yani en eski olay sondaki.
+    const enEski = events.length ? events[events.length - 1].ts : simdi;
+    const pencereDk = Math.max(1, Math.min(10, Math.round((simdi - enEski) / 60000)));
     return {
       aktif:   canli.length,
       sepette: canli.filter(p => p.stage === 'cart').length,
       odemede: canli.filter(p => p.stage === 'checkout').length,
       liste:   canli,
+      pencereDk,
     };
-  }, [visitorProfiles]);
+  }, [visitorProfiles, events]);
 
   // Abandonment Intelligence: cart/checkout ziyaretçileri risk skoruyla birlikte
   const atRiskVisitors = useMemo(() => {
@@ -5563,7 +5586,8 @@ export default function Dashboard({ session, onLogout }) {
           {/* SOL — KPIs, Abandoned, Funnel */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label={t('now.onsite')} sub={t('now.onsite_sub')}
+              <StatCard label={t('now.onsite')}
+                sub={t('now.onsite_sub').replace('{n}', canliDurum.pencereDk)}
                 value={canliDurum.aktif} icon={Users} color="blue" pulse={sseStatus === 'connected'}
                 onClick={() => setDrillDown({ title: t('now.onsite'), subtitle: t('now.onsite_sub'),
                   visitors: canliDurum.liste })} />
@@ -5791,8 +5815,8 @@ export default function Dashboard({ session, onLogout }) {
               </div>
               <ul className="divide-y divide-border/60 border-t border-border/60">
                 {collectionStats.slice(0, 8).map(c => (
-                  <li key={c.key} className="flex items-center gap-3 px-4 py-2">
-                    <p className="flex-1 text-xs text-text truncate" title={c.key}>{c.key}</p>
+                  <li key={c.handle} className="flex items-center gap-3 px-4 py-2">
+                    <p className="flex-1 text-xs text-text truncate" title={c.handle}>{c.handle}</p>
                     <span className="text-xs font-bold text-text tabular-nums shrink-0">{c.count}</span>
                   </li>
                 ))}

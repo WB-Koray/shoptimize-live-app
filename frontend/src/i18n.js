@@ -2,6 +2,9 @@
 
 const translations = {
   en: {
+    'event.attention_time': 'Time on Page',
+    'event.scroll_depth':   'Scroll Depth',
+
     'now.products':        'Products being viewed now',
 
     'recovery.today':         'today',
@@ -9,7 +12,7 @@ const translations = {
     'recovery.recovered_sub': 'via WhatsApp follow-up',
 
     'now.onsite':          'On site now',
-    'now.onsite_sub':      'Active in the last 10 minutes',
+    'now.onsite_sub':      'Active in the last {n} minutes',
     'now.in_cart':         'In cart',
     'now.in_cart_sub':     'Has items, not checking out yet',
     'now.at_checkout':     'At checkout',
@@ -677,6 +680,9 @@ const translations = {
   },
 
   tr: {
+    'event.attention_time': 'Sayfada Geçirilen Süre',
+    'event.scroll_depth':   'Sayfa Kaydırma',
+
     'now.products':        'Şu an gezilen ürünler',
 
     'recovery.today':         'bugün',
@@ -684,7 +690,7 @@ const translations = {
     'recovery.recovered_sub': 'WhatsApp takibiyle',
 
     'now.onsite':          'Şu an sitede',
-    'now.onsite_sub':      'Son 10 dakikada aktif',
+    'now.onsite_sub':      'Son {n} dakikada aktif',
     'now.in_cart':         'Sepette',
     'now.in_cart_sub':     'Ürün var, henüz ödemeye geçmedi',
     'now.at_checkout':     'Ödemede',
