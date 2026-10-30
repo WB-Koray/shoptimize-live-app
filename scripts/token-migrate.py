@@ -367,7 +367,7 @@ def komut_kontrol(args):
     print(baslik)
     print("-" * len(baslik))
 
-    sayac = {"canli": 0, "olu": 0, "yok": 0, "hata": 0, "atlandi": 0}
+    sayac = {"canli": 0, "olu": 0, "suresiz_red": 0, "yok": 0, "hata": 0, "atlandi": 0}
     for u, b, ayar in kayitlar:
         shop  = (ayar.get("shop_domain") or "").strip()
         token = (ayar.get(K_TOKEN) or "").strip()
@@ -397,8 +397,20 @@ def komut_kontrol(args):
                     sonuc = "YANIT BOS"; ayrinti = str(r.json())[:80]
                     sayac["hata"] += 1
             elif r.status_code in (401, 403):
-                sonuc = "OLU"; ayrinti = f"HTTP {r.status_code} - token gecersiz / uygulama kaldirilmis"
-                sayac["olu"] += 1
+                # Govde sart: 403 iki ayri sebeple gelebiliyor ve ikisi zit
+                # sonuc dogurur. "Non-expiring access tokens are no longer
+                # accepted" demek, token'in OLMEDIGI, sirf suresiz oldugu
+                # icin reddedildigi anlamina gelir - tasima tam da bunu
+                # cozer. Durum koduna bakip "olu" demek, tasinabilecek bir
+                # magazayi kaybetmek olurdu.
+                govde = (r.text or "").strip()[:150]
+                if "expiring" in govde.lower():
+                    sonuc = "SURESIZ RED"
+                    sayac["suresiz_red"] += 1
+                else:
+                    sonuc = "OLU"
+                    sayac["olu"] += 1
+                ayrinti = f"HTTP {r.status_code} {govde}"
             elif r.status_code == 404:
                 sonuc = "MAGAZA YOK"; ayrinti = "HTTP 404 - magaza silinmis"
                 sayac["yok"] += 1
@@ -414,10 +426,16 @@ def komut_kontrol(args):
         time.sleep(0.3)
 
     print()
-    print(f"{sayac['canli']} CANLI, {sayac['olu']} olu token, "
-          f"{sayac['yok']} magaza yok, {sayac['hata']} hata, "
-          f"{sayac['atlandi']} atlandi (token yok / mukerrer)")
-    print("Yalnizca CANLI olanlar tasinabilir; digerlerinde tasima zaten basarisiz olur.")
+    print(f"{sayac['canli']} CANLI, {sayac['suresiz_red']} SURESIZ RED, "
+          f"{sayac['olu']} olu token, {sayac['yok']} magaza yok, "
+          f"{sayac['hata']} hata, {sayac['atlandi']} atlandi (token yok / mukerrer)")
+    print()
+    print("CANLI       : token calisiyor, tasinabilir")
+    print("SURESIZ RED : token OLU DEGIL - Shopify sirf suresiz oldugu icin")
+    print("              reddediyor. Tasimanin cozdugu durum tam olarak bu;")
+    print("              bu magazalar oncelikli tasinmali.")
+    print("OLU         : token gercekten gecersiz (uygulama kaldirilmis).")
+    print("              Tasima denemesi basarisiz olur, zararsiz.")
     print()
 
 
