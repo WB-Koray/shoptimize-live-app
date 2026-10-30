@@ -147,6 +147,28 @@ function fmtUrl(url) {
   try { return new URL(url).pathname || '/'; } catch { return url || '/'; }
 }
 function shortVid(vid) { return 'vis_' + (vid || '').slice(-6); }
+// Arama karsilastirmasi icin metin normalizasyonu.
+//
+// Turkce'ye ozgu bir tuzak var: "TUGBA DEMIREL" (buyuk I noktali) icin
+// toLowerCase() "demi" + AYRI bir birlesen nokta uretiyor (U+0307), yani
+// "demirel" yazan kullanici eslesme bulamiyordu. NFD'ye acip birlesen
+// isaretleri atmak bunu cozuyor ve yan fayda olarak aksansiz yazmaya da
+// izin veriyor ("tugba" -> "tugba" ile eslesir).
+//
+// toLocaleLowerCase('tr') KULLANILMIYOR: o, "I" harfini "i" degil "ı"
+// yapiyor ve "INTEX" gibi latin urun adlarini aranamaz hale getiriyordu.
+function aramaMetni(x) {
+  return String(x ?? '')
+    .toLowerCase()
+    // "ı" (noktasiz i) bilesik bir karakter DEGIL, NFD onu ayristirmiyor.
+    // Turkce'de aksansiz yazan kullanici "Sari" yazip "Sarı"yi bulamiyordu.
+    // Ayristirilabilen digerleri (g s c o u) asagidaki NFD adiminda zaten
+    // sadelesiyor.
+    .replace(/ı/g, 'i')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
 function timeAgo(ts, lang = 'en') {
   // Negatife KIRPILIR: olayin zaman damgasi ziyaretcinin cihazindan geliyor ve
   // o saat merchant'in tarayicisindan ileride olabiliyor. Kirpmadan "-44sn once"
@@ -4942,32 +4964,37 @@ export default function Dashboard({ session, onLogout }) {
   // Arama ziyaretcinin gezdigi TUM urunlerde calisir: "satin alinan urunu ara,
   // kaynagini bul" akisi icin kart uzerindeki son urun yeterli degil.
   const filteredVisitors = useMemo(() => {
-    const q = visitorQuery.trim().toLowerCase();
+    const q = aramaMetni(visitorQuery.trim());
     return visitorProfiles.filter(p => {
       if (visitorOnlyOrders && p.stage !== 'converted') return false;
       if (!q) return true;
+      // Musteri adi profilde DEGIL, customerNames onbelleginde duruyor.
+      // Kart adi gosterdigi halde arama ona bakmiyordu: "Tugba" yazan
+      // kullanici ekranda gordugu ziyaretciyi bulamiyordu.
+      const m = (p.customer_id && customerNames[p.customer_id]) || null;
       const alanlar = [
-        p.vid, p.lastProduct, p.referrer, p.device,
+        p.vid, p.lastProduct, p.referrer, p.device, p.customer_id,
+        m?.first_name, m?.last_name, m?.email, m?.phone,
         p.utm?.utm_source, p.utm?.utm_medium, p.utm?.utm_campaign,
         ...(p.events || []).map(e => {
           const d = e.data || {};
           return [d.product_title, d.title, d.query, d.order_number].filter(Boolean).join(' ');
         }),
       ];
-      return alanlar.some(x => String(x || '').toLowerCase().includes(q));
+      return alanlar.some(x => aramaMetni(x).includes(q));
     });
-  }, [visitorProfiles, visitorQuery, visitorOnlyOrders]);
+  }, [visitorProfiles, visitorQuery, visitorOnlyOrders, customerNames]);
 
   // Canli akis arama + "sadece siparisler" filtresi.
   const filteredEvents = useMemo(() => {
-    const q = feedQuery.trim().toLowerCase();
+    const q = aramaMetni(feedQuery.trim());
     return events.filter(ev => {
       if (feedOnlyOrders && ev.event_type !== 'checkout_completed') return false;
       if (!q) return true;
       const d = ev.data || {};
       const alanlar = [ev.event_type, ev.vid, ev.url,
                        d.product_title, d.title, d.query, d.order_number, d.customer_name];
-      return alanlar.some(x => String(x || '').toLowerCase().includes(q));
+      return alanlar.some(x => aramaMetni(x).includes(q));
     });
   }, [events, feedQuery, feedOnlyOrders]);
 
