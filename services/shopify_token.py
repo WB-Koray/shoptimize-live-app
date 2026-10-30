@@ -377,6 +377,20 @@ def yenile(username: str, brand: str, kayit: Optional[dict] = None) -> str:
             logger.warning("[Token] yenileme geçici hata: shop=%s — %s", shop, e)
             return (taze.get(K_TOKEN) or "").strip()
         except TokenHatasi as e:
+            # Yarış: biz istek atarken merchant uygulamayı açmış ve Shopify
+            # yeni bir çift vermiş olabilir. O durumda bizim sunduğumuz
+            # refresh token emekliye ayrıldığı için 400 döner — ama mağaza
+            # gayet sağlıklı. Kaydı tekrar okumadan reauth işaretlemek yanlış
+            # alarm üretir; dahası arka plan yenileyici reauth işaretli
+            # kayıtları atladığı için o mağaza bir daha yenilenmez.
+            guncel = get_payload(username, brand, "shopify")
+            if (guncel.get(K_REFRESH) or "").strip() not in ("", ref):
+                logger.info(
+                    "[Token] yenileme reddedildi ama refresh token bu arada "
+                    "değişmiş: shop=%s — başkası tazelemiş, reauth yok", shop,
+                )
+                onbellek_bosalt(username, brand)
+                return (guncel.get(K_TOKEN) or "").strip()
             logger.error("[Token] yenileme KALICI hata: shop=%s — %s", shop, e)
             _reauth_isaretle(username, brand, shop, str(e))
             return ""
