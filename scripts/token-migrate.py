@@ -26,6 +26,11 @@ Uygulama konteynerinde calistirilir (DSN ve SHOPIFY_CLIENT_* orada):
         Butun kayitlarin token tipini listeler. Hicbir sey degistirmez,
         token degeri basmaz.
 
+    python scripts/token-migrate.py kontrol
+        Saklanan token'lar GERCEKTEN calisiyor mu - her biriyle kucuk bir
+        Admin API sorgusu atar. Salt okunur. Tasimadan once bunu calistir:
+        olu bir token'a tasima denemek bir sey kanitlamaz.
+
     python scripts/token-migrate.py tasi --shop magaza.myshopify.com
         Tek magazayi tasir. --uygula verilmeden kuru calisir.
 
@@ -336,12 +341,93 @@ def komut_yenile(args):
         time.sleep(1)
 
 
+_CANLI_SORGU = "{ shop { name myshopifyDomain } }"
+
+
+def komut_kontrol(args):
+    """Saklanan token'larin GERCEKTEN calisip calismadigini olcer.
+
+    Tasima geri alinamaz ve olu bir token'a tasima denemek bir sey
+    kanitlamaz - once hangilerinin canli oldugunu bilmek gerekir. Bu komut
+    hicbir sey yazmaz: her kayit icin kucuk bir Admin API sorgusu atar.
+
+    Yan fayda: uygulamanin gercekte hangi magazalarda kurulu oldugunu
+    soyler. billing_status bayat olabiliyor (ornegin kaldirilmis bir
+    magaza hala "active" gorunuyordu), bu olcum ise dogrudan Shopify'a
+    soruyor.
+    """
+    import requests as _rq
+    surum = os.getenv("SHOPIFY_API_VERSION", "2026-04")
+    kayitlar = _kayitlari_topla()
+    aktif = _aktif_kayitlar(kayitlar)
+    kayitlar.sort(key=lambda x: ((x[2].get("shop_domain") or "~").lower(), x[0], x[1]))
+
+    baslik = f"{'magaza':36} {'username':38} {'brand':8} {'token':9} {'sonuc':14} ayrinti"
+    print()
+    print(baslik)
+    print("-" * len(baslik))
+
+    sayac = {"canli": 0, "olu": 0, "yok": 0, "hata": 0, "atlandi": 0}
+    for u, b, ayar in kayitlar:
+        shop  = (ayar.get("shop_domain") or "").strip()
+        token = (ayar.get(K_TOKEN) or "").strip()
+        if not shop or not token:
+            sayac["atlandi"] += 1
+            continue
+        if aktif.get(shop.lower()) != (u, b):
+            # Mukerrer kayit: tasimayacagimiz icin olcmeye de gerek yok.
+            sayac["atlandi"] += 1
+            continue
+
+        sonuc, ayrinti = "HATA", ""
+        try:
+            r = _rq.post(
+                f"https://{shop}/admin/api/{surum}/graphql.json",
+                json={"query": _CANLI_SORGU},
+                headers={"X-Shopify-Access-Token": token,
+                         "Content-Type": "application/json"},
+                timeout=15,
+            )
+            if r.status_code == 200:
+                veri = (r.json().get("data") or {}).get("shop") or {}
+                if veri.get("name"):
+                    sonuc = "CANLI"; ayrinti = veri["name"][:50]
+                    sayac["canli"] += 1
+                else:
+                    sonuc = "YANIT BOS"; ayrinti = str(r.json())[:80]
+                    sayac["hata"] += 1
+            elif r.status_code in (401, 403):
+                sonuc = "OLU"; ayrinti = f"HTTP {r.status_code} - token gecersiz / uygulama kaldirilmis"
+                sayac["olu"] += 1
+            elif r.status_code == 404:
+                sonuc = "MAGAZA YOK"; ayrinti = "HTTP 404 - magaza silinmis"
+                sayac["yok"] += 1
+            else:
+                ayrinti = f"HTTP {r.status_code} {r.text[:60]}"
+                sayac["hata"] += 1
+        except Exception as e:
+            ayrinti = f"{type(e).__name__}: {e}"[:70]
+            sayac["hata"] += 1
+
+        print(f"{shop[:36]:36} {u[:38]:38} {(b or '-')[:8]:8} "
+              f"{_parmak(token):9} {sonuc:14} {ayrinti}")
+        time.sleep(0.3)
+
+    print()
+    print(f"{sayac['canli']} CANLI, {sayac['olu']} olu token, "
+          f"{sayac['yok']} magaza yok, {sayac['hata']} hata, "
+          f"{sayac['atlandi']} atlandi (token yok / mukerrer)")
+    print("Yalnizca CANLI olanlar tasinabilir; digerlerinde tasima zaten basarisiz olur.")
+    print()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     alt = ap.add_subparsers(dest="komut", required=True)
 
     alt.add_parser("durum", help="Token tiplerini listeler (salt okunur)")
+    alt.add_parser("kontrol", help="Token'lar gercekten calisiyor mu? (salt okunur)")
 
     for ad, yardim in (("tasi", "Suresiz token'i expiring'e tasir"),
                        ("yenile", "Expiring token'i hemen yeniler")):
@@ -356,7 +442,8 @@ def main():
                            help="SHOPIFY_EXPIRING_TOKENS kapali olsa bile tasi")
 
     args = ap.parse_args()
-    {"durum": komut_durum, "tasi": komut_tasi, "yenile": komut_yenile}[args.komut](args)
+    {"durum": komut_durum, "kontrol": komut_kontrol,
+     "tasi": komut_tasi, "yenile": komut_yenile}[args.komut](args)
 
 
 if __name__ == "__main__":
