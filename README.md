@@ -106,6 +106,7 @@ shoptimize-live-app/
 | `POST /api/live/event` | Pixel event alımı (rate limited, dedup) |
 | `GET /api/live/stream` | SSE — anlık event stream |
 | `GET /api/live/events` | Son N event (dashboard ilk yükleme) |
+| `GET /api/live/stats/daily` | **Günlük kalıcı sayaçlar** — Performans alanının kaynağı (`days`, varsayılan 30) |
 | `GET /api/shopify/pixel/status` | Theme App Extension kurulum durumu |
 | `POST /api/shopify/pixel/install` | Webhook kayıt |
 | `GET /api/shopify/customer` | Shopify müşteri detayı (admin GraphQL) |
@@ -191,6 +192,36 @@ Tüm geçici state Redis'te saklanır:
 | `optout:{username}:{brand}` | - | Set — opt-out telefon numaraları |
 | `flow_log:{username}:{brand}` | - | WA gönderim logu |
 | `online_token:{username}:{brand}` | - | Shopify OAuth online access token |
+
+
+#### Günlük sayaçlar — neden okuma anında türetilmiyor
+
+`events:{tid}` listesi `_MAX_EVENTS` (5000) sınırında kırpılıyor **ve bu sınır
+mağazanın tüm ziyaretçileri için ortak**. Yoğun bir mağazada 5000 event bir saat
+bile tutmuyor, yani 7 günlük TTL kâğıt üzerinde kalıyor.
+
+Panel "bugün kaç ziyaretçi" sorusunu bu listeden türetiyordu. SSE bağlanınca son
+**500** olayı tekrar oynattığı için pratikte gösterilen şey son yarım saatti —
+ama hemen yanında duran "bugünün siparişi" gerçek rakamdı. Merchant ikisini
+bölüp yanlış dönüşüm oranı çıkarıyordu.
+
+Bu yüzden sayaçlar **yazma anında** işleniyor (`_gunluk_isle`, `push_event`
+içinden — tüm event yollarının tek geçiş noktası, kampanya atfıyla aynı kanca):
+
+| Anahtar | İçerik | TTL |
+|---------|--------|-----|
+| `gun:{tid}:{YYYY-MM-DD}` | events, visitors, event tipi başına sayaç, revenue | 400 gün |
+| `gun_kanal:{tid}:{tarih}` | ilk dokunuş kanalı → tekil ziyaretçi | 95 gün |
+| `gun_urun:{tid}:{tarih}` | ürün başlığı → görüntülenme | 95 gün |
+| `gun_vis:{tid}:{tarih}` | gün içi tekillik kümesi | **2 gün** |
+
+`gun_vis` kısa ömürlü çünkü yalnız "bu ziyaretçiyi bugün saydık mı" sorusuna
+bakıyor; sayı zaten günlük hash'e yazıldığı için geçmiş ona bağlı değil. Böylece
+bellek gün sayısıyla büyümüyor.
+
+Gün sınırı **UTC+3**'e göre (`tr_gun`): UTC'ye göre hesaplansa akşam 21:00'den
+sonraki siparişler ertesi güne düşer ve merchant'ın gördüğü "bugün" Shopify'ın
+gösterdiğiyle tutmazdı.
 
 ### `services/db.py` — PostgreSQL
 

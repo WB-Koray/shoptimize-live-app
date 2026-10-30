@@ -2178,6 +2178,40 @@ async def get_webhook_status(username: str = Query(""), brand: str = Query("defa
 
 # ── Checkout istatistikleri (CHECKOUT/ABANDONED kartları — gerçek webhook verisi) ──
 
+@router.get("/api/live/stats/daily")
+async def daily_stats_endpoint(
+    username: str = Query(""),
+    brand: str = Query("default"),
+    days: int = Query(30),
+    current_user: dict = Depends(get_current_user),
+):
+    """Gunluk kalici sayaclar — panelin "Performans" alani buradan beslenir.
+
+    Panel bu sayilari su ana kadar istemcideki event dizisinden turetiyordu.
+    O dizi SSE'nin tekrar oynattigi son 500 olayla basliyor ve 2000'de
+    kirpiliyor; yogun bir magazada yarim saatlik bir pencere. "Bugunun
+    ziyaretcisi" diye gosterilen sayi aslinda son yarim saatinkiydi ve yanindaki
+    "bugunun siparisi" gercek rakamdi — merchant ikisini bolup yanlis donusum
+    orani cikariyordu.
+
+    Buradaki sayilar yazma aninda islenmis kalici sayaclardan gelir; event
+    listesinin kirpilmasindan etkilenmez.
+    """
+    tid = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
+    if not tid:
+        return {"ok": True, "days": [], "channels": [], "products": [], "no_tid": True}
+
+    gunler  = await store.gunluk_istatistik(tid, days)
+    kanallar = await store.gunluk_kirilim(tid, days, "kanal")
+    urunler  = await store.gunluk_kirilim(tid, days, "urun")
+    return {
+        "ok":       True,
+        "days":     gunler,
+        "channels": kanallar[:30],
+        "products": urunler[:30],
+    }
+
+
 @router.get("/api/live/checkout-stats")
 async def checkout_stats_endpoint(
     username: str = Query(""),

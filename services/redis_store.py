@@ -7,6 +7,8 @@ import hashlib
 import json
 import logging
 import os
+import time
+from datetime import datetime
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -23,6 +25,72 @@ _EVENTS_TTL  = 86400 * 7  # 7 gün
 # atıf okuma anında türetilemez; yazma anında bu kalıcı anahtarlara işlenir.
 _ATTR_TTL     = 86400 * 180  # kampanya sayaçlarının rapor ömrü (6 ay)
 _VID_CAMP_TTL = 86400 * 30   # tıklama → sipariş atıf penceresi
+
+# ── Günlük kalıcı sayaçlar ──────────────────────────────────────────────────
+# Aynı gerekçe, daha geniş kapsam: panel "bugün kaç ziyaretçi" sorusunu event
+# listesinden türetiyordu. O liste _MAX_EVENTS'te kırpılıyor VE sınır mağazanın
+# tüm ziyaretçileri için ortak. Yoğun bir mağazada 5000 event bir saat bile
+# tutmuyor, yani 7 günlük TTL kâğıt üzerinde kalıyor. Sonuç: panel "son yarım
+# saati" bugünün rakamı gibi gösteriyordu.
+#
+# Çözüm okuma anında türetmeyi bırakmak: sayaçlar yazma anında işlenir.
+_GUN_TTL         = 86400 * 400  # günlük toplamlar — birkaç alan, uzun saklanır
+_GUN_KIRILIM_TTL = 86400 * 95   # kaynak/ürün kırılımları (daha hacimli)
+# Gün içi tekillik kümesi: yalnız "bu ziyaretçiyi bugün saydık mı" sorusu için.
+# Sayı zaten günlük hash'e yazıldığı için geçmiş bu kümeye bağlı değil — iki gün
+# yeter ve bellek sınırlı kalır.
+_GUN_VIS_TTL     = 86400 * 2
+
+_TR_OFFSET_MS = 3 * 3_600_000   # panelin her yerinde UTC+3 kullanılıyor
+
+
+def tr_gun(ts_ms: int | None = None) -> str:
+    """Verilen zaman damgasının Türkiye saatine (UTC+3) göre YYYY-MM-DD karşılığı.
+
+    Panelin geri kalanı da bu ofseti kullanıyor (ordersToday, gönderim
+    penceresi). Gün sınırı UTC'ye göre hesaplanırsa akşam 21:00'den sonraki
+    siparişler ertesi güne düşer ve merchant'ın gördüğü "bugün" Shopify'ın
+    gösterdiğiyle tutmaz.
+    """
+    ms = int(ts_ms if ts_ms is not None else time.time() * 1000)
+    return datetime.utcfromtimestamp((ms + _TR_OFFSET_MS) / 1000).strftime("%Y-%m-%d")
+
+
+def _kanal(event: dict) -> str:
+    """Ziyaretçinin geliş kanalı — UTM varsa ondan, yoksa referrer'dan.
+
+    Frontend'deki kanalEtiketi() ile aynı mantık; burada kaynak kırılımı
+    yazma anında sayıldığı için sunucu tarafında da gerekiyor.
+    """
+    utm = event.get("utm") or {}
+    kaynak = str(utm.get("utm_source") or "").strip().lower()
+    if kaynak:
+        return kaynak[:40]
+
+    ref = str(event.get("referrer") or "").strip().lower()
+    if not ref:
+        return "direct"
+    try:
+        host = ref.split("//", 1)[-1].split("/", 1)[0].replace("www.", "")
+    except Exception:
+        return "referral"
+    if not host:
+        return "direct"
+    for ad, anahtarlar in (
+        ("google",    ("google.",)),
+        ("facebook",  ("facebook.", "fb.")),
+        ("instagram", ("instagram.",)),
+        ("tiktok",    ("tiktok.",)),
+        ("bing",      ("bing.",)),
+        ("yandex",    ("yandex.",)),
+        ("youtube",   ("youtube.",)),
+        ("pinterest", ("pinterest.",)),
+        ("x",         ("twitter.", "t.co", "x.com")),
+        ("whatsapp",  ("whatsapp.", "wa.me")),
+    ):
+        if any(a in host for a in anahtarlar):
+            return ad
+    return host[:40]
 
 
 class RedisStore:
@@ -120,6 +188,7 @@ class RedisStore:
 
         await self._redis.publish(f"live:{tid}", raw)
         await self._record_attribution(tid, event)
+        await self._gunluk_isle(tid, event)
 
     # ── Kampanya atfı ────────────────────────────────────────────────────────
     # Atıf yazma anında hesaplanır. Okuma anında event listesinden türetmek
@@ -150,6 +219,124 @@ class RedisStore:
             except (TypeError, ValueError):
                 rev = 0.0
             await self.record_campaign_purchase(tid, vid, rev)
+
+    # ── Günlük sayaçlar ──────────────────────────────────────────────────────
+
+    async def _gunluk_isle(self, tid: str, event: dict) -> None:
+        """Olayı o günün kalıcı sayaçlarına işler. Hata yutulur — sayaç
+        tutmamak, event akışını durdurmaktan iyidir."""
+        try:
+            gun = tr_gun(event.get("ts"))
+            tip = str(event.get("event_type") or "")[:40]
+            vid = str(event.get("vid") or "")
+
+            gun_k  = f"gun:{tid}:{gun}"
+            kanal_k = f"gun_kanal:{tid}:{gun}"
+
+            pipe = self._redis.pipeline()
+            pipe.hincrby(gun_k, "events", 1)
+            if tip:
+                pipe.hincrby(gun_k, tip, 1)
+            pipe.expire(gun_k, _GUN_TTL)
+
+            if tip == "checkout_completed":
+                d = event.get("data") or {}
+                ham = d.get("value") or d.get("total") or d.get("total_price") or d.get("price") or 0
+                try:
+                    ciro = float(ham)
+                except (TypeError, ValueError):
+                    ciro = 0.0
+                if ciro:
+                    pipe.hincrbyfloat(gun_k, "revenue", ciro)
+
+            if tip == "product_viewed":
+                baslik = str((event.get("data") or {}).get("product_title") or "").strip()[:120]
+                if baslik:
+                    urun_k = f"gun_urun:{tid}:{gun}"
+                    pipe.hincrby(urun_k, baslik, 1)
+                    pipe.expire(urun_k, _GUN_KIRILIM_TTL)
+
+            await pipe.execute()
+
+            # Tekil ziyaretçi + ilk dokunuş kanalı. SADD 1 dönerse bu ziyaretçi
+            # bugün ilk kez görülüyor demektir; kanal da ilk görüldüğü anda
+            # sayılır (son dokunuş değil, ilk dokunuş).
+            if vid:
+                yeni = await self._redis.sadd(f"gun_vis:{tid}:{gun}", vid)
+                await self._redis.expire(f"gun_vis:{tid}:{gun}", _GUN_VIS_TTL)
+                if yeni:
+                    pipe2 = self._redis.pipeline()
+                    pipe2.hincrby(gun_k, "visitors", 1)
+                    pipe2.hincrby(kanal_k, _kanal(event), 1)
+                    pipe2.expire(kanal_k, _GUN_KIRILIM_TTL)
+                    await pipe2.execute()
+        except Exception as e:
+            logger.warning("[GUN] gunluk sayac hatasi (tid=%s): %s", tid[:16], e)
+
+    async def gunluk_istatistik(self, tid: str, gunler: int = 30) -> list[dict]:
+        """Son N günün sayaçları — bugün dahil, en yeniden eskiye.
+
+        Hiç veri olmayan günler de 0'larla döner: panelin grafiği boşluk
+        yerine sıfır göstersin, "veri yok" ile "o gün satış olmadı" ayrılsın.
+        """
+        gunler = max(1, min(int(gunler or 30), 400))
+        simdi_ms = int(time.time() * 1000)
+        anahtarlar = [tr_gun(simdi_ms - i * 86_400_000) for i in range(gunler)]
+
+        pipe = self._redis.pipeline()
+        for g in anahtarlar:
+            pipe.hgetall(f"gun:{tid}:{g}")
+        satirlar = await pipe.execute()
+
+        sonuc = []
+        for gun, ham in zip(anahtarlar, satirlar):
+            ham = ham or {}
+            def _say(ad):
+                try:
+                    return int(float(ham.get(ad, 0) or 0))
+                except (TypeError, ValueError):
+                    return 0
+            try:
+                ciro = float(ham.get("revenue", 0) or 0)
+            except (TypeError, ValueError):
+                ciro = 0.0
+            sonuc.append({
+                "date":               gun,
+                "events":             _say("events"),
+                "visitors":           _say("visitors"),
+                "page_viewed":        _say("page_viewed"),
+                "product_viewed":     _say("product_viewed"),
+                "add_to_cart":        _say("add_to_cart"),
+                "cart_viewed":        _say("cart_viewed"),
+                "checkout_started":   _say("checkout_started"),
+                "checkout_completed": _say("checkout_completed"),
+                "search_submitted":   _say("search_submitted"),
+                "revenue":            round(ciro, 2),
+            })
+        return sonuc
+
+    async def gunluk_kirilim(self, tid: str, gunler: int = 30, tur: str = "kanal") -> list[dict]:
+        """Belirtilen gün aralığında kaynak ya da ürün kırılımı (toplanmış)."""
+        onek = {"kanal": "gun_kanal", "urun": "gun_urun"}.get(tur)
+        if not onek:
+            return []
+        gunler = max(1, min(int(gunler or 30), 95))
+        simdi_ms = int(time.time() * 1000)
+
+        pipe = self._redis.pipeline()
+        for i in range(gunler):
+            pipe.hgetall(f"{onek}:{tid}:{tr_gun(simdi_ms - i * 86_400_000)}")
+        satirlar = await pipe.execute()
+
+        toplam: dict[str, int] = {}
+        for ham in satirlar:
+            for ad, deger in (ham or {}).items():
+                try:
+                    toplam[ad] = toplam.get(ad, 0) + int(float(deger or 0))
+                except (TypeError, ValueError):
+                    continue
+        return [{"key": a, "count": s} for a, s in
+                sorted(toplam.items(), key=lambda x: -x[1])]
 
     async def record_campaign_click(self, tid: str, cid: str, vid: str) -> None:
         """Kampanya linkine tıklayanı kalıcı olarak işaretler + ters indeksi kurar."""
