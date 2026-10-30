@@ -5080,6 +5080,28 @@ export default function Dashboard({ session, onLogout }) {
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 15);
   }, [events]);
 
+  // Sayfa istatistikleri - canli sinyal: su an hangi sayfalar geziliyor.
+  // Tekil ziyaretciye gore siralanir; ayni kisinin sayfayi yenilemesi sirayi
+  // bozmasin.
+  const pageStats = useMemo(() => {
+    const map = {};
+    for (const ev of events) {
+      if (ev.event_type !== 'page_viewed') continue;
+      const path = fmtUrl(ev.url);
+      if (!path || path === '/') continue;
+      if (!map[path]) map[path] = { path, title: ev.data?.title || path, count: 0, vids: new Set(), lastTs: ev.ts };
+      map[path].count++;
+      map[path].vids.add(ev.vid);
+      if (ev.ts > map[path].lastTs) map[path].lastTs = ev.ts;
+    }
+    return Object.values(map).sort((a, b) => b.vids.size - a.vids.size).slice(0, 30);
+  }, [events]);
+
+  // Urun izgarasi icin stok seviyeleri. Ilk 12 ile sinirli: useStockLevels
+  // handle listesine gore anahtarli ve 2sn debounce'lu, ama listeyi
+  // sinirlamak Shopify'a giden sorguyu da sinirli tutuyor.
+  const prodStock = useStockLevels(productStats.slice(0, 12).map(p => p.handle), session);
+
   const notFoundStats = useMemo(() => {
     const map = {};
     for (const ev of events) {
@@ -5719,10 +5741,36 @@ export default function Dashboard({ session, onLogout }) {
         <AdProductGrid utmStats={utmStats} session={session} customerNames={customerNames} />
       )}
 
+      {/* Su an gezilen urunler - canli. Performans'taki urun listesi
+          donemsel sayaclardan gelir; bu ise o anki pencereyi gosterir,
+          stok rozetiyle birlikte. Adlari bu yuzden farkli. */}
+      {activeView === 'live' && productStats.length > 0 && (
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <Package size={13} className="text-blue shrink-0" aria-hidden="true" />
+            <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">
+              {t('now.products')}
+            </span>
+            <span className="text-[10px] text-textMute">{productStats.length}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 p-3 border-t border-border/60">
+            {productStats.slice(0, 12).map(p => (
+              <ProductCard key={p.key} product={p}
+                /* flash artik turetiliyor: eskiden her product_viewed olayinda
+                   Dashboard seviyesinde iki setState yapiliyordu (yaz + 1.5sn
+                   sonra sil) ve her biri tum paneli yeniden ciziyordu. lastTs
+                   zaten elimizde; ayni etki, sifir fazladan render. */
+                flash={Date.now() - p.lastTs < 2500}
+                available={prodStock[p.handle]?.available} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Canli sinyaller - "su an ne aranıyor", "su an nereden geliyorlar",
           "su an hangi sayfa kiriliyor". Bunlar eski Analiz sekmesindeydi ama
           donemsel degil ANLIK veriler; yanlis olan tek sey etiketleriydi. */}
-      {activeView === 'live' && (searchStats.length > 0 || trafficStats.length > 0 || notFoundStats.length > 0) && (
+      {activeView === 'live' && (searchStats.length > 0 || trafficStats.length > 0 || notFoundStats.length > 0 || pageStats.length > 0 || collectionStats.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
           {trafficStats.length > 0 && (
             <TrafficTable traffic={trafficStats} onSourceClick={src => {
@@ -5749,6 +5797,37 @@ export default function Dashboard({ session, onLogout }) {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+          {pageStats.length > 0 && (
+            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              <button onClick={() => setPageOpen(o => !o)}
+                aria-expanded={pageOpen}
+                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surfaceAlt/40 transition-colors">
+                <Globe size={13} className="text-purple shrink-0" aria-hidden="true" />
+                <span className="flex-1 text-left text-text font-semibold text-xs uppercase tracking-wide">{t('analytics.pages')}</span>
+                <span className="text-[10px] text-textMute mr-1">{pageStats.length}</span>
+                {pageOpen ? <ChevronUp size={13} className="text-textMute shrink-0" aria-hidden="true" />
+                          : <ChevronDown size={13} className="text-textMute shrink-0" aria-hidden="true" />}
+              </button>
+              {pageOpen && (
+                <div className="divide-y divide-border/60 border-t border-border/60">
+                  {pageStats.slice(0, 12).map((page, i) => (
+                    <div key={page.path} className="flex items-center gap-3 px-4 py-2">
+                      <span className="text-[10px] text-textMute w-4 text-right font-mono shrink-0">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-text font-medium truncate" title={page.title}>{page.title}</p>
+                        <p className="text-[10px] text-textMute font-mono truncate">{page.path}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-bold text-purple tabular-nums">{page.vids.size}</p>
+                        <p className="text-[10px] text-textMute">{t('common.unique')}</p>
+                      </div>
+                      <span className="text-[10px] text-textMute w-12 text-right shrink-0">{timeAgo(page.lastTs, lang)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {notFoundStats.length > 0 && (

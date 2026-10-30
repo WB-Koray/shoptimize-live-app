@@ -2,6 +2,8 @@
 
 const translations = {
   en: {
+    'now.products':        'Products being viewed now',
+
     'recovery.today':         'today',
     'recovery.recovered':     'Recovered orders',
     'recovery.recovered_sub': 'via WhatsApp follow-up',
@@ -675,6 +677,8 @@ const translations = {
   },
 
   tr: {
+    'now.products':        'Şu an gezilen ürünler',
+
     'recovery.today':         'bugün',
     'recovery.recovered':     'Kurtarılan sipariş',
     'recovery.recovered_sub': 'WhatsApp takibiyle',
