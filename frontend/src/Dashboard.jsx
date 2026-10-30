@@ -5615,17 +5615,12 @@ export default function Dashboard({ session, onLogout }) {
       {/* "Simdi" alani: yalniz canli durum. Donemsel rakamlar Performans'a
           tasindi - ikisinin yan yana durmasi yanlis donusum orani
           hesaplanmasina yol aciyordu. */}
-      {(
-        /* Üç sütun: eylem panelleri · ziyaretçiler · canlı akış.
-           Önceden iki sütundu ve ziyaretçi listesiyle akış SAĞ SÜTUNDA ÜST
-           ÜSTE duruyordu — sadece o ikisi 1250px tutuyor, sol sütun ise
-           1030'da bitip altını boş bırakıyordu. Yan yana alınca aynı bilgi
-           ~600px'e sığıyor. bkz. frontend/design/YERLESIM.md */
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[300px_1fr_1fr] gap-3 items-start">
-
-          {/* SOL — canlı durum sayıları ve eylem panelleri */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+      {(<>
+        {/* Canlı durum sayıları — TAM GENİŞLİK tek sıra.
+            Sol sütunda 2x2 dururken o sütunu ~300px şişiriyor ve sütunlar
+            arasında 470px'lik bir boşluk bırakıyordu. Dört sayı üstte tek
+            sırada hem dengeli hem tek bakışta okunur. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
               <StatCard label={t('now.onsite')}
                 sub={t('now.onsite_sub').replace('{n}', canliDurum.pencereDk)}
                 value={canliDurum.aktif} icon={Users} color="blue" pulse={sseStatus === 'connected'}
@@ -5643,8 +5638,17 @@ export default function Dashboard({ session, onLogout }) {
                 value={atRiskVisitors.length} icon={Zap} color="orange"
                 onClick={() => setDrillDown({ title: t('now.at_risk'), subtitle: t('now.at_risk_sub'),
                   visitors: atRiskVisitors })} />
-            </div>
+        </div>
 
+        {/* Üç sütun: eylem panelleri · ziyaretçiler · canlı akış.
+            Önceden iki sütundu ve ziyaretçi listesiyle akış SAĞ SÜTUNDA ÜST
+            ÜSTE duruyordu — sadece o ikisi 1250px tutuyor, sol sütun ise
+            1030'da bitip altını boş bırakıyordu. Yan yana alınca aynı bilgi
+            ~600px'e sığıyor. bkz. frontend/design/YERLESIM.md */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[300px_1fr_1fr] gap-3 items-start">
+
+          {/* SOL — canlı durum sayıları ve eylem panelleri */}
+          <div className="space-y-3">
             {/* Abandonment Intelligence Panel */}
             <AbandonmentIntelligencePanel
               atRiskVisitors={atRiskVisitors}
@@ -5668,7 +5672,12 @@ export default function Dashboard({ session, onLogout }) {
           {/* ORTA — şu an sitede olanlar */}
           <div>
             {visitorProfiles.length > 0 && (
-              <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+              /* Sabit yukseklik + dikey flex: kutu KENDI yuksekligini icerige
+                 gore secmiyor, icerik kutuyu dolduruyor. Boylece ziyaretci
+                 listesiyle canli akis BIREBIR ayni boyda duruyor; onceden
+                 ikisi farkli yuksekliklerde bitip hizayi bozuyordu. */
+              <div className="bg-surface border border-border rounded-2xl overflow-hidden
+                              flex flex-col xl:h-[420px]">
                 <SectionHead icon={Users} title={t('visitors.title')} badge={filteredVisitors.length} extra={t('visitors.extra')} />
                 <div className="flex items-center gap-2 px-4 pt-3">
                   <div className="relative flex-1 min-w-0">
@@ -5701,7 +5710,7 @@ export default function Dashboard({ session, onLogout }) {
                                      ve Tailwind kirilimlari kapsayiciya degil EKRANA
                                      bakiyor. Dort sutun istemek 125px genisliginde
                                      kart demekti; metinler okunamiyordu. */
-                                  max-h-[300px] sm:max-h-[360px] xl:max-h-[460px] overflow-y-auto custom-scrollbar">
+                                  max-h-[300px] sm:max-h-[360px] xl:max-h-none xl:flex-1 xl:min-h-0 overflow-y-auto custom-scrollbar">
                     {filteredVisitors.slice(0, 60).map(profile => (
                       <VisitorCard key={profile.vid} profile={profile}
                         customerName={customerNames[profile.customer_id]}
@@ -5722,7 +5731,8 @@ export default function Dashboard({ session, onLogout }) {
               yiyordu. */}
           <div>
             {/* Live feed */}
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+            <div className={`bg-surface border border-border rounded-2xl overflow-hidden
+                            flex flex-col ${feedOpen ? 'xl:h-[420px]' : ''}`}>
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <div className="flex items-center gap-2">
                   <Activity size={16} className="text-textDim" />
@@ -5774,7 +5784,7 @@ export default function Dashboard({ session, onLogout }) {
                       </button>
                     </div>
                   )}
-                  <div className="overflow-y-auto max-h-[320px] sm:max-h-[380px] xl:max-h-[520px] p-3 space-y-2 custom-scrollbar">
+                  <div className="overflow-y-auto max-h-[320px] sm:max-h-[380px] xl:max-h-none xl:flex-1 xl:min-h-0 p-3 space-y-2 custom-scrollbar">
                     {events.length === 0
                       ? <div className="py-16 text-center space-y-2">
                           <p className="text-textMute text-sm font-medium">{t('feed.no_events')}</p>
@@ -5808,7 +5818,7 @@ export default function Dashboard({ session, onLogout }) {
             )}
           </div>
         </div>
-      )}
+      </>)}
 
       {/* ── Canlı detay — sekmeli ─────────────────────────────────────────
           Burada eskiden YEDİ bölüm alt alta duruyordu (reklam, ürünler,
