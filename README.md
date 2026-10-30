@@ -288,6 +288,27 @@ python scripts/token-migrate.py yenile --shop magaza.myshopify.com
 mağaza bir sonraki açılışında tekrar süresiz token alır ve taşıma geri alınmış
 olur. `--zorla` ile aşılabilir.
 
+### Mükerrer kayıtlar — mağaza başına tek taşıma
+
+`integration_connections` tablosunda aynı `shop_domain`'e bakan birden fazla
+kayıt olabilir: arama başarısız olduğunda çağıran taraf shop'tan username
+türetip yeni kayıt açıyor (bkz. `lookup_username_by_shop` ve `_kayit_oncelik`).
+
+Shopify mağaza başına **tek** geçerli offline token tutuyor — yeni bir token
+alındığında öncekiler emekliye ayrılıyor. Dolayısıyla aynı mağazanın ikinci bir
+kaydını taşımak, birincinin az önce aldığı çifti geçersizleştirir ve uygulama
+hangi kaydı okuyorsa o ölü kalabilir.
+
+Bu yüzden `--hepsi` ve `--shop` **mağaza seçimidir**: her `shop_domain` için
+yalnızca `lookup_username_by_shop`'un döndürdüğü kayıt taşınır, diğerleri
+atlandı diye raporlanır. `--user` ise **kayıt seçimidir** — ne istediğini
+bilerek veren için, filtre uygulanmaz.
+
+`durum` çıktısında `<<<` işareti uygulamanın o mağaza için gerçekten okuduğu
+kaydı gösterir. `token` sütunu değerin sha256 parmak izidir (ilk 8 karakter):
+aynı parmak izi = aynı token, böylece hangi mükerrerlerin aynı token'ı
+paylaştığı değer sızdırmadan görülür.
+
 Sağlık monitörü iki yeni sorun bildirir: *"Shopify token yenilenemiyor"*
 (`admin_token_needs_reauth`) ve son 60 güne girildiğinde *"token hâlâ süresiz
 tipte"*.

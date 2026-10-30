@@ -36,6 +36,7 @@ Uygulama konteynerinde calistirilir (DSN ve SHOPIFY_CLIENT_* orada):
         Expiring bir token'i hemen yeniler (yenileme akisini test eder).
 """
 import argparse
+import hashlib
 import os
 import sys
 import time
@@ -43,7 +44,9 @@ import time
 # Proje kokunu yola ekle (scripts/ altindan calistirildiginda)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from services.db import get_all_shopify_connections                 # noqa: E402
+from services.db import (                                          # noqa: E402
+    ShopLookupError, get_all_shopify_connections, lookup_username_by_shop,
+)
 from services.shopify_token import (                                 # noqa: E402
     EXPIRING_ENABLED, K_EXPIRES, K_LEGACY, K_MIGRATED, K_REAUTH,
     K_REF_EXP, K_REFRESH, K_TOKEN, tasi, token_durumu, yenile,
@@ -80,85 +83,181 @@ def _kayitlari_topla():
     return sorted(sonuc, key=lambda x: (not (x[2].get(K_TOKEN) or "").strip(), x[0]))
 
 
+def _parmak(token: str) -> str:
+    """Token'in kimligi - DEGERI SIZDIRMADAN. Ayni token = ayni parmak izi.
+
+    Ayni magazaya bakan birden fazla kayit var; hangilerinin ayni token'i
+    tuttugunu bilmeden tasima yapilamaz.
+    """
+    token = (token or "").strip()
+    if not token:
+        return "-"
+    return hashlib.sha256(token.encode()).hexdigest()[:8]
+
+
+def _aktif_kayitlar(kayitlar):
+    """Her magaza icin uygulamanin GERCEKTEN okudugu kaydi bulur.
+
+    Ayni shop_domain'e bakan birden fazla kayit olabilir (turetilmis
+    username'li mukerrerler). lookup_username_by_shop hangisini sectiyse
+    uygulama onu kullaniyor demektir; tasima da yalnizca ona yapilmali.
+
+    Doner: {shop_domain_kucuk: (username, brand)}
+    """
+    sonuc = {}
+    for shop in sorted({(a.get("shop_domain") or "").strip().lower()
+                        for _, _, a in kayitlar if (a.get("shop_domain") or "").strip()}):
+        try:
+            bulunan = lookup_username_by_shop(shop)
+        except ShopLookupError:
+            bulunan = None
+        if bulunan:
+            sonuc[shop] = (bulunan[0], bulunan[1])
+    return sonuc
+
+
 def komut_durum(args):
     simdi = int(time.time())
     kayitlar = _kayitlari_topla()
+    aktif = _aktif_kayitlar(kayitlar)
 
-    print(f"\nSHOPIFY_EXPIRING_TOKENS = {'ACIK' if EXPIRING_ENABLED else 'KAPALI'}")
-    print(f"{'username':40} {'magaza':34} {'tip':9} {'kalan':12} {'refresh':12} {'billing':14} not")
-    print("-" * 150)
+    # Magazaya gore grupla: mukerrer kayitlar ancak yan yana gorununce fark edilir.
+    kayitlar.sort(key=lambda x: ((x[2].get("shop_domain") or "~").lower(), x[0], x[1]))
+
+    print()
+    print(f"SHOPIFY_EXPIRING_TOKENS = {'ACIK' if EXPIRING_ENABLED else 'KAPALI'}")
+    print()
+    basliklar = (f"{'magaza':34} {'username':38} {'brand':8} {'tip':9} {'kalan':9} "
+                 f"{'billing':14} {'token':9} {'kul':4} not")
+    print(basliklar)
+    print("-" * len(basliklar))
 
     sayac = {"suresiz": 0, "expiring": 0, "yok": 0, "reauth": 0}
+    magaza_sayisi = {}
+    onceki_shop = None
+
     for u, b, ayar in kayitlar:
         token = (ayar.get(K_TOKEN) or "").strip()
-        son   = int(ayar.get(K_EXPIRES) or 0)
+        son_k = int(ayar.get(K_EXPIRES) or 0)
         ref   = (ayar.get(K_REFRESH) or "").strip()
         rson  = int(ayar.get(K_REF_EXP) or 0)
-        shop  = (ayar.get("shop_domain") or "-")[:34]
+        shop  = (ayar.get("shop_domain") or "").strip()
+        shop_k = shop.lower()
+
+        if token:
+            magaza_sayisi.setdefault(shop_k, []).append((u, b))
 
         if not token:
-            tip = "YOK"
-            sayac["yok"] += 1
-        elif son:
-            tip = "expiring"
-            sayac["expiring"] += 1
+            tip = "YOK"; sayac["yok"] += 1
+        elif son_k:
+            tip = "expiring"; sayac["expiring"] += 1
         else:
-            tip = "SURESIZ"
-            sayac["suresiz"] += 1
+            tip = "SURESIZ"; sayac["suresiz"] += 1
+
+        kullanilan = aktif.get(shop_k) == (u, b)
 
         notlar = []
         if str(ayar.get(K_REAUTH) or "") == "1":
-            notlar.append("REAUTH GEREK")
-            sayac["reauth"] += 1
+            notlar.append("REAUTH GEREK"); sayac["reauth"] += 1
+        if son_k and ref:
+            notlar.append(f"refresh {_sure(rson - simdi)}")
+        if son_k and not ref:
+            notlar.append("DIKKAT: expiring ama refresh YOK")
         if ayar.get(K_MIGRATED):
             gecen = simdi - int(ayar.get(K_MIGRATED) or 0)
             notlar.append(f"tasindi {_sure(gecen)} once")
             if gecen < 7 * 86400 and (ayar.get(K_LEGACY) or "").strip():
                 notlar.append("kurtarma penceresi acik")
-        if token and son and not ref:
-            notlar.append("DIKKAT: expiring ama refresh token YOK")
 
-        print(f"{u[:40]:40} {shop:34} {tip:9} {_sure(son - simdi if son else 0):12} "
-              f"{_sure(rson - simdi if rson else 0):12} "
-              f"{(ayar.get('billing_status') or '-')[:14]:14} {' · '.join(notlar)}")
+        # Magaza degisince bos satir - gruplar gozle ayrilsin
+        if onceki_shop is not None and shop_k != onceki_shop:
+            print()
+        onceki_shop = shop_k
 
-    print(f"\n{len(kayitlar)} kayit: {sayac['expiring']} expiring, "
+        print(f"{(shop or '-')[:34]:34} {u[:38]:38} {(b or '-')[:8]:8} {tip:9} "
+              f"{_sure(son_k - simdi if son_k else 0):9} "
+              f"{(ayar.get('billing_status') or '-')[:14]:14} {_parmak(token):9} "
+              f"{'<<<' if kullanilan else '':4} {' - '.join(notlar)}")
+
+    print()
+    print(f"{len(kayitlar)} kayit: {sayac['expiring']} expiring, "
           f"{sayac['suresiz']} SURESIZ (tasinmasi gerekiyor), "
-          f"{sayac['yok']} token yok, {sayac['reauth']} reauth bekliyor\n")
+          f"{sayac['yok']} token yok, {sayac['reauth']} reauth bekliyor")
+    print("<<< = uygulamanin bu magaza icin GERCEKTEN okudugu kayit "
+          "(lookup_username_by_shop secimi)")
+
+    # --- Mukerrer uyarisi: tasimanin en tehlikeli tarafi -------------------
+    mukerrer = {k: v for k, v in magaza_sayisi.items() if len(v) > 1}
+    if mukerrer:
+        print()
+        print("DIKKAT - ayni magazaya bakan birden fazla token'li kayit var:")
+        for shop, liste in sorted(mukerrer.items()):
+            secili = aktif.get(shop)
+            print(f"  {shop}")
+            for u, b in liste:
+                isaret = "  <<< tasinacak olan" if (u, b) == secili else ""
+                print(f"      {u} / {b}{isaret}")
+        print("  Shopify magaza basina TEK gecerli token tutuyor. Ikinci bir kaydi")
+        print("  tasimak birincinin ciftini emekliye ayirir. Bu yuzden --hepsi")
+        print("  yalnizca <<< isaretli kayitlari tasir, digerlerini atlar.")
 
     if sayac["suresiz"] and not EXPIRING_ENABLED:
+        print()
         print("UYARI: SHOPIFY_EXPIRING_TOKENS kapali. Once onu 1 yapip dagitin,")
         print("       sonra tasimayi yapin - yoksa magaza bir sonraki acilisinda")
-        print("       tekrar suresiz token alir ve tasima geri alinmis olur.\n")
+        print("       tekrar suresiz token alir ve tasima geri alinmis olur.")
+    print()
 
 
-def _hedefleri_bul(args):
-    """--shop / --user / --hepsi secimine gore (username, brand) listesi."""
+def _hedefleri_bul(args, sadece_tasinacak=False):
+    """--shop / --user / --hepsi secimine gore (username, brand, ayar) listesi.
+
+    --hepsi ve --shop MAGAZA secimidir: her magaza icin YALNIZCA uygulamanin
+    okudugu kayit secilir. Ayni magazanin ikinci bir kaydini tasimak,
+    birincinin yeni ciftini Shopify tarafinda emekliye ayirir - uygulama
+    hangisini okuyorsa o olu kalabilir.
+
+    --user KAYIT secimidir: ne istedigini bilerek veren icin, mukerrer
+    filtresi uygulanmaz.
+    """
     kayitlar = _kayitlari_topla()
-    hedef = []
+    # Mukerrer filtresi magaza secimlerinde; --user acikca tek kaydi hedefler.
+    magaza_secimi = bool(args.hepsi or args.shop) and not args.user
+    aktif = _aktif_kayitlar(kayitlar) if magaza_secimi else {}
+    hedef, atlanan = [], []
+
     for u, b, ayar in kayitlar:
         shop = (ayar.get("shop_domain") or "").strip().lower()
         token = (ayar.get(K_TOKEN) or "").strip()
-        son = int(ayar.get(K_EXPIRES) or 0)
+        son_k = int(ayar.get(K_EXPIRES) or 0)
 
         if args.shop and shop != args.shop.strip().lower():
             continue
         if args.user and u != args.user:
             continue
-        if args.hepsi:
-            # Sadece tasinmasi gerekenler: token'i olan ve henuz suresiz olanlar
-            if not token or son:
-                continue
+        if args.hepsi and (not token or (sadece_tasinacak and son_k)):
+            continue
+        if magaza_secimi and shop in aktif and aktif[shop] != (u, b):
+            atlanan.append((u, b, shop))
+            continue
         hedef.append((u, b, ayar))
 
     if not (args.shop or args.user or args.hepsi):
         print("--shop, --user ya da --hepsi vermelisiniz.")
         sys.exit(2)
+
+    if atlanan:
+        print()
+        print(f"{len(atlanan)} mukerrer kayit atlandi (ayni magazanin aktif "
+              f"kaydi zaten listede):")
+        for u, b, shop in atlanan:
+            print(f"  {shop:36} {u} / {b}")
+
     return hedef
 
 
 def komut_tasi(args):
-    hedef = _hedefleri_bul(args)
+    hedef = _hedefleri_bul(args, sadece_tasinacak=True)
     if not hedef:
         print("Eslesen / tasinmasi gereken kayit yok.")
         return
