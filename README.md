@@ -219,6 +219,17 @@ içinden — tüm event yollarının tek geçiş noktası, kampanya atfıyla ayn
 bakıyor; sayı zaten günlük hash'e yazıldığı için geçmiş ona bağlı değil. Böylece
 bellek gün sayısıyla büyümüyor.
 
+Sayaçların gerçekten yazıldığını doğrulamak için (salt okunur):
+
+```bash
+python scripts/gunluk-kontrol.py            # son 7 gün, her mağaza
+python scripts/gunluk-kontrol.py --gun 30 --kirilim
+```
+
+Sayaçlar yalnızca **yeni** olaylarda yazılır; geçmiş veri yoktur. `since`
+(`gun_basladi:{tid}`) ve satır başına `has_data`, panelin "veri yok" ile "o gün
+satış olmadı"yı ayırabilmesi için döner.
+
 Gün sınırı **UTC+3**'e göre (`tr_gun`): UTC'ye göre hesaplansa akşam 21:00'den
 sonraki siparişler ertesi güne düşer ve merchant'ın gördüğü "bugün" Shopify'ın
 gösterdiğiyle tutmazdı.
