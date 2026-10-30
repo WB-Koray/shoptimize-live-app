@@ -213,10 +213,84 @@ integration_connections (
 
 Shopify API çağrılarında token şu sırada aranır:
 
-1. `store.get_online_token(username, brand)` — OAuth ile kurulan mağazalar (short-lived)
-2. `get_setting(..., "admin_api_token")` — Eski manuel token (private app)
+1. `store.get_online_token(username, brand)` — Merchant panelden geldiğinde alınan online token (Redis, ~23 saat)
+2. `admin_token(username, brand)` — Offline token (`services/shopify_token.py`)
 
 RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip eder.
+
+**Offline token asla doğrudan DB'den okunmaz.** Tek giriş noktası
+`services.shopify_token.admin_token()`; gerekiyorsa yenilemeyi o yapar.
+`get_setting(..., "admin_api_token")` ile okumak expiring bir token'ı bir saat
+sonra ölü halde kullanmak demektir.
+
+---
+
+## Expiring Offline Token Geçişi
+
+Shopify **1 Ocak 2027**'den sonra süresiz (non-expiring) offline token'ları
+GraphQL Admin API'de reddedecek. Yerine gelen token 60 dakika yaşıyor ve 90
+günlük, her kullanımda değişen bir refresh token ile yenileniyor.
+
+### Alanlar (`payload_json`)
+
+| Alan | Anlamı |
+|------|--------|
+| `admin_api_token` | Kullanılacak access token (anahtar adı değişmedi) |
+| `admin_token_expires_at` | Unix ts. **Yok/0 ise token süresiz (eski tip)** |
+| `admin_refresh_token` | Dönen refresh token |
+| `admin_refresh_expires_at` | Refresh token'ın 90 günlük sonu |
+| `admin_api_token_legacy` | Taşıma öncesi süresiz token (7 günlük kurtarma penceresi) |
+| `admin_token_migrated_at` | Taşımanın yapıldığı unix ts |
+| `admin_token_needs_reauth` | `"1"` ise yenileme kurtarılamadı; merchant uygulamayı açmalı |
+
+### Geçiş sırası — bozulursa mağazalar bir saat içinde durur
+
+1. **Kod canlıya çıkar.** `SHOPIFY_EXPIRING_TOKENS` kapalı olduğu için davranış
+   değişmez; sadece yenileme altyapısı ve `_token_refresh_worker` hazır olur.
+2. **`SHOPIFY_EXPIRING_TOKENS=1`** verilir. Bundan sonra her kurulum ve her
+   merchant girişi expiring token alır, refresh çifti saklanır.
+3. **`scripts/token-migrate.py tasi --hepsi --uygula`** ile uygulamayı açmayan
+   mağazaların token'ları taşınır.
+
+2. adım 1. adımdan önce yapılırsa arka plan işçileri (sepet kurtarma 60 saniyede
+bir, sağlık monitörü, kampanyalar) refresh desteği olmadığı için bir saat içinde
+401 almaya başlar.
+
+### Taşıma geri alınamaz
+
+Shopify'ın doğrudan taşıma akışı eski token'ı Admin API için **kalıcı olarak**
+geçersiz kılar. Yanıt kaybolursa aynı eski token ile **7 gün** içinde tekrar
+denenirse Shopify aynı çifti döner — bu yüzden eski token
+`admin_api_token_legacy` altında saklanır, silinmez. Kurtarma penceresi şunlardan
+biri olunca kapanır: yeni çift bir kez yenilendi, mağaza için yeni token alındı,
+ya da 7 gün geçti.
+
+### Operasyon
+
+```bash
+# Durum — hangi mağaza hangi tipte? (salt okunur, token değeri basmaz)
+python scripts/token-migrate.py durum
+
+# Tek mağaza, kuru prova
+python scripts/token-migrate.py tasi --shop magaza.myshopify.com
+
+# Gerçekten taşı
+python scripts/token-migrate.py tasi --shop magaza.myshopify.com --uygula
+
+# Taşınması gereken hepsi
+python scripts/token-migrate.py tasi --hepsi --uygula
+
+# Yenileme akışını test et
+python scripts/token-migrate.py yenile --shop magaza.myshopify.com
+```
+
+`SHOPIFY_EXPIRING_TOKENS` kapalıyken `tasi --uygula` kendini durdurur: taşınan
+mağaza bir sonraki açılışında tekrar süresiz token alır ve taşıma geri alınmış
+olur. `--zorla` ile aşılabilir.
+
+Sağlık monitörü iki yeni sorun bildirir: *"Shopify token yenilenemiyor"*
+(`admin_token_needs_reauth`) ve son 60 güne girildiğinde *"token hâlâ süresiz
+tipte"*.
 
 ---
 
@@ -253,6 +327,15 @@ RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip e
 - Trial'ı biten mağazalar için (son 24 saat) uyarı gönderir.
 - Aralık `HEALTH_MONITOR_INTERVAL_SEC` ile ayarlanır.
 
+### 4. Token Refresh Worker (`_token_refresh_worker`, varsayılan 5 dakikada bir)
+- Son kullanmaya 10 dakikadan az kalan expiring offline token'ları yeniler.
+- `admin_token()` zaten çağrı anında yeniliyor; bu işçi iki şey için var:
+  90 gün hiç istek almayan bir mağazanın refresh penceresini kaçırmasını
+  önler, ve yenilemeyi merchant isteğinin kritik yolundan çıkarır.
+- `SHOPIFY_EXPIRING_TOKENS` kapalıyken yapacak iş bulamaz (süresiz token'lar
+  yenilenmez) — geçişten önce devreye alınması zararsızdır.
+- Aralık `TOKEN_REFRESH_INTERVAL_SEC` ile ayarlanır.
+
 ---
 
 ## Environment Variables
@@ -268,6 +351,8 @@ RFM, CustomerJourney, Customer Detail endpoint'lerinin hepsi bu sırayı takip e
 | `DATA_ENCRYPTION_KEY` | ✅ | Ana backend `integration_connections.payload_json` alanını `enc1:` + Fernet ile şifreli yazıyor. Bu anahtar olmadan hiçbir merchant kaydı okunamaz — uygulama mağazaları bulamaz ve boş yeni kayıtlar açar. `shoptimize-backend` ile **aynı değer** olmalı |
 | `API_BASE_URL` | ✅ | Pixel'in event göndereceği adres — `{API}` olarak pixel.js'e gömülür ve ScriptTag kurulum URL'ini belirler. **Varsayılanı `https://api.shoptimize.com.tr`** (ana backend); bu app için `https://live.shoptimize.com.tr` verilmezse event'ler yanlış backend'e gider |
 | `SHOPIFY_API_VERSION` | — | Default: `2026-04` |
+| `SHOPIFY_EXPIRING_TOKENS` | — | `1` ise yeni offline token'lar **expiring** istenir (`expiring=1`) ve refresh çifti saklanır. Default `0`. 1 Ocak 2027'den önce `1` yapılmalı — bkz. *Expiring Offline Token Geçişi* |
+| `TOKEN_REFRESH_INTERVAL_SEC` | — | Token yenileme işçisinin aralığı (default `300` = 5 dakika) |
 | `SHOPIFY_CLIENT_SECRET_LEGACY` | — | Eski app secret (geçiş dönemi fallback) |
 | `DASHBOARD_PASSWORD` | — | Password-login kullanıcıları için |
 | `ADMIN_TOKEN` | — | Operator panel erişim token'ı |

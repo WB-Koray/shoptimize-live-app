@@ -306,6 +306,41 @@ async def _health_monitor_worker():
         await asyncio.sleep(INTERVAL)
 
 
+async def _token_refresh_worker():
+    """Expiring offline token'ları süresi dolmadan ÖNCE yeniler.
+
+    Neden arka planda: ``admin_token()`` zaten çağrı anında yeniliyor, ama bu
+    yetmez. Refresh token 90 gün sonra ölüyor; 90 gün hiç istek almayan bir
+    mağaza o pencereyi kaçırır ve merchant uygulamayı açana kadar sepet
+    kurtarma durur. Bu işçi pencereyi açık tutar.
+
+    Ayrıca yenilemeyi merchant'ın isteğinin kritik yolundan çıkarır: token
+    çoktan tazeyken gelen istek yenileme beklemez.
+
+    SHOPIFY_EXPIRING_TOKENS kapalıyken yapacak iş bulamaz (süresiz token'lar
+    yenilenmez) — bu yüzden geçişten önce devreye alınması zararsızdır.
+    """
+    import asyncio
+    import logging
+    _log = logging.getLogger(__name__)
+    from services.shopify_token import yenilenmesi_gerekenler, yenile
+    INTERVAL = int(os.getenv("TOKEN_REFRESH_INTERVAL_SEC", "300"))
+    await asyncio.sleep(90)   # açılış yoğunluğunu bekle
+    while True:
+        try:
+            bekleyen = await asyncio.to_thread(yenilenmesi_gerekenler)
+            for kayit in bekleyen:
+                try:
+                    yeni = await asyncio.to_thread(yenile, kayit["username"], kayit["brand"])
+                    _log.info("[TOKEN-REF] %s → %s", kayit["shop"], "yenilendi" if yeni else "BAŞARISIZ")
+                except Exception as e:
+                    _log.warning("[TOKEN-REF] %s yenileme hatası: %s", kayit["shop"], e)
+                await asyncio.sleep(1)   # Shopify OAuth ucunu yormayalım
+        except Exception as e:
+            _log.warning("[TOKEN-REF] worker hatası: %s", e)
+        await asyncio.sleep(INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -315,6 +350,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_abandoned_checkout_worker())
     asyncio.create_task(_scheduled_campaign_worker())
     asyncio.create_task(_health_monitor_worker())
+    asyncio.create_task(_token_refresh_worker())
     yield
     # Shutdown
     await store.disconnect()

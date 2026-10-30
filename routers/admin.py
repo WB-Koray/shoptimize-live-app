@@ -26,6 +26,10 @@ PLAN_PRICE = float(os.getenv("BILLING_PLAN_PRICE", "9.99"))
 # Yalnız geçmişte event görmüş mağazalar için uyarı üretilir — hiç trafik
 # görmemiş yeni kurulumlar kapsam dışı, yoksa her yeni merchant alarm verirdi.
 PIXEL_SILENCE_HOURS = int(os.getenv("PIXEL_SILENCE_HOURS", "24"))
+# Shopify suresiz offline token'lari bu tarihten sonra GraphQL Admin API'de
+# reddedecek. Saglik kontrolu son 60 gune girildiginde uyarir.
+_SURESIZ_SON = 1798761600   # 2027-01-01 00:00:00 UTC
+
 
 
 def _require_admin(token: str):
@@ -384,6 +388,12 @@ async def compute_store_health(conn: dict) -> dict:
         int((time.time() * 1000 - pixel_last_ts) // 3_600_000) if pixel_last_ts else 0
     )
 
+    # Token alanlari kok seviyede ya da nested 'settings' altinda olabilir
+    # (tabloyu ana backend yaziyor, bicim kayda gore degisiyor).
+    _tok_ayar = settings
+    if isinstance(settings.get("settings"), dict):
+        _tok_ayar = {**settings, **settings["settings"]}
+
     problems = []
     if billing_status != "uninstalled":
         if flow_enabled and not wa_connected:
@@ -404,6 +414,16 @@ async def compute_store_health(conn: dict) -> dict:
             problems.append("Pixel kurulu değil")
         if pixel_last_ts and pixel_silent_hours >= PIXEL_SILENCE_HOURS:
             problems.append(f"Pixel {pixel_silent_hours} saattir event göndermiyor")
+        # Expiring token yenilenemedi: Admin API cagrilarinin HEPSI duracak
+        # (siparis okuma, stok, sepet kurtarma). Merchant uygulamayi acana
+        # kadar kurtarilamaz, bu yuzden operatore haber verilmeli.
+        if str(_tok_ayar.get("admin_token_needs_reauth") or "") == "1":
+            problems.append("Shopify token yenilenemiyor - merchant uygulamayı açmalı")
+        # Suresiz token: 1 Ocak 2027'den sonra Admin API bunu reddedecek.
+        elif _tok_ayar.get("admin_api_token") and not int(_tok_ayar.get("admin_token_expires_at") or 0):
+            _kalan_gun = int((_SURESIZ_SON - time.time()) // 86400)
+            if _kalan_gun < 60:
+                problems.append(f"Shopify token hâlâ süresiz tipte - {_kalan_gun} gün içinde taşınmalı")
 
     return {
         "username": username, "brand": brand,
@@ -592,11 +612,25 @@ async def set_shopify_token(
     if not username or not token:
         raise HTTPException(400, "username ve token zorunlu")
 
-    updates: dict = {"admin_api_token": token}
+    # Elle girilen token her zaman SURESIZ tiptedir (private app / manuel).
+    # Expiring alanlari temizlenmezse admin_token() eski son-kullanmaya bakip
+    # bu token'i yenilemeye calisir ve yeni token'i ezer.
+    updates: dict = {
+        "admin_api_token":          token,
+        "admin_token_expires_at":   0,
+        "admin_refresh_token":      "",
+        "admin_refresh_expires_at": 0,
+        "admin_token_needs_reauth": "",
+    }
     if shop_domain:
         updates["shop_domain"] = shop_domain
 
     set_connection_settings(username, brand, "shopify", updates)
+    try:
+        from services.shopify_token import onbellek_bosalt
+        onbellek_bosalt(username, brand)
+    except Exception:
+        pass
     logger.info("[ADMIN] set-shopify-token: username=%s brand=%s shop=%s", username, brand, shop_domain)
     return {"ok": True, "username": username, "brand": brand, "token_set": True}
 
@@ -655,27 +689,35 @@ async def copy_shopify_token(
     if not from_user or not to_user:
         raise HTTPException(400, "from_username ve to_username zorunlu")
 
-    # Kaynak kaydı oku
-    src_token = ""
+    # Kaynak kaydi oku. get_payload kullaniliyor: ham payload_json sifreli
+    # (enc1:/Fernet) olabilir, json.loads onu okuyamaz.
+    from services.db import get_payload
     try:
-        with _get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT payload_json FROM integration_connections WHERE username=%s AND brand=%s AND integration_id='shopify' LIMIT 1",
-                    (from_user, from_brand),
-                )
-                row = cur.fetchone()
-                if row and row["payload_json"]:
-                    data = row["payload_json"]
-                    if isinstance(data, str):
-                        data = json.loads(data)
-                    src_token = data.get("admin_api_token", "")
+        data = get_payload(from_user, from_brand, "shopify")
     except Exception as e:
         raise HTTPException(500, f"Kaynak okuma hatası: {e}")
 
+    src_token = (data.get("admin_api_token") or "").strip()
     if not src_token:
         raise HTTPException(404, f"'{from_user}' kaydında admin_api_token yok")
 
-    set_connection_settings(to_user, to_brand, "shopify", {"admin_api_token": src_token})
-    logger.info("[ADMIN] copy-shopify-token: %s→%s token_tail=%s", from_user, to_user, src_token[-6:])
-    return {"ok": True, "from": from_user, "to": to_user, "token_tail": "..." + src_token[-6:]}
+    # Token CIFT halinde kopyalanir. Sadece access token kopyalanirsa expiring
+    # bir token bir saat icinde oluyor ve yenilenemiyor (refresh token yok).
+    kopya = {"admin_api_token": src_token}
+    for alan in ("admin_token_expires_at", "admin_refresh_token",
+                 "admin_refresh_expires_at"):
+        kopya[alan] = data.get(alan, 0 if alan.endswith("_at") else "")
+    kopya["admin_token_needs_reauth"] = ""
+
+    set_connection_settings(to_user, to_brand, "shopify", kopya)
+    try:
+        from services.shopify_token import onbellek_bosalt
+        onbellek_bosalt(to_user, to_brand)
+    except Exception:
+        pass
+    _expiring = bool(int(kopya.get("admin_token_expires_at") or 0))
+    logger.info("[ADMIN] copy-shopify-token: %s→%s token_tail=%s expiring=%s",
+                from_user, to_user, src_token[-6:], _expiring)
+    return {"ok": True, "from": from_user, "to": to_user,
+            "token_tail": "..." + src_token[-6:], "expiring": _expiring,
+            "refresh_kopyalandi": bool(kopya.get("admin_refresh_token"))}

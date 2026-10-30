@@ -27,6 +27,7 @@ from fastapi.responses import Response
 
 from services.auth import get_current_user
 from services.db import get_setting
+from services.shopify_token import admin_token
 from services.redis_store import store
 from services.wa_sender import send_wa_template
 
@@ -519,7 +520,7 @@ async def get_audience(
     """Segment bazlı kişi sayıları + potansiyel ciro + Yüksek Harcayanlar + ulaşılabilir."""
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token = await store.get_online_token(username, brand) \
-            or get_setting(username, brand, "shopify", "admin_api_token", "")
+            or admin_token(username, brand)
     audience = await _build_audience(domain, token, days)
 
     seg_counts: dict[str, int] = {}
@@ -571,7 +572,7 @@ async def get_audience_members(
     """Seçili segmentteki kişileri döner (isim, telefon, harcama, opt-out durumu)."""
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token = await store.get_online_token(username, brand) \
-            or get_setting(username, brand, "shopify", "admin_api_token", "")
+            or admin_token(username, brand)
     if segment == "sms_consent":
         members = await _build_sms_audience(domain, token)
     else:
@@ -614,7 +615,7 @@ async def execute_campaign(username: str, brand: str, campaign: dict) -> dict:
 
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     sh_token = await store.get_online_token(username, brand) \
-               or get_setting(username, brand, "shopify", "admin_api_token", "")
+               or admin_token(username, brand)
     seg = campaign.get("segment", "all")
     if seg == "sms_consent":
         targets = await _build_sms_audience(domain, sh_token)

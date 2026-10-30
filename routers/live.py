@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 SHOPIFY_API_VERSION = os.getenv("SHOPIFY_API_VERSION", "2026-04")
 from services.db import get_setting, set_connection_settings
+from services.shopify_token import admin_token
 from services.redis_store import store
 
 logger = logging.getLogger(__name__)
@@ -731,7 +732,7 @@ def _find_our_scripttag(domain: str, token: str, version: str = None) -> Optiona
 @router.get("/api/shopify/pixel/status")
 async def pixel_status(username: str = Query(""), brand: str = Query("default")):
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
-    token  = get_setting(username, brand, "shopify", "admin_api_token", "")
+    token  = admin_token(username, brand)
     tid    = get_setting(username, brand, "shopify", "pixel_tracking_id", "")
 
     # Primary path: Shopify merchant with Theme App Extension
@@ -791,7 +792,7 @@ async def pixel_status(username: str = Query(""), brand: str = Query("default"))
 @router.post("/api/shopify/pixel/install")
 async def pixel_install(username: str = Query(""), brand: str = Query("default")):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
-    token   = get_setting(username, brand, "shopify", "admin_api_token", "")
+    token   = admin_token(username, brand)
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
@@ -826,7 +827,7 @@ async def pixel_install(username: str = Query(""), brand: str = Query("default")
 @router.delete("/api/shopify/pixel/uninstall")
 async def pixel_uninstall(username: str = Query(""), brand: str = Query("default")):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
-    token   = get_setting(username, brand, "shopify", "admin_api_token", "")
+    token   = admin_token(username, brand)
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
@@ -864,7 +865,7 @@ async def get_shopify_customer(
 ):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = await store.get_online_token(username, brand) \
-              or get_setting(username, brand, "shopify", "admin_api_token", "")
+              or admin_token(username, brand)
     version = get_setting(username, brand, "shopify", "api_version", SHOPIFY_API_VERSION)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
@@ -1126,7 +1127,7 @@ async def get_order_journey(
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     # Online token önce dene (her zaman expiring → 403 hatasını önler)
     token  = await store.get_online_token(username, brand) \
-             or get_setting(username, brand, "shopify", "admin_api_token", "")
+             or admin_token(username, brand)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "Shopify bağlantısı bulunamadı"}, status_code=400)
 
@@ -1279,7 +1280,7 @@ async def get_attribution_report(
 
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = await store.get_online_token(username, brand) \
-             or get_setting(username, brand, "shopify", "admin_api_token", "")
+             or admin_token(username, brand)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
 
@@ -1516,7 +1517,7 @@ async def get_rfm_segments(
 
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = await store.get_online_token(username, brand) \
-             or get_setting(username, brand, "shopify", "admin_api_token", "")
+             or admin_token(username, brand)
     logger.info("[RFM] domain=%r token_set=%s user=%s brand=%s", domain or "(empty)", bool(token), username[:20], brand)
     if not domain or not token:
         # Diagnoz: raw payload'u logla
@@ -1692,7 +1693,7 @@ async def get_products_stock(
     """Virgülle ayrılmış ürün handle listesi için stok bilgisi döner."""
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = await store.get_online_token(username, brand) \
-             or get_setting(username, brand, "shopify", "admin_api_token", "")
+             or admin_token(username, brand)
     if not domain or not token:
         return JSONResponse({"ok": False, "error": "shopify_not_connected"}, status_code=400)
 
@@ -2091,7 +2092,7 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     # Shopify non-expiring offline token'ları reddediyor → EXPIRING (online) token tercih et.
     token   = await store.get_online_token(username, brand) \
-              or get_setting(username, brand, "shopify", "admin_api_token", "")
+              or admin_token(username, brand)
     # Webhook kaydı GÜNCEL sürümle yapılmalı — bazı mağazalarda kayıtlı api_version
     # eski ("2024-10") kalıp Shopify'dan 403 aldırıyordu.
     version = SHOPIFY_API_VERSION
@@ -2153,7 +2154,7 @@ async def register_order_webhook(username: str = Query(""), brand: str = Query("
 async def get_webhook_status(username: str = Query(""), brand: str = Query("default")):
     domain  = get_setting(username, brand, "shopify", "shop_domain", "")
     token   = await store.get_online_token(username, brand) \
-              or get_setting(username, brand, "shopify", "admin_api_token", "")
+              or admin_token(username, brand)
     version = SHOPIFY_API_VERSION
     if not domain or not token:
         return {"ok": False, "webhooks": []}

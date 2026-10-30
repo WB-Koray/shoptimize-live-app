@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from services.auth import get_current_user
 from services.redis_store import store
 from services.wa_sender import send_wa_template
+from services.shopify_token import admin_token
 
 META_GRAPH = "https://graph.facebook.com/v19.0"
 
@@ -796,7 +797,7 @@ async def get_optouts(current_user: dict = Depends(get_current_user)):
     from services.db import get_setting
     domain = get_setting(username, brand, "shopify", "shop_domain", "")
     token  = await store.get_online_token(username, brand) \
-             or get_setting(username, brand, "shopify", "admin_api_token", "")
+             or admin_token(username, brand)
 
     items = []
     for phone in phones:

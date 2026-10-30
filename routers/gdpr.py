@@ -103,10 +103,21 @@ async def app_uninstalled(request: Request):
                     u = conn["username"]
                     b = conn["brand"]
                     # 1. Billing'i iptal et + Shopify token'ı geçersiz kıl
+                    # Refresh token da temizlenmeli: kalirsa arka plan
+                    # yenileyici kaldirilmis magazayi yenilemeye calisir.
                     set_connection_settings(u, b, "shopify", {
                         "billing_status": "uninstalled",
                         "admin_api_token": "",
+                        "admin_refresh_token": "",
+                        "admin_token_expires_at": 0,
+                        "admin_refresh_expires_at": 0,
+                        "admin_api_token_legacy": "",
                     })
+                    try:
+                        from services.shopify_token import onbellek_bosalt
+                        onbellek_bosalt(u, b)
+                    except Exception:
+                        pass
                     # 2. Redis live event + visitor verilerini temizle
                     tid = settings.get("pixel_tracking_id", "")
                     if tid:

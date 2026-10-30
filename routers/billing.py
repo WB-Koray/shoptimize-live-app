@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from services.db import get_setting, set_connection_settings
+from services.shopify_token import admin_token
 from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -191,7 +192,7 @@ async def billing_callback(
     Shopify, merchant onayından sonra buraya yönlendirir.
     charge_id = AppSubscription'ın sayısal ID'si.
     """
-    access_token = get_setting(username, brand, "shopify", "admin_api_token", "")
+    access_token = admin_token(username, brand)
     if not access_token:
         raise HTTPException(400, "Mağaza bağlantısı bulunamadı")
 

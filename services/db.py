@@ -101,6 +101,42 @@ def get_setting(username: str, brand: str, integration: str, key: str, default="
     return default
 
 
+def get_payload(username: str, brand: str, integration: str) -> dict:
+    """Kaydin tum payload'ini TEK okumada doner (kok seviye + settings birlesik).
+
+    get_setting her anahtar icin ayri bir DB turu yapiyor. Birbirine bagli
+    birkac alani (token + refresh token + son kullanma) ayri ayri okumak hem
+    bosa baglanti harcar hem de yaris acar: ikisi arasinda baska bir surec
+    yenileme yaparsa elimizde eski token'la yeni son-kullanma kalir.
+    DB hatasinda bos dict doner — cagiran taraf "alan yok" gibi davranir.
+    """
+    try:
+        with _get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT payload_json FROM integration_connections
+                    WHERE username = %s AND brand = %s AND integration_id = %s
+                    LIMIT 1
+                    """,
+                    (username, brand, integration),
+                )
+                row = cur.fetchone()
+                if row and row["payload_json"]:
+                    data = payload_coz(row["payload_json"])
+                    if not isinstance(data, dict):
+                        return {}
+                    sub = data.get("settings")
+                    if isinstance(sub, dict):
+                        birlesik = dict(data)
+                        birlesik.update(sub)
+                        return birlesik
+                    return data
+    except Exception as e:
+        logger.error("[DB] get_payload hatası: %s", e)
+    return {}
+
+
 def set_connection_settings(username: str, brand: str, integration: str, updates: dict):
     """
     integration_connections tablosundaki payload_json alanını günceller.

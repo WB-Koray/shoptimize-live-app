@@ -13,12 +13,15 @@ import secrets
 import time
 from typing import Optional
 
-import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.db import get_setting, get_setting_strict, set_connection_settings, lookup_username_by_shop, ShopLookupError
+from services.shopify_token import (
+    admin_token, offline_token_al, online_token_al, kod_degistir,
+    token_alanlari, TokenHatasi, TokenGecici,
+)
 from services.auth import get_current_user as get_current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -215,36 +218,36 @@ async def shopify_callback(
     is_reauth = state_data.get("reauth", False)
 
     # 3. Access token al
+    # SHOPIFY_EXPIRING_TOKENS acikken kod_degistir expiring=1 gonderir ve
+    # yanit access_token + refresh_token cifti dondurur; token_alanlari o
+    # cifti saklanacak alanlara cevirir. Kapaliyken eski (suresiz) davranis.
     try:
-        r = requests.post(
-            f"https://{shop}/admin/oauth/access_token",
-            json={
-                "client_id": SHOPIFY_CLIENT_ID,
-                "client_secret": SHOPIFY_CLIENT_SECRET,
-                "code": code,
-            },
-            timeout=15,
-        )
-        if r.status_code != 200:
-            raise HTTPException(502, f"Token exchange başarısız: {r.text}")
-        token_data = r.json()
-        access_token = token_data.get("access_token", "")
-        granted_scopes = token_data.get("scope", "")
-    except HTTPException:
-        raise
+        token_data = kod_degistir(shop, code)
+    except TokenGecici as e:
+        raise HTTPException(502, f"Token exchange başarısız: {e}")
+    except TokenHatasi as e:
+        raise HTTPException(502, f"Token exchange reddedildi: {e}")
     except Exception as e:
         raise HTTPException(500, f"Token exchange hatası: {e}")
 
+    granted_scopes = token_data.get("scope", "")
+    try:
+        _token_alanlari = token_alanlari(token_data)
+    except TokenHatasi as e:
+        raise HTTPException(502, f"Token exchange yanıtı geçersiz: {e}")
+    access_token = _token_alanlari["admin_api_token"]
+
     # 4. Mağaza bilgilerini kaydet
     if is_reauth:
-        # Yeniden giriş: sadece token güncelle
-        set_connection_settings(username, brand, "shopify", {"admin_api_token": access_token})
-        logger.info("[OAuth] ✓ Yeniden giriş: shop=%s username=%s", shop, username)
+        # Yeniden giriş: sadece token (ve varsa refresh cifti) güncellenir
+        set_connection_settings(username, brand, "shopify", dict(_token_alanlari))
+        logger.info("[OAuth] ✓ Yeniden giriş: shop=%s username=%s expiring=%s",
+                    shop, username, bool(_token_alanlari.get("admin_token_expires_at")))
     else:
         _updates = {
             "shop_domain": shop,
-            "admin_api_token": access_token,
             "granted_scopes": granted_scopes,
+            **_token_alanlari,
         }
         # installed_at'i KORU — daha önce kurulduysa deneme tekrar başlamasın
         # (re-install ile sonsuz deneme açığını önler). Yoksa ilk kurulum say.
@@ -717,71 +720,17 @@ def _verify_shopify_session_token(token: str) -> Optional[dict]:
         return None
 
 
-def _exchange_session_token_for_offline(shop: str, session_token: str) -> Optional[str]:
-    """
-    Shopify App Bridge session token'ını offline access token ile değiştirir.
-    Token Exchange grant (RFC 8693).
-    """
-    url = f"https://{shop}/admin/oauth/access_token"
-    payload = {
-        "client_id":            SHOPIFY_CLIENT_ID,
-        "client_secret":        SHOPIFY_CLIENT_SECRET,
-        "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token":        session_token,
-        "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
-        "requested_token_type": "urn:shopify:params:oauth:token-type:offline-access-token",
-    }
-    logger.warning("[TokenExchange/offline] Deneniyor: shop=%s", shop)
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        logger.warning("[TokenExchange/offline] Response: shop=%s status=%d body=%s",
-                       shop, r.status_code, r.text[:500])
-        if r.status_code == 200:
-            data  = r.json()
-            token = data.get("access_token", "")
-            if token:
-                logger.warning("[TokenExchange/offline] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
-                               shop, len(token), token[:8])
-                return token
-            logger.warning("[TokenExchange/offline] 200 ama access_token yok: body=%s", data)
-        return None
-    except Exception as e:
-        logger.warning("[TokenExchange/offline] Hata: shop=%s error=%s", shop, e)
-        return None
+def _exchange_session_token_for_offline(shop: str, session_token: str,
+                                        username: str, brand: str) -> str:
+    """Session token -> offline access token. Gercek is services/shopify_token
+    icinde: SHOPIFY_EXPIRING_TOKENS acikken expiring=1 gonderir ve donen
+    refresh token cifti de saklanir."""
+    return offline_token_al(shop, session_token, username, brand)
 
 
-def _exchange_session_token_for_online(shop: str, session_token: str) -> Optional[str]:
-    """
-    Shopify App Bridge session token'ını kısa süreli ONLINE access token ile değiştirir.
-    Online token'lar ~1 gün geçerlidir ve Shopify tarafından her zaman "expiring" kabul edilir.
-    Billing API çağrıları için kullanılır (non-expiring token 403 hatasını önler).
-    """
-    url = f"https://{shop}/admin/oauth/access_token"
-    payload = {
-        "client_id":            SHOPIFY_CLIENT_ID,
-        "client_secret":        SHOPIFY_CLIENT_SECRET,
-        "grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token":        session_token,
-        "subject_token_type":   "urn:ietf:params:oauth:token-type:id_token",
-        "requested_token_type": "urn:shopify:params:oauth:token-type:online-access-token",
-    }
-    logger.warning("[TokenExchange/online] Deneniyor: shop=%s", shop)
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        logger.warning("[TokenExchange/online] Response: shop=%s status=%d body=%s",
-                       shop, r.status_code, r.text[:500])
-        if r.status_code == 200:
-            data  = r.json()
-            token = data.get("access_token", "")
-            if token:
-                logger.warning("[TokenExchange/online] ✓ Token alındı: shop=%s token_len=%d prefix=%s",
-                               shop, len(token), token[:8])
-                return token
-            logger.warning("[TokenExchange/online] 200 ama access_token yok: body=%s", data)
-        return None
-    except Exception as e:
-        logger.warning("[TokenExchange/online] Hata: shop=%s error=%s", shop, e)
-        return None
+def _exchange_session_token_for_online(shop: str, session_token: str) -> str:
+    """Session token -> kisa omurlu ONLINE token (Billing API icin)."""
+    return online_token_al(shop, session_token)
 
 
 def _ensure_webhooks_registered(shop: str, username: str, brand: str, access_token: str) -> None:
@@ -894,9 +843,9 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     username, brand = found
 
     # ── Token exchange: expiring offline token al, DB'yi güncelle ──────────
-    new_access_token = _exchange_session_token_for_offline(shop, body.session_token)
-    if new_access_token:
-        set_connection_settings(username, brand, "shopify", {"admin_api_token": new_access_token})
+    new_access_token = _exchange_session_token_for_offline(
+        shop, body.session_token, username, brand,
+    )
 
     # ── Online token'ı Redis'e kaydet (user-triggered API çağrıları için) ──
     # Online token her zaman expiring → Admin API 403 hatasını önler.
@@ -912,7 +861,7 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
     # reddediyor. Webhook kaydını EXPIRING (online) token ile yap.
     _ensure_webhooks_registered(
         shop, username, brand,
-        online_tok or new_access_token or get_setting(username, brand, "shopify", "admin_api_token", ""),
+        online_tok or new_access_token or admin_token(username, brand),
     )
 
     from services.auth import create_access_token
@@ -928,7 +877,7 @@ async def shopify_session_auth(body: ShopifySessionTokenRequest):
         billing_status = get_setting(username, brand, "shopify", "billing_status", "")
 
         # Gerçek abonelik durumunu Shopify'dan doğrula (tek doğru kaynak)
-        bill_token = online_tok or new_access_token or get_setting(username, brand, "shopify", "admin_api_token", "")
+        bill_token = online_tok or new_access_token or admin_token(username, brand)
         if bill_token:
             subscribed = _has_active_subscription(shop, bill_token)
             if subscribed and billing_status != "active":
